@@ -335,7 +335,7 @@ Run: `git diff --check`
 
 Expected: PASS；新页面第一行摘要、标题、目录索引和来源链接齐全。
 
-- [ ] **Step 3: Run full verification**
+- [x] **Step 3: Run full verification**
 
 Run: `cd app && npm test`
 
@@ -349,7 +349,7 @@ Run: `cd server && go build ./... && go test ./...`
 
 Expected: PASS；若非 Windows 环境跳过实际 WebView2 smoke，只记录 Windows 编译/测试结果。
 
-实际结果：feature-focused Web suites、`tsc:web`、`build:web`、Desktop Go tests 和 `go build ./...` 均通过；全量 Web/Go 仍包含主分支可复现的既有失败，未将其归因于本任务。
+实际结果：feature-focused Web suites、`tsc:web`、`build:web`、Desktop Go tests、`go build ./...` 和 `go test ./...` 均通过；全量 Web 仍包含主分支可复现的既有失败，未将其归因于本任务。
 
 - [x] **Step 4: 对照 spec 验收**
 
@@ -364,3 +364,55 @@ Expected: PASS；若非 Windows 环境跳过实际 WebView2 smoke，只记录 Wi
 - [x] **Step 6: Git finalize**
 
 调用 `git-workflow` finalize，按项目偏好提交剩余修改、push 当前分支；仅在主工作树干净且 finalize 结果允许时合入并 push `main`，之后清理已成功合入的 worktree/branch。
+
+---
+
+## Review remediation
+
+基于只读 review 结果，补齐原计划中未被真实验收覆盖的行为；不改变 Registry/server protocol version。
+
+### Task 7: Isolate the Preview channel and make scroll sync incremental
+
+**Files:**
+- Modify: `app/web/src/preview/previewWorkbenchChannel.ts`
+- Modify: `app/web/src/preview/previewWorkbenchHost.ts`
+- Modify: `app/web/src/app/WorkspaceApp.tsx`
+- Modify: `app/web/src/preview/PreviewWindowApp.tsx`
+- Modify: `server/cmd/wheelmaker-desktop/desktop_bridge.go`
+- Modify: `server/cmd/wheelmaker-desktop/webview_windows.go`
+- Modify: `server/cmd/wheelmaker-desktop/preview_window_windows.go`
+- Test: channel, host, PreviewWindowApp and Windows bridge tests
+
+**Acceptance:** 每个 Desktop 主窗口获得独立 channel name 并注入 companion；滚动只发送轻量 scroll message；native closed 是 Dock 后重新 attach 的唯一确认。
+
+- [x] **Step 1: Write and run RED tests**
+- [x] **Step 2: Implement the minimum channel/lifecycle changes**
+- [x] **Step 3: Run focused Web/Go tests**
+
+### Task 8: Restore complete companion interactions and source routing
+
+**Files:**
+- Modify: `app/web/src/preview/PreviewWorkbenchChrome.tsx`
+- Modify: `app/web/src/preview/PreviewWindowApp.tsx`
+- Modify: `app/web/src/preview/previewWorkbenchChannel.ts`
+- Modify: `app/web/src/app/WorkspaceApp.tsx`
+- Modify: `app/web/src/styles/file.css`
+- Test: companion and existing chat/preview source tests
+
+**Acceptance:** companion 可打开 Files/Git、执行 diff 文件切换、执行搜索结果导航/定位；Changed Files 在 detached 时 focus companion；mobile close drawer 仍清 pin。
+
+- [x] **Step 1: Write and run RED tests**
+- [x] **Step 2: Implement shared intent handling and companion adapters**
+- [x] **Step 3: Run focused Web tests**
+
+### Task 9: Tighten remembered bounds and verification evidence
+
+**Files:**
+- Modify: `server/cmd/wheelmaker-desktop/preview_window_windows.go`
+- Modify: `server/cmd/wheelmaker-desktop/preview_window_windows_test.go`
+
+**Acceptance:** 只有足够可操作的窗口交集才复用；near-main placement 不把标题栏放到屏幕外；记录新增测试证据。
+
+- [x] **Step 1: Write and run RED tests**
+- [x] **Step 2: Implement bounds validation**
+- [x] **Step 3: Run Windows Desktop tests**

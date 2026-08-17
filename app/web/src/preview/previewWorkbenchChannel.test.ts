@@ -48,7 +48,7 @@ afterEach(() => {
 });
 
 describe('preview workbench channel', () => {
-  test('round-trips ready and intent messages through the typed channel', () => {
+  test('round-trips ready, intent and lightweight scroll messages through the typed channel', () => {
     const first = createPreviewWorkbenchChannel({channelFactory: fakeChannelFactory});
     const second = createPreviewWorkbenchChannel({channelFactory: fakeChannelFactory});
     const received: PreviewWorkbenchMessage[] = [];
@@ -56,11 +56,24 @@ describe('preview workbench channel', () => {
 
     first.post({kind: 'preview-ready', version: 1, instanceId: 'detached-1'});
     first.post({kind: 'preview-intent', version: 1, intent: {kind: 'dock'}});
+    first.post({kind: 'preview-scroll', version: 1, scrollTop: 144});
 
     expect(received).toEqual([
       {kind: 'preview-ready', version: 1, instanceId: 'detached-1'},
       {kind: 'preview-intent', version: 1, intent: {kind: 'dock'}},
+      {kind: 'preview-scroll', version: 1, scrollTop: 144},
     ]);
+  });
+
+  test('separate channel names do not receive each other’s messages', () => {
+    const first = createPreviewWorkbenchChannel({name: 'preview-a', channelFactory: fakeChannelFactory});
+    const second = createPreviewWorkbenchChannel({name: 'preview-b', channelFactory: fakeChannelFactory});
+    const received: PreviewWorkbenchMessage[] = [];
+    second.subscribe(message => received.push(message));
+
+    first.post({kind: 'preview-ready', version: 1, instanceId: 'detached-a'});
+
+    expect(received).toEqual([]);
   });
 
   test('close removes the subscription and ignores messages after close', () => {

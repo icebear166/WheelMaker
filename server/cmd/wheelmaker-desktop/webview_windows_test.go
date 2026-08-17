@@ -107,7 +107,7 @@ func TestDesktopRuntimeInitScriptAuthorizesExactLocalhostPage(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(webviewSource), "desktopRuntimeInitScript(opts.Runtime.TrustedLocalhostURL())") {
+	if !strings.Contains(string(webviewSource), "desktopRuntimeInitScriptWithPreviewChannel(previewChannelName, opts.Runtime.TrustedLocalhostURL())") {
 		t.Fatal("Windows WebView initialization does not pass the authorized Localhost URL")
 	}
 	adapterSource, err := os.ReadFile("webview_profile_windows.go")

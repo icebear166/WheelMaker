@@ -2,6 +2,7 @@ import React from 'react';
 
 import {Icon} from '../common/Icon';
 import {FileExplorerTree} from '../file/FileExplorerTree';
+import {buildFileSearchResultTree, type FileSearchResultTreeNode} from '../file/fileSearchResultTree';
 import {GitHistoryPanel} from '../git/GitHistoryPanel';
 import {PortRelayFrameSurface} from '../portRelay/PortRelayFrameSurface';
 import {applyDocumentTheme} from '../theme/documentTheme';
@@ -16,6 +17,7 @@ import {
 import {PreviewWorkbenchView} from './PreviewWorkbenchView';
 import {
   activePreviewTab,
+  buildPreviewSearchMatches,
   previewRenderedTabs,
   type FilePreviewTab,
   type PreviewWorkbenchTab,
@@ -76,12 +78,80 @@ function filterDirectoryEntries(
   );
 }
 
+function PreviewWindowFileSearchResults({
+  nodes,
+  collapsedDirs,
+  onToggleDirectory,
+  onFileSelect,
+}: {
+  nodes: FileSearchResultTreeNode[];
+  collapsedDirs: ReadonlySet<string>;
+  onToggleDirectory: (path: string) => void;
+  onFileSelect: (path: string) => void;
+}) {
+  return (
+    <>
+      {nodes.map(node => {
+        if (node.kind === 'dir') {
+          const collapsed = collapsedDirs.has(node.path);
+          return (
+            <div key={`search-dir:${node.path}`}>
+              <button
+                type="button"
+                className="preview-workbench-file-search-node dir"
+                data-preview-search-directory={node.path}
+                data-tooltip={node.path}
+                onClick={() => onToggleDirectory(node.path)}
+                aria-expanded={!collapsed}
+              >
+                <Icon name={collapsed ? 'chevronRight' : 'chevronDown'} className="caret" />
+                <Icon name={collapsed ? 'folder' : 'folderOpen'} className="node-icon" />
+                <span className="label">{node.name}</span>
+              </button>
+              {!collapsed ? (
+                <div className="preview-workbench-file-search-children" style={{marginLeft: 14}}>
+                  <PreviewWindowFileSearchResults
+                    nodes={node.children}
+                    collapsedDirs={collapsedDirs}
+                    onToggleDirectory={onToggleDirectory}
+                    onFileSelect={onFileSelect}
+                  />
+                </div>
+              ) : null}
+            </div>
+          );
+        }
+        const fileIcon = resolvePreviewFileIcon(node.name);
+        return (
+          <button
+            key={`search-file:${node.path}`}
+            type="button"
+            className="preview-workbench-file-search-node file"
+            onClick={() => onFileSelect(node.path)}
+            data-tooltip={node.path}
+          >
+            <span className="caret placeholder" aria-hidden="true" />
+            <span className="node-icon seti-icon" style={{color: fileIcon.color}}>
+              <span className="seti-glyph">{fileIcon.glyph}</span>
+            </span>
+            <span className="label">{node.name}</span>
+          </button>
+        );
+      })}
+    </>
+  );
+}
+
 function PreviewWindowSearchBar({
   state,
   channel,
+  matchCount,
+  onNavigate,
 }: {
   state: PreviewWorkbenchMirrorState;
   channel: PreviewWorkbenchChannel;
+  matchCount: number;
+  onNavigate: (delta: 1 | -1) => void;
 }) {
   if (!state.search.open) return null;
   const updateSearch = (query: string) => postIntent(channel, {
@@ -100,7 +170,37 @@ function PreviewWindowSearchBar({
           onChange={event => updateSearch(event.target.value)}
           placeholder="Search"
           aria-label="Search current preview"
+          onKeyDown={event => {
+            if (event.key === 'Escape') {
+              event.preventDefault();
+              postIntent(channel, {kind: 'search', open: false, query: '', activeIndex: 0});
+            } else if (event.key === 'Enter') {
+              event.preventDefault();
+              onNavigate(event.shiftKey ? -1 : 1);
+            }
+          }}
         />
+        <span className={`preview-workbench-search-status${state.search.query && matchCount === 0 ? ' no-results' : ''}`}>
+          {state.search.query ? (matchCount > 0 ? `${state.search.activeIndex + 1}/${matchCount}` : 'No results') : 'Search current preview'}
+        </span>
+        <button
+          type="button"
+          className="chat-preview-icon-button"
+          onClick={() => onNavigate(-1)}
+          disabled={matchCount === 0}
+          aria-label="Previous match"
+        >
+          <Icon name="chevronUp" />
+        </button>
+        <button
+          type="button"
+          className="chat-preview-icon-button"
+          onClick={() => onNavigate(1)}
+          disabled={matchCount === 0}
+          aria-label="Next match"
+        >
+          <Icon name="chevronDown" />
+        </button>
         <button
           type="button"
           className="chat-preview-icon-button"
@@ -123,17 +223,22 @@ export function PreviewWindowApp({channel: providedChannel}: PreviewWindowAppPro
   const ownedChannelRef = React.useRef<PreviewWorkbenchChannel | null>(null);
   const channel = React.useMemo(() => {
     if (providedChannel) return providedChannel;
-    const created = createPreviewWorkbenchChannel();
+    const created = createPreviewWorkbenchChannel({name: window.__wheelmakerPreviewChannelName});
     ownedChannelRef.current = created;
     return created;
   }, [providedChannel]);
   const [mirrorState, setMirrorState] = React.useState<PreviewWorkbenchMirrorState | null>(null);
+  const [scrollTop, setScrollTop] = React.useState(0);
   const scrollRef = React.useRef<HTMLDivElement | null>(null);
 
   React.useEffect(() => {
     const unsubscribe = channel.subscribe(message => {
       if (message.kind === 'preview-state') {
         setMirrorState(message.state);
+        setScrollTop(message.state.search.scrollTop);
+      }
+      if (message.kind === 'preview-scroll') {
+        setScrollTop(message.scrollTop);
       }
     });
     channel.post({
@@ -144,10 +249,6 @@ export function PreviewWindowApp({channel: providedChannel}: PreviewWindowAppPro
     return () => {
       unsubscribe();
       if (ownedChannelRef.current === channel) {
-        channel.post({
-          kind: 'preview-window-closed',
-          version: PREVIEW_WORKBENCH_CHANNEL_VERSION,
-        });
         channel.close();
         ownedChannelRef.current = null;
       }
@@ -156,14 +257,39 @@ export function PreviewWindowApp({channel: providedChannel}: PreviewWindowAppPro
 
   React.useEffect(() => {
     if (scrollRef.current && mirrorState) {
-      scrollRef.current.scrollTop = mirrorState.search.scrollTop;
+      scrollRef.current.scrollTop = scrollTop;
     }
-  }, [mirrorState]);
+  }, [mirrorState, scrollTop]);
 
   React.useEffect(() => {
     if (!mirrorState) return undefined;
     return applyDocumentTheme(document.documentElement, mirrorState.themeMode);
   }, [mirrorState?.themeMode]);
+
+  const searchMatches = React.useMemo(() => {
+    if (!mirrorState) return [];
+    return buildPreviewSearchMatches(activePreviewTab(mirrorState.workbench), mirrorState.search.query);
+  }, [mirrorState?.search.query, mirrorState?.workbench]);
+
+  React.useEffect(() => {
+    const container = scrollRef.current;
+    if (!container || !mirrorState?.search.open || !mirrorState.search.query) return;
+    const activeMatch = searchMatches[mirrorState.search.activeIndex];
+    const highlightedLines = new Set(searchMatches.map(match => match.line));
+    Array.from(container.querySelectorAll<HTMLElement>('[data-line-number]')).forEach(node => {
+      const line = Number(node.dataset.lineNumber);
+      const diffPath = node.closest<HTMLElement>('[data-preview-diff-path]')?.dataset.previewDiffPath;
+      const matching = searchMatches.some(match => match.line === line && (match.kind !== 'diff' || match.path === diffPath));
+      const active = activeMatch && activeMatch.line === line && (activeMatch.kind !== 'diff' || activeMatch.path === diffPath);
+      node.classList.toggle('preview-search-match', matching && highlightedLines.has(line));
+      node.classList.toggle('preview-search-match-active', Boolean(active));
+    });
+    return () => {
+      Array.from(container.querySelectorAll<HTMLElement>('[data-line-number]')).forEach(node => {
+        node.classList.remove('preview-search-match', 'preview-search-match-active');
+      });
+    };
+  }, [mirrorState?.search.activeIndex, mirrorState?.search.open, mirrorState?.search.query, searchMatches]);
 
   if (!mirrorState) {
     return (
@@ -181,11 +307,39 @@ export function PreviewWindowApp({channel: providedChannel}: PreviewWindowAppPro
   );
   const projectId = workbench.activeProjectId;
   const expandedDirs = new Set(mirrorState.fileTree.expandedDirs[projectId] ?? ['.']);
+  const searchCollapsedDirs = new Set(mirrorState.fileTree.searchCollapsedDirs);
+  const searchTree = buildFileSearchResultTree(mirrorState.fileTree.searchResults, {
+    dirEntries: mirrorState.fileTree.dirEntries,
+  });
   const fileEntries = filterDirectoryEntries(
     mirrorState.fileTree.dirEntries,
     mirrorState.fileTree.searchQuery,
   );
   const selectedFile = activeTab?.type === 'file' ? activeTab.path : '';
+
+  const scrollToSearchMatch = (match: ReturnType<typeof buildPreviewSearchMatches>[number]) => {
+    const container = scrollRef.current;
+    if (!container) return;
+    const lineNodes = Array.from(container.querySelectorAll<HTMLElement>('[data-line-number]'));
+    const node = lineNodes.find(candidate => {
+      if (Number(candidate.dataset.lineNumber) !== match.line) return false;
+      if (match.kind !== 'diff') return true;
+      return candidate.closest<HTMLElement>('[data-preview-diff-path]')?.dataset.previewDiffPath === match.path;
+    });
+    node?.scrollIntoView({block: 'center'});
+  };
+
+  const navigateSearchMatch = (delta: 1 | -1) => {
+    if (searchMatches.length === 0) return;
+    const nextIndex = (mirrorState.search.activeIndex + delta + searchMatches.length) % searchMatches.length;
+    postIntent(channel, {
+      kind: 'search',
+      open: true,
+      query: mirrorState.search.query,
+      activeIndex: nextIndex,
+    });
+    scrollToSearchMatch(searchMatches[nextIndex]);
+  };
 
   const drawerSearch = (
     <>
@@ -212,24 +366,46 @@ export function PreviewWindowApp({channel: providedChannel}: PreviewWindowAppPro
 
   const fileDrawer = (
     <div className="preview-workbench-file-tree-content">
-      <FileExplorerTree
-        showSectionTitle={false}
-        dirEntries={fileEntries}
-        loadingDirs={mirrorState.fileTree.loadingDirs}
-        selectedFile={selectedFile}
-        isExpanded={path => expandedDirs.has(path)}
-        toggleDirectory={path => postIntent(channel, {kind: 'toggle-directory', projectId, path})}
-        resolveFileIcon={resolvePreviewFileIcon}
-        onFileSelect={path => postIntent(channel, {
-          kind: 'open-file',
-          projectId,
-          path,
-          targetLine: null,
-        })}
-        depthIndent={14}
-        rootState={mirrorState.fileTree.rootState}
-        rootError={mirrorState.fileTree.rootError}
-      />
+      {mirrorState.fileTree.searchQuery ? (
+        mirrorState.fileTree.searchLoading ? <div className="preview-workbench-file-search-empty">Loading...</div>
+          : mirrorState.fileTree.searchError ? <div className="preview-workbench-file-search-empty">{mirrorState.fileTree.searchError}</div>
+            : !mirrorState.fileTree.searchIndexed ? <div className="preview-workbench-file-search-empty">File index is not ready.</div>
+              : searchTree.length === 0 ? <div className="preview-workbench-file-search-empty">No files found</div>
+                : (
+                  <div className="preview-workbench-file-search-tree" role="tree" aria-label="Search results">
+                    <PreviewWindowFileSearchResults
+                      nodes={searchTree}
+                      collapsedDirs={searchCollapsedDirs}
+                      onToggleDirectory={path => postIntent(channel, {kind: 'toggle-search-directory', path})}
+                      onFileSelect={path => postIntent(channel, {
+                        kind: 'open-file',
+                        projectId,
+                        path,
+                        targetLine: null,
+                      })}
+                    />
+                  </div>
+                )
+      ) : (
+        <FileExplorerTree
+          showSectionTitle={false}
+          dirEntries={fileEntries}
+          loadingDirs={mirrorState.fileTree.loadingDirs}
+          selectedFile={selectedFile}
+          isExpanded={path => expandedDirs.has(path)}
+          toggleDirectory={path => postIntent(channel, {kind: 'toggle-directory', projectId, path})}
+          resolveFileIcon={resolvePreviewFileIcon}
+          onFileSelect={path => postIntent(channel, {
+            kind: 'open-file',
+            projectId,
+            path,
+            targetLine: null,
+          })}
+          depthIndent={14}
+          rootState={mirrorState.fileTree.rootState}
+          rootError={mirrorState.fileTree.rootError}
+        />
+      )}
     </div>
   );
 
@@ -295,7 +471,12 @@ export function PreviewWindowApp({channel: providedChannel}: PreviewWindowAppPro
           codeLineHeight={mirrorState.codeLineHeight}
           codeTabSize={mirrorState.codeTabSize}
           onClose={() => post({kind: 'dock'})}
-          onToggleFile={() => undefined}
+          onToggleFile={path => post({
+            kind: 'toggle-diff-file',
+            projectId: tab.projectId,
+            tabId: tab.id,
+            path,
+          })}
           scrollRef={scrollRef}
         />
       );
@@ -310,7 +491,12 @@ export function PreviewWindowApp({channel: providedChannel}: PreviewWindowAppPro
           overviewLabel={tab.source.kind === 'commit'
             ? `${tab.source.sha.slice(0, 7)} · ${tab.files.length} files`
             : `${tab.source.scope} · ${tab.activeFilePath}`}
-          onToggleFile={() => undefined}
+          onToggleFile={path => post({
+            kind: 'toggle-diff-file',
+            projectId: tab.projectId,
+            tabId: tab.id,
+            path,
+          })}
           themeMode={mirrorState.themeMode}
           codeTheme={mirrorState.codeTheme}
           codeFont={mirrorState.codeFont}
@@ -360,6 +546,7 @@ export function PreviewWindowApp({channel: providedChannel}: PreviewWindowAppPro
       tabs={tabs}
       drawerMode={workbench.drawerMode}
       drawerPinned={mirrorState.drawerPinned}
+      showDrawerTools
       fileDrawer={fileDrawer}
       fileDrawerSearch={drawerSearch}
       gitDrawer={gitDrawer}
@@ -384,7 +571,12 @@ export function PreviewWindowApp({channel: providedChannel}: PreviewWindowAppPro
         if (event.key === 'Escape') post({kind: 'focus'});
       }}
       >
-        <PreviewWindowSearchBar state={mirrorState} channel={channel} />
+        <PreviewWindowSearchBar
+          state={mirrorState}
+          channel={channel}
+          matchCount={searchMatches.length}
+          onNavigate={navigateSearchMatch}
+        />
         <div
           ref={scrollRef}
           className="chat-file-peek-scroll"

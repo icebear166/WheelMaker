@@ -41,6 +41,12 @@ function stateFixture(): PreviewWorkbenchMirrorState {
       loadingDirs: {},
       expandedDirs: {},
       searchQuery: '',
+      searchResults: [],
+      searchCollapsedDirs: [],
+      searchLoading: false,
+      searchError: '',
+      searchIndexed: true,
+      searchActiveIndex: 0,
       rootState: 'empty',
       rootError: '',
     },
@@ -91,6 +97,13 @@ test('host publishes the mirror on ready and routes intents to the main controll
     intent: {kind: 'scroll', scrollTop: 144},
   });
   expect(onIntent).toHaveBeenCalledWith({kind: 'scroll', scrollTop: 144});
+
+  host.publishScroll(144);
+  expect(transport.posts).toContainEqual({
+    kind: 'preview-scroll',
+    version: PREVIEW_WORKBENCH_CHANNEL_VERSION,
+    scrollTop: 144,
+  });
 
   transport.emit({kind: 'preview-window-closed', version: PREVIEW_WORKBENCH_CHANNEL_VERSION});
   expect(onClosed).toHaveBeenCalledTimes(1);

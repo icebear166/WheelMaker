@@ -41,7 +41,12 @@ const (
 )
 
 func desktopRuntimeInitScript(localhostURLs ...string) string {
+	return desktopRuntimeInitScriptWithPreviewChannel("", localhostURLs...)
+}
+
+func desktopRuntimeInitScriptWithPreviewChannel(previewChannelName string, localhostURLs ...string) string {
 	bootstrapDocumentURL := strconv.Quote(desktopBootstrapDocumentURL())
+	quotedPreviewChannelName := strconv.Quote(previewChannelName)
 	trustedLocalhostURL := ""
 	if len(localhostURLs) > 0 {
 		if policy, err := newDesktopLocalhostWebViewPolicy(localhostURLs[0]); err == nil {
@@ -75,8 +80,9 @@ func desktopRuntimeInitScript(localhostURLs ...string) string {
     return;
   }
   const installTrustedDesktopBridge = () => {
-    window.WheelMakerDesktop = Object.freeze({
-      enabled: true,
+	window.WheelMakerDesktop = Object.freeze({
+    enabled: true,
+		previewChannelName: ` + quotedPreviewChannelName + `,
 		getDeviceName: invoke('` + desktopGetDeviceNameBinding + `'),
       startDrag: invoke('` + desktopStartDragBinding + `'),
       minimize: invoke('` + desktopMinimizeBinding + `'),
@@ -121,6 +127,7 @@ func desktopRuntimeInitScript(localhostURLs ...string) string {
   if (location.protocol === 'http:' && location.hostname === '127.0.0.1' && location.port === '4173') {
 		window.WheelMakerDesktop = Object.freeze({
 			enabled: true,
+			previewChannelName: ` + quotedPreviewChannelName + `,
 			getDeviceName: invoke('` + desktopGetDeviceNameBinding + `'),
 			startDrag: invoke('` + desktopStartDragBinding + `'),
 			minimize: invoke('` + desktopMinimizeBinding + `'),
@@ -141,6 +148,9 @@ func desktopBootstrapReadySignalScript() string {
 	return `window.dispatchEvent(new Event(` + strconv.Quote(desktopBootstrapReadyEvent) + `));`
 }
 
-func desktopCompanionRuntimeInitScript() string {
-	return `(() => { if (window !== window.top) return; })();` + "\n" + desktopLaunchOverlayScript()
+func desktopCompanionRuntimeInitScript(previewChannelName string) string {
+	return `(() => {
+  if (window !== window.top) return;
+  window.__wheelmakerPreviewChannelName = ` + strconv.Quote(previewChannelName) + `;
+})();` + "\n" + desktopLaunchOverlayScript()
 }

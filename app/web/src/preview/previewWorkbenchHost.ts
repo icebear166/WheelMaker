@@ -8,6 +8,7 @@ import {
 
 export type PreviewWorkbenchHost = {
   publishState: (state: PreviewWorkbenchMirrorState) => void;
+  publishScroll: (scrollTop: number) => void;
   close: () => void;
 };
 
@@ -24,6 +25,14 @@ function postState(channel: PreviewWorkbenchChannel, state: PreviewWorkbenchMirr
     kind: 'preview-state',
     version: PREVIEW_WORKBENCH_CHANNEL_VERSION,
     state,
+  });
+}
+
+function postScroll(channel: PreviewWorkbenchChannel, scrollTop: number): void {
+  channel.post({
+    kind: 'preview-scroll',
+    version: PREVIEW_WORKBENCH_CHANNEL_VERSION,
+    scrollTop,
   });
 }
 
@@ -53,6 +62,9 @@ export function createPreviewWorkbenchHost(options: PreviewWorkbenchHostOptions)
   return {
     publishState: state => {
       if (!closed) postState(options.channel, state);
+    },
+    publishScroll: scrollTop => {
+      if (!closed && Number.isFinite(scrollTop)) postScroll(options.channel, scrollTop);
     },
     close: () => {
       if (closed) return;

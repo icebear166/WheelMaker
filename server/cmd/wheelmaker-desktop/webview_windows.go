@@ -24,6 +24,10 @@ func (webView2Launcher) Launch(target desktopLaunchTarget, opts desktopWindowOpt
 		return err
 	}
 	defer uninitializeDesktopClipboardOLE()
+	previewChannelName, err := newDesktopPreviewChannelName()
+	if err != nil {
+		return err
+	}
 
 	w := webview2.NewWithOptions(webview2.WebViewOptions{
 		AutoFocus: true,
@@ -69,7 +73,7 @@ func (webView2Launcher) Launch(target desktopLaunchTarget, opts desktopWindowOpt
 		}
 		notifications := newDesktopNotificationCenter(hwnd, func(script string) { w.Eval(script) })
 		defer notifications.close()
-		previewController, err = newDesktopPreviewWindowController(w, hwnd, opts.Runtime)
+		previewController, err = newDesktopPreviewWindowController(w, hwnd, opts.Runtime, previewChannelName)
 		if err != nil {
 			return err
 		}
@@ -83,7 +87,7 @@ func (webView2Launcher) Launch(target desktopLaunchTarget, opts desktopWindowOpt
 		if bindErr != nil {
 			return bindErr
 		}
-		w.Init(desktopRuntimeInitScript(opts.Runtime.TrustedLocalhostURL()))
+		w.Init(desktopRuntimeInitScriptWithPreviewChannel(previewChannelName, opts.Runtime.TrustedLocalhostURL()))
 	}
 	if target.HTML != "" {
 		w.SetHtml(target.HTML)

@@ -44,6 +44,7 @@ type PreviewWorkbenchChromeProps = {
   onMobilePortRelayRefresh?: () => void;
   mobileFullscreen?: boolean;
   onMobileFullscreenChange?: (fullscreen: boolean) => void;
+  showDrawerTools?: boolean;
   onFloat?: () => void;
   onDock?: () => void;
   children: React.ReactNode;
@@ -82,6 +83,7 @@ export function PreviewWorkbenchChrome({
   onMobilePortRelayRefresh,
   mobileFullscreen = false,
   onMobileFullscreenChange,
+  showDrawerTools = false,
   onFloat,
   onDock,
   children,
@@ -392,7 +394,7 @@ export function PreviewWorkbenchChrome({
       bodyClassName="preview-workbench-body"
       onKeyDown={onWorkbenchKeyDown}
     >
-      {mode === 'mobile' && (fileDrawer || gitDrawer) ? (
+      {((mode === 'mobile' && (fileDrawer || gitDrawer)) || (showDrawerTools && (fileDrawer || gitDrawer))) ? (
         <div ref={drawerToolsRef} className="preview-workbench-body-tools">
           {fileDrawer ? (
             <button

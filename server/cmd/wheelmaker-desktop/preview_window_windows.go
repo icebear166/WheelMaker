@@ -3,10 +3,13 @@
 package main
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"net/url"
 	"path"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -14,17 +17,20 @@ import (
 )
 
 const (
-	previewWindowDefaultWidth  int32 = 1100
-	previewWindowDefaultHeight int32 = 780
-	previewWindowMinimumWidth  int32 = 720
-	previewWindowMinimumHeight int32 = 480
-	previewWindowMargin        int32 = 24
+	previewWindowDefaultWidth         int32 = 1100
+	previewWindowDefaultHeight        int32 = 780
+	previewWindowMinimumWidth         int32 = 720
+	previewWindowMinimumHeight        int32 = 480
+	previewWindowMargin               int32 = 24
+	previewWindowMinimumVisibleWidth  int32 = 320
+	previewWindowMinimumVisibleHeight int32 = 180
 )
 
 type desktopPreviewWindowController struct {
 	mainWebView webview2.WebView
 	mainWindow  uintptr
 	runtime     *desktopRuntime
+	channelName string
 
 	mu      sync.Mutex
 	window  webview2.WebView
@@ -33,11 +39,19 @@ type desktopPreviewWindowController struct {
 	closed  bool
 }
 
-func newDesktopPreviewWindowController(mainWebView webview2.WebView, mainWindow uintptr, runtime *desktopRuntime) (*desktopPreviewWindowController, error) {
+func newDesktopPreviewWindowController(mainWebView webview2.WebView, mainWindow uintptr, runtime *desktopRuntime, channelName string) (*desktopPreviewWindowController, error) {
 	if mainWindow == 0 || runtime == nil {
 		return nil, errors.New("Preview window controller is unavailable")
 	}
-	return &desktopPreviewWindowController{mainWebView: mainWebView, mainWindow: mainWindow, runtime: runtime}, nil
+	if channelName == "" {
+		return nil, errors.New("Preview channel is unavailable")
+	}
+	return &desktopPreviewWindowController{
+		mainWebView: mainWebView,
+		mainWindow:  mainWindow,
+		runtime:     runtime,
+		channelName: channelName,
+	}, nil
 }
 
 func (c *desktopPreviewWindowController) Open() error {
@@ -182,7 +196,7 @@ func (c *desktopPreviewWindowController) run(targetURL string, storedBounds *des
 		setWindowPosRect(hwnd, initial.left, initial.top, initial.width(), initial.height(), swpNoZOrder|swpShowWindow)
 		showWindow(hwnd, swRestore)
 	}
-	window.Init(desktopCompanionRuntimeInitScript())
+	window.Init(desktopCompanionRuntimeInitScript(c.channelName))
 	window.Navigate(targetURL)
 	window.Run()
 	runtime.KeepAlive(adapter)
@@ -199,15 +213,27 @@ func (c *desktopPreviewWindowController) finish(hwnd uintptr, _ desktopWindowRec
 	c.mu.Unlock()
 	if notifyMain && c.mainWebView != nil {
 		c.mainWebView.Dispatch(func() {
-			c.mainWebView.Eval(`(() => {
+			c.mainWebView.Eval(previewWindowClosedScript(c.channelName))
+		})
+	}
+}
+
+func previewWindowClosedScript(channelName string) string {
+	return `(() => {
   try {
-    const channel = new BroadcastChannel('wheelmaker.preview-workbench.v1');
+    const channel = new BroadcastChannel(` + strconv.Quote(channelName) + `);
     channel.postMessage({kind: 'preview-window-closed', version: 1});
     channel.close();
   } catch (_) {}
-})();`)
-		})
+})();`
+}
+
+func newDesktopPreviewChannelName() (string, error) {
+	var randomBytes [16]byte
+	if _, err := rand.Read(randomBytes[:]); err != nil {
+		return "", errors.New("generate Preview channel name: " + err.Error())
 	}
+	return "wheelmaker.preview-workbench.v1." + hex.EncodeToString(randomBytes[:]), nil
 }
 
 func focusDesktopPreviewWindow(hwnd uintptr) {
@@ -299,8 +325,14 @@ func placePreviewWindowNearMain(area desktopWindowRect, mainHwnd uintptr) deskto
 	if mainHwnd != 0 {
 		if mainRect, ok := getWindowRect(mainHwnd); ok {
 			x := mainRect.right + previewWindowMargin
+			top := maxInt32(area.top+previewWindowMargin, mainRect.top)
+			maxTop := area.bottom - previewWindowMargin - height
+			if maxTop < area.top {
+				maxTop = area.top
+			}
+			top = minInt32(top, maxTop)
 			if x+width <= area.right {
-				return desktopWindowRect{left: x, top: mainRect.top, right: x + width, bottom: mainRect.top + height}
+				return desktopWindowRect{left: x, top: top, right: x + width, bottom: top + height}
 			}
 		}
 	}
@@ -313,7 +345,7 @@ func desktopWindowRectVisible(rect desktopWindowRect, areas []desktopMonitorWork
 		top := maxInt32(rect.top, area.workArea.top)
 		right := minInt32(rect.right, area.workArea.right)
 		bottom := minInt32(rect.bottom, area.workArea.bottom)
-		if right-left >= 120 && bottom-top >= 80 {
+		if right-left >= previewWindowMinimumVisibleWidth && bottom-top >= previewWindowMinimumVisibleHeight {
 			return true
 		}
 	}

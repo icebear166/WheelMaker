@@ -6,6 +6,7 @@ export type DesktopUpdateInfo = {
 
 export type DesktopWindowBridge = {
   enabled: true;
+  previewChannelName?: string;
   getDeviceName?: () => Promise<string> | string;
   startDrag?: () => Promise<void> | void;
   minimize?: () => Promise<void> | void;
@@ -57,6 +58,7 @@ export type DesktopFileActionTarget = {
 declare global {
   interface Window {
     WheelMakerDesktop?: DesktopWindowBridge;
+    __wheelmakerPreviewChannelName?: string;
   }
 }
 

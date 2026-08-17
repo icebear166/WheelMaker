@@ -90,6 +90,15 @@ describe('web chat file peek viewer', () => {
     expect(mainTsx).toContain('togglePromptArtifactPreviewFile');
   });
 
+  test('Changed Files focuses the detached Preview window after opening a prompt diff', () => {
+    const mainTsx = readSourceText(mainPath);
+    const openStart = mainTsx.indexOf('const openPromptArtifactDiff = useCallback(');
+    const openEnd = mainTsx.indexOf('const togglePromptArtifactPreviewFile', openStart);
+    const openBody = mainTsx.slice(openStart, openEnd);
+
+    expect(openBody).toContain('focusPreviewWindow();');
+  });
+
   test('prompt diff active file selection survives open, load, restore, and header toggles', () => {
     const mainTsx = readSourceText(mainPath);
     const viewersTsx = readSourceText(viewersPath);
@@ -1087,5 +1096,24 @@ describe('web chat file peek viewer', () => {
       .toContain('className="workbench-chrome-title"');
     expect(mainTsx).not.toContain('className="chat-file-peek-name"');
     expect(mainTsx).not.toContain('className="chat-file-peek-path"');
+  });
+
+  test('mobile drawer close clears pin while desktop keeps pin sticky', () => {
+    const mainTsx = readSourceText(mainPath);
+    const updateStart = mainTsx.indexOf('const updatePreviewDrawerMode = useCallback(');
+    const updateEnd = mainTsx.indexOf('\n\n  useEffect(() => {', updateStart);
+    const updateBody = mainTsx.slice(updateStart, updateEnd);
+
+    expect(updateBody).toContain("if (mode === 'closed' && !isWide)");
+  });
+
+  test('Dock waits for the native closed event before restoring inline Preview', () => {
+    const mainTsx = readSourceText(mainPath);
+    const dockStart = mainTsx.indexOf('const dockPreviewWindow = useCallback(');
+    const dockEnd = mainTsx.indexOf('const handlePreviewWorkbenchIntent', dockStart);
+    const dockBody = mainTsx.slice(dockStart, dockEnd);
+
+    expect(dockBody).toContain('setPreviewDockPending(true);');
+    expect(dockBody).not.toContain('setPreviewDetached(false);');
   });
 });

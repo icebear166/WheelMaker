@@ -696,6 +696,7 @@ import {
 import {PreviewWorkbenchView} from '../preview/PreviewWorkbenchView';
 import {
   createPreviewWorkbenchChannel,
+  PREVIEW_WORKBENCH_CHANNEL_NAME,
   PREVIEW_WORKBENCH_CHANNEL_VERSION,
   type PreviewWorkbenchChannel,
   type PreviewWorkbenchIntent,
@@ -2875,9 +2876,12 @@ export function App() {
     previewWorkbenchStateFromSnapshot(persistedGlobal.previewWorkbenchSnapshot),
   );
   const [previewDetached, setPreviewDetached] = useState(false);
+  const [previewDockPending, setPreviewDockPending] = useState(false);
   const previewWorkbenchChannel = useMemo<PreviewWorkbenchChannel | null>(() => {
     const bridge = getDesktopWindowBridge();
-    return bridge?.openPreviewWindow ? createPreviewWorkbenchChannel() : null;
+    return bridge?.openPreviewWindow
+      ? createPreviewWorkbenchChannel({name: bridge.previewChannelName || PREVIEW_WORKBENCH_CHANNEL_NAME})
+      : null;
   }, []);
   const focusPreviewWindow = useCallback(() => {
     const bridge = getDesktopWindowBridge();
@@ -2914,6 +2918,7 @@ export function App() {
   const [previewSearchQuery, setPreviewSearchQuery] = useState('');
   const [previewSearchActiveIndex, setPreviewSearchActiveIndex] = useState(0);
   const [previewSearchScrollTop, setPreviewSearchScrollTop] = useState(0);
+  const previewSearchScrollTopRef = useRef(0);
   const previewSearchInputRef = useRef<HTMLInputElement | null>(null);
   const [previewFileTreeSearchQuery, setPreviewFileTreeSearchQuery] = useState('');
   const [previewFileTreeSearchResults, setPreviewFileTreeSearchResults] = useState<RegistryFileIndexSearchResult[]>([]);
@@ -2981,8 +2986,11 @@ export function App() {
   );
   const portRelayWorkbenchOpen = !!activePortRelayPreview && chatPreviewOpen;
   const updatePreviewDrawerMode = useCallback((mode: PreviewWorkbenchDrawerMode) => {
+    if (mode === 'closed' && !isWide) {
+      setPreviewDrawerPinned(false);
+    }
     setPreviewWorkbench(current => ({...current, drawerMode: mode}));
-  }, []);
+  }, [isWide]);
 
   useEffect(() => {
     setPreviewWorkbenchActionsMenuOpen(false);
@@ -5639,8 +5647,8 @@ export function App() {
     if (target instanceof Element && target.closest(SIDEBAR_TRANSIENT_MENU_SELECTOR)) {
       return;
     }
-    closeSidebarTransientMenus();
-  }, [closeSidebarTransientMenus]);
+    closeSidebarTransientMenus(chatHubMenuOpen ? 'hub' : null);
+  }, [chatHubMenuOpen, closeSidebarTransientMenus]);
   useEffect(() => {
     window.addEventListener('scroll', closeSidebarTransientMenusOnScroll, true);
     return () => window.removeEventListener('scroll', closeSidebarTransientMenusOnScroll, true);
@@ -7599,13 +7607,16 @@ export function App() {
     setChatPreviewManualCollapsed(true);
   }, []);
   const closeChatPreview = useCallback(() => {
+    if (!isWide) {
+      setPreviewDrawerPinned(false);
+    }
     setChatPreviewManualOpen(false);
     setChatPreviewManualCollapsed(true);
     closeChatFilePeek();
     closeChatAttachmentPreview();
     closeChatPromptArtifactPreview();
     closeChatPortRelayPreview();
-  }, [closeChatAttachmentPreview, closeChatFilePeek, closeChatPortRelayPreview, closeChatPromptArtifactPreview]);
+  }, [closeChatAttachmentPreview, closeChatFilePeek, closeChatPortRelayPreview, closeChatPromptArtifactPreview, isWide]);
   const handleAndroidNativeBack = useCallback(() => {
     if (shareSource) {
       setShareSource(null);
@@ -7966,6 +7977,7 @@ export function App() {
   terminalSyncRef.current = terminalSync;
   activeTerminalKeyRef.current = activeTerminalKey;
   previewWorkbenchRef.current = previewWorkbench;
+  previewSearchScrollTopRef.current = previewSearchScrollTop;
   chatFilePeekRef.current = chatFilePeek;
 
   useEffect(() => {
@@ -8001,13 +8013,19 @@ export function App() {
       open: previewSearchOpen,
       query: previewSearchQuery,
       activeIndex: previewSearchActiveIndex,
-      scrollTop: previewSearchScrollTop,
+      scrollTop: previewSearchScrollTopRef.current,
     },
     fileTree: {
       dirEntries: chatFilePreviewDirEntries,
       loadingDirs: chatFilePreviewLoadingDirs,
       expandedDirs: chatFilePreviewExpandedDirsByProject,
       searchQuery: previewFileTreeSearchQuery,
+      searchResults: previewFileTreeSearchResults,
+      searchCollapsedDirs: previewFileTreeSearchCollapsedDirs,
+      searchLoading: previewFileTreeSearchLoading,
+      searchError: previewFileTreeSearchError,
+      searchIndexed: previewFileTreeSearchIndexed,
+      searchActiveIndex: previewFileTreeSearchActiveIndex,
       rootState: chatFilePreviewRootState,
       rootError: chatFilePreviewDirErrors['.'] || '',
     },
@@ -8037,11 +8055,16 @@ export function App() {
     codeTheme,
     previewDrawerPinned,
     previewFileTreeSearchQuery,
+    previewFileTreeSearchResults,
+    previewFileTreeSearchCollapsedDirs,
+    previewFileTreeSearchLoading,
+    previewFileTreeSearchError,
+    previewFileTreeSearchIndexed,
+    previewFileTreeSearchActiveIndex,
     previewGitSnapshot,
     previewSearchActiveIndex,
     previewSearchOpen,
     previewSearchQuery,
-    previewSearchScrollTop,
     previewWorkbench,
     registryAuth.status?.csrfToken,
     registryEndpoints.previewURL,
@@ -9238,6 +9261,9 @@ export function App() {
   );
 
   const closeChatFilePeekFromChrome = useCallback(() => {
+    if (!isWide) {
+      setPreviewDrawerPinned(false);
+    }
     if (!isWide && chatFilePeekHistoryActiveRef.current) {
       window.history.back();
       return;
@@ -17566,6 +17592,7 @@ export function App() {
         requestSeq,
       ),
     );
+    focusPreviewWindow();
     if (!isWide) {
       setDrawerOpen(false);
       if (!chatFilePeekHistoryActiveRef.current) {
@@ -17626,6 +17653,7 @@ export function App() {
   }, [
     archivedPreview?.messages,
     findPromptRequestForDone,
+    focusPreviewWindow,
     isWide,
     projectId,
     selectedArchivedKey?.projectId,
@@ -17634,6 +17662,31 @@ export function App() {
     service,
     setDrawerOpen,
   ]);
+  const togglePreviewDiffFile = useCallback((projectId: string, tabId: string, path: string) => {
+    setPreviewWorkbench(current =>
+      updatePreviewTab(current, projectId, tabId, item => {
+        if (item.type === 'prompt-diff') {
+          return {
+            ...item,
+            activeFilePath: path,
+            files: item.files.map(file =>
+              file.path === path ? {...file, expanded: !file.expanded} : file,
+            ),
+          };
+        }
+        if (item.type === 'git-diff') {
+          return {
+            ...item,
+            activeFilePath: path,
+            files: item.files.map(file =>
+              file.path === path ? {...file, expanded: !file.expanded} : file,
+            ),
+          };
+        }
+        return item;
+      }),
+    );
+  }, []);
 
   const togglePromptArtifactPreviewFile = useCallback((path: string) => {
     const tab = activePreviewTab(previewWorkbenchRef.current);
@@ -17641,17 +17694,16 @@ export function App() {
       return;
     }
     setPreviewWorkbench(current =>
-      updatePreviewTab(current, tab.projectId, tab.id, item =>
-        item.type === 'prompt-diff'
-          ? {
-              ...item,
-              activeFilePath: path,
-              files: item.files.map(file =>
-                file.path === path ? {...file, expanded: !file.expanded} : file,
-              ),
-            }
-          : item,
-      ),
+      updatePreviewTab(current, tab.projectId, tab.id, item => {
+        if (item.type !== 'prompt-diff') return item;
+        return {
+          ...item,
+          activeFilePath: path,
+          files: item.files.map(file =>
+            file.path === path ? {...file, expanded: !file.expanded} : file,
+          ),
+        };
+      }),
     );
   }, []);
   const toggleGitDiffPreviewFile = useCallback((path: string) => {
@@ -17660,17 +17712,16 @@ export function App() {
       return;
     }
     setPreviewWorkbench(current =>
-      updatePreviewTab(current, tab.projectId, tab.id, item =>
-        item.type === 'git-diff'
-          ? {
-              ...item,
-              activeFilePath: path,
-              files: item.files.map(file =>
-                file.path === path ? {...file, expanded: !file.expanded} : file,
-              ),
-            }
-          : item,
-      ),
+      updatePreviewTab(current, tab.projectId, tab.id, item => {
+        if (item.type !== 'git-diff') return item;
+        return {
+          ...item,
+          activeFilePath: path,
+          files: item.files.map(file =>
+            file.path === path ? {...file, expanded: !file.expanded} : file,
+          ),
+        };
+      }),
     );
   }, []);
 
@@ -21695,33 +21746,8 @@ export function App() {
   const previewCompanionSupported = Boolean(
     previewWorkbenchChannel && getDesktopWindowBridge()?.openPreviewWindow,
   );
-  const floatPreviewWindow = useCallback(() => {
-    const bridge = getDesktopWindowBridge();
-    if (!previewWorkbenchChannel?.post || !bridge?.openPreviewWindow) return;
-    setPreviewDetached(true);
-    setChatPreviewManualOpen(false);
-    setChatPreviewManualCollapsed(true);
-    previewWorkbenchChannel.post({
-      kind: 'preview-host-status',
-      version: PREVIEW_WORKBENCH_CHANNEL_VERSION,
-      detached: true,
-    });
-    Promise.resolve(bridge.openPreviewWindow()).catch(error => {
-      setPreviewDetached(false);
-      setChatPreviewManualCollapsed(false);
-      setChatPreviewManualOpen(true);
-      previewWorkbenchChannel.post({
-        kind: 'preview-host-status',
-        version: PREVIEW_WORKBENCH_CHANNEL_VERSION,
-        detached: false,
-      });
-      const reason = error instanceof Error ? error.message : String(error);
-      setToastMessage(`Failed to open Preview window: ${reason}`);
-    });
-  }, [previewWorkbenchChannel]);
-  const dockPreviewWindow = useCallback(() => {
-    const bridge = getDesktopWindowBridge();
-    Promise.resolve(bridge?.dockPreviewWindow?.()).catch(() => undefined);
+  const restoreInlinePreview = useCallback(() => {
+    setPreviewDockPending(false);
     setPreviewDetached(false);
     setChatPreviewManualCollapsed(false);
     setChatPreviewManualOpen(true);
@@ -21731,6 +21757,38 @@ export function App() {
       detached: false,
     });
   }, [previewWorkbenchChannel]);
+  const floatPreviewWindow = useCallback(() => {
+    const bridge = getDesktopWindowBridge();
+    if (!previewWorkbenchChannel?.post || !bridge?.openPreviewWindow) return;
+    setPreviewDockPending(false);
+    setPreviewDetached(true);
+    setChatPreviewManualOpen(false);
+    setChatPreviewManualCollapsed(true);
+    previewWorkbenchChannel.post({
+      kind: 'preview-host-status',
+      version: PREVIEW_WORKBENCH_CHANNEL_VERSION,
+      detached: true,
+    });
+    Promise.resolve(bridge.openPreviewWindow()).catch(error => {
+      restoreInlinePreview();
+      const reason = error instanceof Error ? error.message : String(error);
+      setToastMessage(`Failed to open Preview window: ${reason}`);
+    });
+  }, [previewWorkbenchChannel, restoreInlinePreview]);
+  const dockPreviewWindow = useCallback(() => {
+    const bridge = getDesktopWindowBridge();
+    if (!previewDetached || previewDockPending) return;
+    if (!bridge?.dockPreviewWindow) {
+      restoreInlinePreview();
+      return;
+    }
+    setPreviewDockPending(true);
+    Promise.resolve(bridge.dockPreviewWindow()).catch(error => {
+      setPreviewDockPending(false);
+      const reason = error instanceof Error ? error.message : String(error);
+      setToastMessage(`Failed to dock Preview window: ${reason}`);
+    });
+  }, [previewDockPending, previewDetached, restoreInlinePreview]);
   const handlePreviewWorkbenchIntent = useCallback((intent: PreviewWorkbenchIntent) => {
     switch (intent.kind) {
       case 'select-tab':
@@ -21758,6 +21816,12 @@ export function App() {
         return;
       case 'toggle-directory':
         void togglePreviewDirectory(intent.path);
+        return;
+      case 'toggle-search-directory':
+        togglePreviewFileTreeSearchDirectory(intent.path);
+        return;
+      case 'toggle-diff-file':
+        togglePreviewDiffFile(intent.projectId, intent.tabId, intent.path);
         return;
       case 'open-file':
         openChatFilePeek(intent.path, intent.targetLine, intent.projectId);
@@ -21794,13 +21858,26 @@ export function App() {
     focusPreviewWindow,
     openChatFilePeek,
     openGitDiffPreview,
+    togglePreviewDiffFile,
+    togglePreviewFileTreeSearchDirectory,
     togglePreviewDirectory,
     updatePreviewDrawerMode,
     updatePreviewFileTreeSearchQuery,
   ]);
   const previewMirrorStateRef = useRef(previewMirrorState);
   previewMirrorStateRef.current = previewMirrorState;
+  const getPreviewMirrorState = useCallback((): PreviewWorkbenchMirrorState => {
+    const state = previewMirrorStateRef.current;
+    return {
+      ...state,
+      search: {
+        ...state.search,
+        scrollTop: previewSearchScrollTopRef.current,
+      },
+    };
+  }, []);
   const handlePreviewWindowReady = useCallback(() => {
+    setPreviewDockPending(false);
     setPreviewDetached(true);
     previewWorkbenchChannel?.post({
       kind: 'preview-host-status',
@@ -21809,15 +21886,13 @@ export function App() {
     });
   }, [previewWorkbenchChannel]);
   const handlePreviewWindowClosed = useCallback(() => {
-    setPreviewDetached(false);
-    setChatPreviewManualCollapsed(false);
-    setChatPreviewManualOpen(true);
-  }, []);
+    restoreInlinePreview();
+  }, [restoreInlinePreview]);
   const previewWorkbenchHost = useMemo(() => {
     if (!previewWorkbenchChannel) return null;
     return createPreviewWorkbenchHost({
       channel: previewWorkbenchChannel,
-      getState: () => previewMirrorStateRef.current,
+      getState: getPreviewMirrorState,
       onReady: handlePreviewWindowReady,
       onIntent: handlePreviewWorkbenchIntent,
       onClosed: handlePreviewWindowClosed,
@@ -21826,6 +21901,7 @@ export function App() {
     handlePreviewWindowClosed,
     handlePreviewWindowReady,
     handlePreviewWorkbenchIntent,
+    getPreviewMirrorState,
     previewWorkbenchChannel,
   ]);
   useEffect(() => {
@@ -21838,6 +21914,10 @@ export function App() {
   useEffect(() => {
     previewWorkbenchHost?.publishState(previewMirrorState);
   }, [previewMirrorState, previewWorkbenchHost]);
+  useEffect(() => {
+    if (!previewDetached) return;
+    previewWorkbenchHost?.publishScroll(previewSearchScrollTop);
+  }, [previewDetached, previewSearchScrollTop, previewWorkbenchHost]);
   const handlePreviewScroll = useCallback((event: React.UIEvent<HTMLDivElement>) => {
     setPreviewSearchScrollTop(event.currentTarget.scrollTop);
   }, []);

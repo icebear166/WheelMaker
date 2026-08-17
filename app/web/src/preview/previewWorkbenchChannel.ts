@@ -1,5 +1,5 @@
 import type {CodeFontId, CodeThemeId} from '../code/shikiSettings';
-import type {RegistryFsEntry} from '../registry/registryTypes';
+import type {RegistryFileIndexSearchResult, RegistryFsEntry} from '../registry/registryTypes';
 import type {GitBrowserProjectSnapshot} from '../git/gitBrowserStore';
 import type {
   GitDiffFileMeta,
@@ -22,6 +22,12 @@ export type PreviewWorkbenchFileTreeState = {
   loadingDirs: Record<string, boolean>;
   expandedDirs: Record<string, string[]>;
   searchQuery: string;
+  searchResults: RegistryFileIndexSearchResult[];
+  searchCollapsedDirs: string[];
+  searchLoading: boolean;
+  searchError: string;
+  searchIndexed: boolean;
+  searchActiveIndex: number;
   rootState: 'ready' | 'loading' | 'error' | 'empty';
   rootError: string;
 };
@@ -54,6 +60,7 @@ export type PreviewWorkbenchIntent =
   | {kind: 'file-tree-search'; query: string}
   | {kind: 'scroll'; scrollTop: number}
   | {kind: 'toggle-directory'; projectId: string; path: string}
+  | {kind: 'toggle-search-directory'; path: string}
   | {kind: 'open-file'; projectId: string; path: string; targetLine: number | null}
   | {kind: 'open-git'; projectId: string; source: GitDiffSource; file: GitDiffFileMeta}
   | {kind: 'git-selected-refs'; projectId: string; refs: string[]}
@@ -61,6 +68,7 @@ export type PreviewWorkbenchIntent =
   | {kind: 'git-refresh'; projectId: string}
   | {kind: 'git-load-more'; projectId: string}
   | {kind: 'git-retry'; projectId: string}
+  | {kind: 'toggle-diff-file'; projectId: string; tabId: string; path: string}
   | {kind: 'copy-commit-sha'; sha: string}
   | {kind: 'focus'}
   | {kind: 'dock'};
@@ -80,6 +88,11 @@ export type PreviewWorkbenchMessage =
       kind: 'preview-intent';
       version: typeof PREVIEW_WORKBENCH_CHANNEL_VERSION;
       intent: PreviewWorkbenchIntent;
+    }
+  | {
+      kind: 'preview-scroll';
+      version: typeof PREVIEW_WORKBENCH_CHANNEL_VERSION;
+      scrollTop: number;
     }
   | {
       kind: 'preview-host-status';
@@ -115,6 +128,7 @@ const MESSAGE_KINDS = new Set<PreviewWorkbenchMessage['kind']>([
   'preview-ready',
   'preview-state',
   'preview-intent',
+  'preview-scroll',
   'preview-host-status',
   'preview-window-closed',
 ]);
@@ -134,9 +148,28 @@ function defaultChannelFactory(name: string): PreviewWorkbenchChannelPort {
 function isPreviewWorkbenchMessage(value: unknown): value is PreviewWorkbenchMessage {
   if (!value || typeof value !== 'object') return false;
   const message = value as {kind?: unknown; version?: unknown};
-  return message.version === PREVIEW_WORKBENCH_CHANNEL_VERSION
-    && typeof message.kind === 'string'
-    && MESSAGE_KINDS.has(message.kind as PreviewWorkbenchMessage['kind']);
+  if (message.version !== PREVIEW_WORKBENCH_CHANNEL_VERSION
+    || typeof message.kind !== 'string'
+    || !MESSAGE_KINDS.has(message.kind as PreviewWorkbenchMessage['kind'])) {
+    return false;
+  }
+  if (message.kind === 'preview-ready') {
+    return typeof (value as {instanceId?: unknown}).instanceId === 'string';
+  }
+  if (message.kind === 'preview-state') {
+    return !!(value as {state?: unknown}).state && typeof (value as {state?: unknown}).state === 'object';
+  }
+  if (message.kind === 'preview-intent') {
+    const intent = (value as {intent?: unknown}).intent;
+    return !!intent && typeof intent === 'object' && typeof (intent as {kind?: unknown}).kind === 'string';
+  }
+  if (message.kind === 'preview-scroll') {
+    return Number.isFinite((value as {scrollTop?: unknown}).scrollTop);
+  }
+  if (message.kind === 'preview-host-status') {
+    return typeof (value as {detached?: unknown}).detached === 'boolean';
+  }
+  return true;
 }
 
 export function createPreviewWorkbenchChannel(
