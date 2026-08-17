@@ -2621,6 +2621,243 @@ button.chat-hub-gateway-capsule:disabled {
   font-size: 10px;
 }
 
+.chat-hub-mcp-toolbar-actions {
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.chat-hub-mcp-toolbar-actions .chat-hub-detail-action {
+  min-height: 22px;
+  padding-inline: 5px;
+  font-size: 9px;
+}
+
+.chat-hub-mcp-import-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.chat-hub-mcp-row {
+  min-height: 38px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) max-content max-content;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 2px 3px 4px;
+  border-radius: 5px;
+}
+
+.chat-hub-mcp-row:hover {
+  background: color-mix(in srgb, var(--hover) 48%, transparent);
+}
+
+.chat-hub-mcp-copy {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.chat-hub-mcp-name,
+.chat-hub-mcp-meta {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chat-hub-mcp-name {
+  color: var(--text-primary);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.chat-hub-mcp-meta {
+  color: var(--text-tertiary);
+  font-size: 9px;
+}
+
+.chat-hub-mcp-status {
+  font-size: 9px;
+  white-space: nowrap;
+}
+
+.chat-hub-mcp-status.state-connected {
+  color: var(--state-success);
+}
+
+.chat-hub-mcp-status.state-starting,
+.chat-hub-mcp-status.state-not_started {
+  color: var(--text-secondary);
+}
+
+.chat-hub-mcp-status.state-failed {
+  color: var(--danger, #df6674);
+}
+
+.chat-hub-mcp-status.state-disabled {
+  color: var(--text-tertiary);
+}
+
+.chat-hub-mcp-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
+}
+
+.chat-hub-mcp-form {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding: 5px 2px 7px;
+  border-bottom: 1px solid color-mix(in srgb, var(--border-subtle) 35%, transparent);
+}
+
+.chat-hub-mcp-import-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin: 2px 0 6px;
+  padding: 7px;
+  border: 1px solid color-mix(in srgb, var(--accent-primary) 28%, var(--border-subtle));
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--accent-primary) 6%, transparent);
+}
+
+.chat-hub-mcp-import-preview-title {
+  color: var(--text-primary);
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.chat-hub-mcp-import-preview-summary {
+  color: var(--text-secondary);
+  font-size: 9px;
+}
+
+.chat-hub-mcp-import-preview-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+}
+
+.chat-hub-mcp-import-preview-chip {
+  padding: 2px 5px;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--surface-raised) 76%, transparent);
+  color: var(--text-secondary);
+  font-size: 9px;
+}
+
+.chat-hub-mcp-form label,
+.chat-hub-mcp-values-toolbar {
+  color: var(--text-secondary);
+  font-size: 9px;
+}
+
+.chat-hub-mcp-form label > span {
+  display: block;
+  margin-bottom: 3px;
+}
+
+.chat-hub-mcp-form small {
+  color: var(--text-tertiary);
+  font-size: 9px;
+  font-weight: 400;
+}
+
+.chat-hub-mcp-form input:not([type='checkbox']),
+.chat-hub-mcp-form select,
+.chat-hub-mcp-form textarea {
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 25px;
+  padding: 4px 6px;
+  border: 1px solid color-mix(in srgb, var(--border-subtle) 80%, transparent);
+  border-radius: 5px;
+  background: color-mix(in srgb, var(--surface-panel) 70%, transparent);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 10px;
+}
+
+.chat-hub-mcp-form textarea {
+  resize: vertical;
+}
+
+.chat-hub-mcp-form-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 120px;
+  gap: 6px;
+}
+
+.chat-hub-mcp-values {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.chat-hub-mcp-values-toolbar {
+  min-height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.chat-hub-mcp-value-row {
+  display: grid;
+  grid-template-columns: minmax(70px, .8fr) minmax(80px, 1.2fr) max-content 24px;
+  align-items: center;
+  gap: 4px;
+}
+
+.chat-hub-mcp-secret-toggle {
+  display: inline-flex !important;
+  align-items: center;
+  gap: 3px;
+  white-space: nowrap;
+}
+
+.chat-hub-mcp-secret-toggle input {
+  margin: 0;
+}
+
+.chat-hub-mcp-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 4px;
+}
+
+.chat-hub-detail-action.accent {
+  color: var(--accent-primary);
+}
+
+@media (max-width: 620px) {
+  .chat-hub-mcp-toolbar-actions {
+    gap: 0;
+  }
+
+  .chat-hub-mcp-toolbar-actions .chat-hub-detail-action {
+    max-width: 25px;
+    overflow: hidden;
+    white-space: nowrap;
+  }
+
+  .chat-hub-mcp-form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .chat-hub-mcp-value-row {
+    grid-template-columns: minmax(70px, 1fr) minmax(80px, 1fr) max-content 24px;
+  }
+}
+
 .chat-hub-npm-row,
 .chat-hub-scan-row,
 .chat-hub-skill-row {

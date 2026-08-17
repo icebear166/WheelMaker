@@ -35,6 +35,12 @@ import type {
   RegistryHubConfig,
   RegistryHubConfigResponse,
   RegistryHubConfigUpdatePayload,
+  RegistryHubMCPImportPreview,
+  RegistryHubMCPRuntimeStatusData,
+  RegistryHubMCPRuntimeState,
+  RegistryHubMCPServerSnapshot,
+  RegistryHubMCPTransport,
+  RegistryHubMCPValueSnapshot,
   RegistryHubState,
   RegistryHubStateActionResponse,
   RegistryHubStateRefreshResponse,
@@ -335,6 +341,127 @@ function normalizeNpmCommandResponse(raw: unknown, hubId: string): RegistryNpmCo
   };
 }
 
+function normalizeMCPValueSnapshot(raw: unknown): RegistryHubMCPValueSnapshot {
+  const input = raw && typeof raw === 'object' && !Array.isArray(raw)
+    ? raw as Record<string, unknown>
+    : {};
+  const secret = input.secret === true;
+  return {
+    value: !secret && typeof input.value === 'string' ? input.value : undefined,
+    secret,
+    configured: input.configured === true,
+    updatedAt: typeof input.updatedAt === 'string' ? input.updatedAt : undefined,
+  };
+}
+
+function normalizeMCPValueMap(raw: unknown): Record<string, RegistryHubMCPValueSnapshot> | undefined {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+    return undefined;
+  }
+  const values: Record<string, RegistryHubMCPValueSnapshot> = {};
+  for (const [name, value] of Object.entries(raw)) {
+    if (!name.trim()) continue;
+    values[name] = normalizeMCPValueSnapshot(value);
+  }
+  return Object.keys(values).length > 0 ? values : undefined;
+}
+
+function normalizeMCPServerSnapshot(raw: unknown): RegistryHubMCPServerSnapshot | null {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+    return null;
+  }
+  const input = raw as Record<string, unknown>;
+  const id = typeof input.id === 'string' ? input.id.trim() : '';
+  const name = typeof input.name === 'string' ? input.name.trim() : '';
+  const transport: RegistryHubMCPTransport = input.transport === 'http' ? 'http' : 'stdio';
+  if (!id || !name) return null;
+  return {
+    id,
+    name,
+    enabled: input.enabled === true,
+    transport,
+    command: typeof input.command === 'string' ? input.command : undefined,
+    args: Array.isArray(input.args)
+      ? input.args.filter((item): item is string => typeof item === 'string')
+      : undefined,
+    cwd: typeof input.cwd === 'string' ? input.cwd : undefined,
+    env: normalizeMCPValueMap(input.env),
+    url: typeof input.url === 'string' ? input.url : undefined,
+    headers: normalizeMCPValueMap(input.headers),
+    createdAt: typeof input.createdAt === 'string' ? input.createdAt : undefined,
+    updatedAt: typeof input.updatedAt === 'string' ? input.updatedAt : undefined,
+    importedFrom: typeof input.importedFrom === 'string' ? input.importedFrom : undefined,
+  };
+}
+
+function normalizeMCPServerSnapshots(raw: unknown): RegistryHubMCPServerSnapshot[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map(item => normalizeMCPServerSnapshot(item))
+    .filter((item): item is RegistryHubMCPServerSnapshot => !!item);
+}
+
+function normalizeMCPRuntimeState(raw: unknown): RegistryHubMCPRuntimeState {
+  switch (raw) {
+    case 'disabled':
+    case 'not_started':
+    case 'starting':
+    case 'connected':
+    case 'failed':
+      return raw;
+    default:
+      return 'not_started';
+  }
+}
+
+function normalizeMCPRuntimeStatusData(raw: unknown): RegistryHubMCPRuntimeStatusData {
+  const input = raw && typeof raw === 'object' && !Array.isArray(raw)
+    ? raw as Record<string, unknown>
+    : {};
+  const servers = Array.isArray(input.servers) ? input.servers.flatMap(item => {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) return [];
+    const entry = item as Record<string, unknown>;
+    const serverId = typeof entry.serverId === 'string' ? entry.serverId.trim() : '';
+    const name = typeof entry.name === 'string' ? entry.name.trim() : '';
+    if (!serverId || !name) return [];
+    return [{
+      serverId,
+      name,
+      state: normalizeMCPRuntimeState(entry.state),
+      error: typeof entry.error === 'string' ? entry.error : undefined,
+      updatedAt: typeof entry.updatedAt === 'string' ? entry.updatedAt : undefined,
+    }];
+  }) : [];
+  return {servers};
+}
+
+function normalizeMCPImportPreview(raw: unknown): RegistryHubMCPImportPreview | undefined {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined;
+  const input = raw as Record<string, unknown>;
+  const source = input.source === 'claude' ? 'claude' : input.source === 'codex' ? 'codex' : null;
+  if (!source) return undefined;
+  const issues = Array.isArray(input.issues) ? input.issues.flatMap(item => {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) return [];
+    const issue = item as Record<string, unknown>;
+    if (typeof issue.name !== 'string' || typeof issue.reason !== 'string') return [];
+    return [{name: issue.name, reason: issue.reason}];
+  }) : [];
+  const conflicts = Array.isArray(input.conflicts)
+    ? input.conflicts.flatMap(item => {
+      if (typeof item === 'string') return [item];
+      if (!item || typeof item !== 'object' || Array.isArray(item)) return [];
+      const name = (item as Record<string, unknown>).name;
+      return typeof name === 'string' ? [name] : [];
+    })
+    : [];
+  return {
+    source,
+    servers: normalizeMCPServerSnapshots(input.servers),
+    issues,
+    conflicts,
+  };
+}
+
 function hubIdFromProjectId(projectId: string): string {
   const index = projectId.indexOf(':');
   return (index > 0 ? projectId.slice(0, index) : projectId).trim();
@@ -441,7 +568,9 @@ export class RegistryRepository {
             ? deepSeekPlatformInput.updatedAt
             : undefined,
         },
+        mcpServers: normalizeMCPServerSnapshots(configInput.mcpServers),
       },
+      mcpImportPreview: normalizeMCPImportPreview(input.mcpImportPreview),
     };
   }
 
@@ -473,6 +602,8 @@ export class RegistryRepository {
         lastError: typeof sectionInput.lastError === 'string' ? sectionInput.lastError : undefined,
         data: name === 'agentPackages' && sectionInput.data !== undefined
           ? normalizeNpmCommandResponse(sectionInput.data, hubId)
+          : name === 'mcp' && sectionInput.data !== undefined
+            ? normalizeMCPRuntimeStatusData(sectionInput.data)
           : sectionInput.data,
       };
     }

@@ -134,6 +134,63 @@ func TestStoreMCPUpdateClearSecret(t *testing.T) {
 	}
 }
 
+func TestStoreMCPUpdateTransportClearsProviderSpecificFields(t *testing.T) {
+	store := New(filepath.Join(t.TempDir(), "hub-config.json"))
+	now := time.Now().UTC()
+	if err := store.AddMCPServer(MCPServerConfig{
+		Name:      "switchable",
+		Transport: MCPTransportStdio,
+		Command:   "python",
+		Args:      []string{"server.py"},
+		Env:       map[string]MCPValue{"TOKEN": {Value: "secret", Secret: true}},
+	}, now); err != nil {
+		t.Fatal(err)
+	}
+	servers, err := store.MCPServers()
+	if err != nil || len(servers) != 1 {
+		t.Fatalf("MCPServers = %#v, %v", servers, err)
+	}
+	if err := store.UpdateMCPServer(MCPServerUpdate{
+		ID:        servers[0].ID,
+		Name:      "switchable",
+		Transport: MCPTransportHTTP,
+		URL:       "https://example.test/mcp",
+	}, now.Add(time.Minute)); err != nil {
+		t.Fatalf("switch transport: %v", err)
+	}
+	servers, err = store.MCPServers()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if servers[0].Command != "" || len(servers[0].Args) != 0 || len(servers[0].Env) != 0 {
+		t.Fatalf("stdio fields survived HTTP switch: %#v", servers[0])
+	}
+}
+
+func TestStoreMCPUpdateCanClearCWD(t *testing.T) {
+	store := New(filepath.Join(t.TempDir(), "hub-config.json"))
+	if err := store.AddMCPServer(MCPServerConfig{
+		Name: "neo4j", Enabled: true, Transport: MCPTransportStdio,
+		Command: "python", CWD: `C:\\mcp`,
+	}, time.Now()); err != nil {
+		t.Fatalf("AddMCPServer: %v", err)
+	}
+	servers, err := store.MCPServers()
+	if err != nil {
+		t.Fatalf("MCPServers: %v", err)
+	}
+	if err := store.UpdateMCPServer(MCPServerUpdate{ID: servers[0].ID, ClearCWD: true}, time.Now()); err != nil {
+		t.Fatalf("UpdateMCPServer: %v", err)
+	}
+	servers, err = store.MCPServers()
+	if err != nil {
+		t.Fatalf("MCPServers after clear: %v", err)
+	}
+	if servers[0].CWD != "" {
+		t.Fatalf("CWD = %q, want empty", servers[0].CWD)
+	}
+}
+
 func TestStoreMCPRejectsInvalidTransportAndMissingCommand(t *testing.T) {
 	store := New(filepath.Join(t.TempDir(), "hub-config.json"))
 	now := time.Now().UTC()

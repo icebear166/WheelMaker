@@ -17,7 +17,7 @@ test('menu and hub expansion refresh only on opening edges', async () => {
   expect(refresh).toHaveBeenNthCalledWith(
     2,
     'hub-a',
-    ['flickerBridge', 'agentPackages', 'skills', 'fileIndex'],
+    ['flickerBridge', 'agentPackages', 'skills', 'fileIndex', 'mcp'],
     false,
   );
 });
@@ -55,13 +55,13 @@ test('treats visibly expanded Hubs as expansion edges on each menu opening', asy
   expect(refresh).toHaveBeenNthCalledWith(
     2,
     'hub-a',
-    ['flickerBridge', 'agentPackages', 'skills', 'fileIndex'],
+    ['flickerBridge', 'agentPackages', 'skills', 'fileIndex', 'mcp'],
     false,
   );
   expect(refresh).toHaveBeenNthCalledWith(
     4,
     'hub-a',
-    ['flickerBridge', 'agentPackages', 'skills', 'fileIndex'],
+    ['flickerBridge', 'agentPackages', 'skills', 'fileIndex', 'mcp'],
     false,
   );
 });

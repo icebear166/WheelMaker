@@ -24,6 +24,15 @@ type MCPImportResult struct {
 	Issues  []MCPImportIssue  `json:"issues"`
 }
 
+// MCPImportPreview is safe to return to a frontend. Imported server values are
+// sanitized in the same way as the persisted HubConfig snapshot.
+type MCPImportPreview struct {
+	Source    string              `json:"source"`
+	Servers   []MCPServerSnapshot `json:"servers"`
+	Issues    []MCPImportIssue    `json:"issues"`
+	Conflicts []string            `json:"conflicts"`
+}
+
 type mcpImportEntry struct {
 	Type           string            `json:"type" toml:"type"`
 	Command        string            `json:"command" toml:"command"`
@@ -155,6 +164,45 @@ func ImportClaudeMCPConfig(raw []byte) (MCPImportResult, error) {
 		entries[name] = entry
 	}
 	return importMCPEntries(entries, "claude"), nil
+}
+
+// PreviewMCPImport parses a native config and reports importable entries,
+// unsupported entries, and same-name conflicts without mutating the store.
+func PreviewMCPImport(source string, raw []byte, existing []MCPServerConfig) (MCPImportPreview, error) {
+	source = strings.ToLower(strings.TrimSpace(source))
+	var (
+		result MCPImportResult
+		err    error
+	)
+	switch source {
+	case "codex":
+		result, err = ImportCodexMCPConfig(raw)
+	case "claude":
+		result, err = ImportClaudeMCPConfig(raw)
+	default:
+		return MCPImportPreview{}, fmt.Errorf("unsupported MCP import source %q", source)
+	}
+	if err != nil {
+		return MCPImportPreview{}, err
+	}
+	servers := make([]MCPServerSnapshot, 0, len(result.Servers))
+	for _, server := range result.Servers {
+		servers = append(servers, mcpServerSnapshot(server))
+	}
+	sort.SliceStable(servers, func(i, j int) bool {
+		return strings.ToLower(servers[i].Name) < strings.ToLower(servers[j].Name)
+	})
+	conflicts := FindMCPImportConflicts(existing, result.Servers)
+	conflictNames := make([]string, 0, len(conflicts))
+	for _, conflict := range conflicts {
+		conflictNames = append(conflictNames, conflict.Name)
+	}
+	return MCPImportPreview{
+		Source:    source,
+		Servers:   servers,
+		Issues:    append([]MCPImportIssue(nil), result.Issues...),
+		Conflicts: conflictNames,
+	}, nil
 }
 
 func importMCPEntries(entries map[string]mcpImportEntry, source string) MCPImportResult {

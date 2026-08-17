@@ -1,4 +1,4 @@
-> 摘要：本页维护 Chat 头部 Hub 菜单作为 per-hub 操作中心的统一行模型、展开与直接动作语义、MCP 预留入口，以及桌面浮窗 / 移动端全屏宿主共享内部布局的约定。
+> 摘要：本页维护 Chat 头部 Hub 菜单作为 per-hub 操作中心的统一行模型、展开与直接动作语义、MCP 管理入口，以及桌面浮窗 / 移动端全屏宿主共享内部布局的约定。
 
 # Hub 菜单
 
@@ -16,7 +16,7 @@ Hub 菜单是唯一的 per-hub 操作中心：所有针对单个 Hub 的配置�
 ```
 ● hub-a                                  v1.2  ↓  ↻  ⌄
   ⚙ Settings                                      ● V2  ›
-  ⛭ Global                    [Package 2] [MCP 0] [Skills 12]
+  ⛭ Global                    [Package 2] [MCP 3] [Skills 12]
   ▤ Projects                [Visible 11] [Scan 2] [Skills 24]
   ┌ Expanded detail panel                               ┐
   └─────────────────────────────────────────────────────┘
@@ -28,7 +28,7 @@ Latest v1.3                                  Update all hubs
 - **Hub 标题行**：颜色点在名称前；版本号是只读状态，右侧提供独立的 Update 与 Restart 图标动作，无展开行为。已安装的正常 Hub 有新版本时同时显示两个动作；已是最新版或本地版本较新时只显示 Restart；未安装或 `update_only` Hub 只显示 Update。Update 使用 `cloudDownload`，Restart 使用 `power`，存在新版本时红色提示点附着在 Update 动作上。两个动作都走 `wheelmakerUpdate` confirm 流程，pending 时动作组禁用。版本动作默认透明，仅 hover/focus/active 时出现背景。
 - **Global 行**：固定三个等宽入口，顺序为 NPM、MCP、Skills。入口都采用“图标 + 数量”，不显示文字标签和 disclosure chevron：
   - NPM 使用 package 图标，数量沿用现有统计；存在可更新包时显示不占布局空间的红色提示点。展开逐包列表，批量 `Update all` 位于 detail 工具栏。
-  - MCP 使用官方 MCP 图标，当前数量固定为 `0`；点击展开本地空态 `MCP servers` / `No MCP servers configured.`，不发起网络、API 或协议调用。
+  - MCP 使用官方 MCP 图标，数量是当前 Hub 已配置的服务器总数（包含 disabled 项）；点击展开 `MCP servers` detail，可新增、编辑、删除、启用/禁用、导入 Codex/Claude 原生配置，并显示每个服务器的运行态。支持 STDIO 与 Streamable HTTP；导入先生成预览，冲突或首批不支持的 SSE/WebSocket 项会阻止确认写入。
   - Skills 使用 sparkles 图标，只展示当前 Hub 的全局 Skills，不混入 Project Skills；批量 `Update all` 位于 detail 工具栏且只更新 Hub 全局 Skills。
 - **Projects 行**：固定三个等宽入口，顺序为 Visibility、Scan、Skills，同样只显示图标和数量：
   - Visibility 使用 eye 图标，数量沿用当前可见/总数语义；展开逐项目可见性勾选，不提供 Show All / Hide All。
@@ -43,10 +43,10 @@ Hub 菜单只读取统一 HubStore，不为 WheelMaker Update、NPM、Skills、F
 | UI 边沿 | 行为 |
 | --- | --- |
 | 打开 Hub 菜单 | 对显示中的 Hub refresh `wheelmakerUpdate`，用于标题行版本 |
-| 展开某个 Hub | 对该 Hub refresh `flickerBridge`、`agentPackages`、`skills`、`fileIndex` |
+| 展开某个 Hub | 对该 Hub refresh `flickerBridge`、`agentPackages`、`skills`、`fileIndex`、`mcp` |
 | 展开 Settings | 独立读取 HubConfig，不重复 refresh HubState |
 | 展开 NPM、Global Skills、Project Skills、Scan | 只消费展开 Hub 时取得的数据，不重复 refresh |
-| 展开 Visibility 或 MCP | 不触发 HubState |
+| 展开 Visibility | 不触发 HubState |
 | 打开 Skill Detail / Add Skill | 只做详情或候选查询，不覆盖或 refresh `skills` |
 
 请求只能由 closed→open 或 collapsed→expanded 边沿触发，不能因 render、effect 依赖变化或 detail 切换重复发送。同一 Section 已 queued/updating 时复用既有任务。关闭菜单、收起 Hub 或关闭 companion surface 不取消 Hub 已接受的 Update 或 Restart。
@@ -104,5 +104,7 @@ Hub 菜单是唯一的 Skills 管理入口：Hub 全局 Skills 位于各 Hub 的
 ## 配置与降级
 
 Hub 级配置走 `hub.config.get/update`，写 Hub 本地 `db/hub-config.json`，secret 永不回显。HubConfig 是持久化配置，HubState 是运行态；两者可以由统一 HubStore 组织，但不得互相复制为第二份权威。
+
+MCP 配置属于 Hub 全局配置。保存后刷新未来创建的 provider runtime；已经运行的 Session 不被强制改写，用户可通过 Hub 菜单的显式 Restart 使其使用最新 MCP 集合。状态在 HubState `mcp` section 中短暂保存，允许 `disabled`、`not_started`、`starting`、`connected`、`failed` 五种状态；失败是非阻塞诊断。编辑已配置的 secret 只显示 configured，不把原值回填到浏览器。
 
 Registry Protocol 使用 2.7 并在当前 HubState schema 内硬切，Hub 与 Web 配套发布，不保留旧 HubState 或 `agentProfiles` 降级分支。2.6 Hub 只保留 `update_only` 升级通道；菜单不通过轮询维持 WheelMaker Update、NPM、Skills、File Index 或 Flicker，异步 Action 完成后由 Hub 主动发布对应完整 Section。

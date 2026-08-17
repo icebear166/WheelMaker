@@ -83,6 +83,7 @@ type MCPServerUpdate struct {
 	Command      string              `json:"command,omitempty"`
 	Args         []string            `json:"args,omitempty"`
 	CWD          string              `json:"cwd,omitempty"`
+	ClearCWD     bool                `json:"clearCwd,omitempty"`
 	Env          map[string]MCPValue `json:"env,omitempty"`
 	ClearEnv     []string            `json:"clearEnv,omitempty"`
 	URL          string              `json:"url,omitempty"`
@@ -262,6 +263,18 @@ func (s *Store) UpdateMCPServer(update MCPServerUpdate, now time.Time) error {
 		server.Enabled = *update.Enabled
 	}
 	if update.Transport != "" {
+		if update.Transport != server.Transport {
+			switch update.Transport {
+			case MCPTransportStdio:
+				server.URL = ""
+				server.Headers = nil
+			case MCPTransportHTTP:
+				server.Command = ""
+				server.Args = nil
+				server.CWD = ""
+				server.Env = nil
+			}
+		}
 		server.Transport = update.Transport
 	}
 	if update.Command != "" {
@@ -270,7 +283,9 @@ func (s *Store) UpdateMCPServer(update MCPServerUpdate, now time.Time) error {
 	if update.Args != nil {
 		server.Args = cloneStrings(update.Args)
 	}
-	if update.CWD != "" {
+	if update.ClearCWD {
+		server.CWD = ""
+	} else if update.CWD != "" {
 		server.CWD = update.CWD
 	}
 	if update.URL != "" {

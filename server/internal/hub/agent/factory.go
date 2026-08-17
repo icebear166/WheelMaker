@@ -7,6 +7,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/swm8023/wheelmaker/internal/hubconfig"
 	"github.com/swm8023/wheelmaker/internal/protocol"
 )
 
@@ -23,7 +24,10 @@ type ACPFactoryOptions struct {
 	KimiAPIKey     string
 	QwenAPIKey     string
 	ZAIAPIKey      string
-	FlickerAPIKey  string
+	// MCPServers contains the current enabled Hub MCP entries for providers
+	// that materialize MCP configuration at process launch.
+	MCPServers    []hubconfig.MCPServerConfig
+	FlickerAPIKey string
 	// FlickerModelStore,when set,suppliesthe cc-flicker provider's model
 	// catalog. It is refreshedonce when the managed bridge reportshealthy.
 	FlickerModelStore *FlickerModelStore
@@ -97,7 +101,7 @@ func newACPFactoryWithOptions(options ACPFactoryOptions, available func(ACPProvi
 	if available == nil {
 		available = isProviderAvailable
 	}
-	codexProvider := NewCodexProvider()
+	codexProvider := NewCodexProviderWithMCP(options.MCPServers)
 	if available(codexProvider) {
 		f.Register(protocol.ACPProviderCodex, codexappInstanceCreator(codexProvider))
 	}
@@ -126,7 +130,7 @@ func newACPFactoryWithOptions(options ACPFactoryOptions, available func(ACPProvi
 		f.Register(candidate.provider, providerInstanceCreator(prov))
 	}
 	if deepseekKey := strings.TrimSpace(options.DeepSeekAPIKey); deepseekKey != "" {
-		cxDeepSeekProvider := NewCXDeepSeekProvider(options.StateDir, deepseekKey)
+		cxDeepSeekProvider := NewCXDeepSeekProviderWithMCP(options.StateDir, deepseekKey, options.MCPServers)
 		if available(cxDeepSeekProvider) {
 			f.Register(protocol.ACPProviderCXDeepSeek, codexappInstanceCreator(cxDeepSeekProvider))
 		}

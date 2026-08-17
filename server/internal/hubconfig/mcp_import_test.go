@@ -67,3 +67,28 @@ func TestImportMCPNameConflictRequiresResolution(t *testing.T) {
 		t.Fatalf("conflicts = %#v", conflicts)
 	}
 }
+
+func TestPreviewMCPImportSanitizesValuesAndReportsIssues(t *testing.T) {
+	raw := []byte(`
+[mcp_servers.neo4j]
+command = "python"
+
+[mcp_servers.neo4j.env]
+NEO4J_PASSWORD = "preview-secret"
+
+[mcp_servers.legacy]
+type = "sse"
+url = "https://example.test/sse"
+`)
+	preview, err := PreviewMCPImport("codex", raw, []MCPServerConfig{{ID: "existing", Name: "neo4j"}})
+	if err != nil {
+		t.Fatalf("PreviewMCPImport: %v", err)
+	}
+	if len(preview.Servers) != 1 || len(preview.Issues) != 1 || len(preview.Conflicts) != 1 || preview.Conflicts[0] != "neo4j" {
+		t.Fatalf("preview = %#v", preview)
+	}
+	password := preview.Servers[0].Env["NEO4J_PASSWORD"]
+	if password.Value != "" || !password.Secret || !password.Configured {
+		t.Fatalf("preview secret = %#v", password)
+	}
+}

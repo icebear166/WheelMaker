@@ -82,6 +82,7 @@ function createHarness(overrides: Partial<ChatHubMenuProps> = {}) {
     colorMenuHubId: null,
     colorMenuExiting: false,
     flickerStatuses: {},
+    mcpStatuses: {},
     flickerActionHubId: '',
     hubConfigByHubId: {},
     opsByHubId: {},
@@ -452,6 +453,164 @@ test('MCP opens a local inline zero-state without dispatching an operation', asy
     .toEqual(['No MCP servers configured.']);
   expect(callbacks.onRequestNpmUpdate).not.toHaveBeenCalled();
   expect(callbacks.onUpdateSkillSources).not.toHaveBeenCalled();
+});
+
+test('MCP lists runtime state and dispatches enablement changes', async () => {
+  const {props, callbacks} = createHarness({
+    expandedSections: {'hub-a': ['mcp']},
+    hubConfigByHubId: {
+      'hub-a': {
+        loading: false,
+        error: '',
+        busyField: '',
+        data: {
+          flickerBridge: {mode: 'v1', enabled: false},
+          apiKeys: {},
+          deepSeekPlatform: {configured: false},
+          mcpServers: [{
+            id: 'mcp-neo4j',
+            name: 'neo4j',
+            enabled: true,
+            transport: 'stdio',
+            command: 'python',
+            args: ['-m', 'neo4j_mcp_server'],
+            env: {NEO4J_PASSWORD: {secret: true, configured: true}},
+          }],
+        },
+      },
+    },
+    mcpStatuses: {
+      'hub-a': {
+        servers: [{
+          serverId: 'mcp-neo4j',
+          name: 'neo4j',
+          state: 'failed',
+          error: 'connection refused',
+        }],
+      },
+    },
+  });
+  let renderer!: TestRenderer.ReactTestRenderer;
+  await act(async () => {
+    renderer = TestRenderer.create(<ChatHubMenu {...props} />);
+  });
+
+  const hubActions = renderer.root.findByProps({className: 'chat-hub-line-actions chat-hub-hub-actions'});
+  const mcpAction = hubActions.findByProps({'aria-label': 'MCP details'});
+  expect(mcpAction.findByProps({className: 'chat-hub-action-info'}).children).toEqual(['1']);
+  const row = renderer.root.findByProps({className: 'chat-hub-mcp-row'});
+  expect(row.findByProps({className: 'chat-hub-mcp-name'}).children).toEqual(['neo4j']);
+  expect(row.findByProps({className: 'chat-hub-mcp-status state-failed'}).children).toEqual(['Failed']);
+  act(() => row.findByProps({ 'aria-label': 'Disable neo4j' }).props.onClick());
+  expect(callbacks.onUpdateHubConfig).toHaveBeenCalledWith('hub-a', {
+    section: 'mcpServers',
+    field: 'mcp-neo4j',
+    action: 'disable',
+  });
+});
+
+test('MCP add form serializes STDIO configuration without exposing existing secrets', async () => {
+  const {props, callbacks} = createHarness({
+    expandedSections: {'hub-a': ['mcp']},
+    hubConfigByHubId: {
+      'hub-a': {
+        loading: false,
+        error: '',
+        busyField: '',
+        data: {
+          flickerBridge: {mode: 'v1', enabled: false},
+          apiKeys: {},
+          deepSeekPlatform: {configured: false},
+          mcpServers: [],
+        },
+      },
+    },
+  });
+  let renderer!: TestRenderer.ReactTestRenderer;
+  await act(async () => {
+    renderer = TestRenderer.create(<ChatHubMenu {...props} />);
+  });
+  act(() => renderer.root.findByProps({'aria-label': 'Add MCP server'}).props.onClick());
+  const form = renderer.root.findByProps({className: 'chat-hub-mcp-form'});
+  const name = form.findByProps({'aria-label': 'MCP server name'});
+  const command = form.findByProps({'aria-label': 'MCP command'});
+  act(() => name.props.onChange({target: {value: 'neo4j'}}));
+  act(() => command.props.onChange({target: {value: 'python'}}));
+  await act(async () => {
+    form.props.onSubmit({preventDefault: jest.fn()});
+  });
+  expect(callbacks.onUpdateHubConfig).toHaveBeenCalledWith('hub-a', expect.objectContaining({
+    section: 'mcpServers',
+    action: 'add',
+  }));
+  const payload = JSON.parse(callbacks.onUpdateHubConfig.mock.calls.at(-1)[1].value);
+  expect(payload).toEqual(expect.objectContaining({
+    name: 'neo4j',
+    enabled: true,
+    transport: 'stdio',
+    command: 'python',
+  }));
+  expect(JSON.stringify(payload)).not.toContain('NEO4J_PASSWORD');
+});
+
+test('MCP import shows a preview before applying entries', async () => {
+  const {props, callbacks} = createHarness({
+    expandedSections: {'hub-a': ['mcp']},
+    hubConfigByHubId: {
+      'hub-a': {
+        loading: false,
+        error: '',
+        busyField: '',
+        data: {
+          flickerBridge: {mode: 'v1', enabled: false},
+          apiKeys: {},
+          deepSeekPlatform: {configured: false},
+          mcpServers: [],
+        },
+      },
+    },
+  });
+  let renderer!: TestRenderer.ReactTestRenderer;
+  await act(async () => {
+    renderer = TestRenderer.create(<ChatHubMenu {...props} />);
+  });
+  const fileInput = renderer.root.findByProps({className: 'chat-hub-mcp-import-input'});
+  const file = {text: jest.fn().mockResolvedValue('[mcp_servers.neo4j]\ncommand = "python"')};
+  await act(async () => {
+    await fileInput.props.onChange({target: {files: [file], value: 'neo4j.toml'}});
+  });
+  expect(callbacks.onUpdateHubConfig).toHaveBeenCalledWith('hub-a', expect.objectContaining({
+    section: 'mcpServers',
+    action: 'preview',
+  }));
+
+  const baseConfig = props.hubConfigByHubId['hub-a']!;
+  const previewProps: ChatHubMenuProps = {
+    ...props,
+    hubConfigByHubId: {
+      'hub-a': {
+        ...baseConfig,
+        mcpImportPreview: {
+          source: 'codex' as const,
+          servers: [{id: 'preview-id', name: 'neo4j', enabled: true, transport: 'stdio' as const, command: 'python'}],
+          issues: [],
+          conflicts: [],
+        },
+      },
+    },
+  };
+  await act(async () => {
+    renderer.update(<ChatHubMenu {...previewProps} />);
+  });
+  expect(renderer.root.findByProps({className: 'chat-hub-mcp-import-preview-title'}).children)
+    .toEqual(['Import preview · ', 'Codex']);
+  await act(async () => {
+    renderer.root.findByProps({'aria-label': 'Confirm MCP import'}).props.onClick();
+  });
+  expect(callbacks.onUpdateHubConfig.mock.calls.at(-1)?.[1]).toEqual(expect.objectContaining({
+    section: 'mcpServers',
+    action: 'import',
+  }));
 });
 
 test('hub row disables unavailable actions', async () => {
@@ -1045,6 +1204,7 @@ test('settings section renders the flicker segment row and compact key editors',
           apiKeys: {
             kimi: {configured: true, updatedAt: '2026-07-29T12:00:00Z'},
           },
+          mcpServers: [],
         },
       },
     },
@@ -1113,6 +1273,7 @@ test('hides Flicker controls, summary, and errors when MyFlicker is unavailable'
           apiKeys: {
             kimi: {configured: true, updatedAt: '2026-07-29T12:00:00Z'},
           },
+          mcpServers: [],
         },
       },
     },
@@ -1151,7 +1312,7 @@ test('flicker segment disables unavailable modes and surfaces the inline error',
         loading: false,
         error: '',
         busyField: '',
-        data: {flickerBridge: {mode: 'v1', enabled: true}, apiKeys: {}, deepSeekPlatform: {configured: false}},
+        data: {flickerBridge: {mode: 'v1', enabled: true}, apiKeys: {}, deepSeekPlatform: {configured: false}, mcpServers: []},
       },
     },
     opsByHubId: {'hub-a': flickerOpsView()},
@@ -1190,7 +1351,7 @@ test('collapsed settings summary shows the flicker mode with a mark', async () =
         loading: false,
         error: '',
         busyField: '',
-        data: {flickerBridge: {mode: 'v2', enabled: true}, apiKeys: {}, deepSeekPlatform: {configured: false}},
+        data: {flickerBridge: {mode: 'v2', enabled: true}, apiKeys: {}, deepSeekPlatform: {configured: false}, mcpServers: []},
       },
     },
     opsByHubId: {'hub-a': flickerOpsView()},
@@ -1217,7 +1378,7 @@ test('collapsed settings summary shows the flicker mode with a mark', async () =
         loading: false,
         error: '',
         busyField: '',
-        data: {flickerBridge: {mode: 'v1', enabled: false}, apiKeys: {}, deepSeekPlatform: {configured: false}},
+        data: {flickerBridge: {mode: 'v1', enabled: false}, apiKeys: {}, deepSeekPlatform: {configured: false}, mcpServers: []},
       },
     },
     opsByHubId: {'hub-a': flickerOpsView()},

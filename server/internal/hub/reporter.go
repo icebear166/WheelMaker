@@ -140,6 +140,7 @@ type ReporterConfig struct {
 	PongTimeout        time.Duration
 	StateDir           string
 	HubConfig          *hubconfig.Store
+	MCPStatus          *mcpStatusStore
 	FlickerBridge      *flickerBridgeManager
 	ReloadAgentRuntime func(context.Context, map[hubconfig.APIKeyName]string) error
 	RestartRuntime     func() error
@@ -184,6 +185,7 @@ type Reporter struct {
 	hubEventSink            *hubEventSink
 	flickerBridge           *flickerBridgeManager
 	hubConfig               *hubconfig.Store
+	mcpStatus               *mcpStatusStore
 	usageCollector          *usage.LocalCollector
 	reloadAgentRuntime      func(context.Context, map[hubconfig.APIKeyName]string) error
 	restartRuntime          func() error
@@ -200,6 +202,7 @@ var bootstrapHubStateSections = []string{
 	hubStateSectionSkills,
 	hubStateSectionFileIndex,
 	hubStateSectionFlickerBridge,
+	hubStateSectionMCP,
 }
 
 // NewReporter creates a Reporter.
@@ -250,6 +253,10 @@ func NewReporter(cfg ReporterConfig, projects []ProjectInfo) *Reporter {
 		hubStateBootstrapDone: make(chan struct{}),
 	}
 	r.hubConfig = cfg.HubConfig
+	r.mcpStatus = cfg.MCPStatus
+	if r.mcpStatus == nil {
+		r.mcpStatus = newMCPStatusStore()
+	}
 	r.reloadAgentRuntime = cfg.ReloadAgentRuntime
 	r.restartRuntime = cfg.RestartRuntime
 	r.ensureSkillsStateCoordinator().SetTargets(r.skillsTargets())
@@ -1305,6 +1312,37 @@ func (r *Reporter) ensureHubConfigStore() *hubconfig.Store {
 	return r.hubConfig
 }
 
+func (r *Reporter) ensureMCPStatusStore() *mcpStatusStore {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.mcpStatus == nil {
+		r.mcpStatus = newMCPStatusStore()
+	}
+	return r.mcpStatus
+}
+
+func (r *Reporter) publishMCPStatus() {
+	configs, err := r.ensureHubConfigStore().MCPServers()
+	if err != nil {
+		r.ensureHubStateManager().notify(
+			hubStateSectionMCP,
+			MCPRuntimeStatusSnapshot{Servers: []MCPRuntimeServerStatus{}},
+			rp.HubStateAvailabilityEmpty,
+			sanitizeMCPError(err.Error(), nil),
+			"mcp.status.error",
+		)
+		return
+	}
+	snapshot := r.ensureMCPStatusStore().Sync(configs)
+	r.ensureHubStateManager().notify(
+		hubStateSectionMCP,
+		snapshot,
+		rp.HubStateAvailabilityReady,
+		"",
+		"mcp.status.updated",
+	)
+}
+
 func (r *Reporter) replyHubConfigGet(conn *websocket.Conn, req envelope) {
 	snapshot, err := r.ensureHubConfigStore().Snapshot()
 	if err != nil {
@@ -1335,6 +1373,21 @@ func (r *Reporter) replyHubConfigUpdate(conn *websocket.Conn, req envelope) {
 	payload.Section = strings.TrimSpace(payload.Section)
 	payload.Field = strings.TrimSpace(payload.Field)
 	payload.Action = strings.TrimSpace(payload.Action)
+	if payload.Section == "mcpServers" && payload.Action == "preview" {
+		preview, err := r.previewMCPServers(payload.Value)
+		if err != nil {
+			_ = r.writeError(conn, req.RequestID, codeInvalidArgument, err.Error())
+			return
+		}
+		snapshot, err := r.ensureHubConfigStore().Snapshot()
+		if err != nil {
+			_ = r.writeError(conn, req.RequestID, codeInternal, "failed to read hub config")
+			return
+		}
+		r.overlayHubConfigDefaults(&snapshot)
+		r.writeHubConfigSnapshotWithPreview(conn, req, snapshot, &preview)
+		return
+	}
 	if err := r.applyHubConfigUpdate(payload); err != nil {
 		_ = r.writeError(conn, req.RequestID, codeInvalidArgument, err.Error())
 		return
@@ -1349,16 +1402,47 @@ func (r *Reporter) replyHubConfigUpdate(conn *websocket.Conn, req envelope) {
 }
 
 func (r *Reporter) writeHubConfigSnapshot(conn *websocket.Conn, req envelope, snapshot hubconfig.Snapshot) {
+	r.writeHubConfigSnapshotWithPreview(conn, req, snapshot, nil)
+}
+
+func (r *Reporter) writeHubConfigSnapshotWithPreview(
+	conn *websocket.Conn,
+	req envelope,
+	snapshot hubconfig.Snapshot,
+	preview *hubconfig.MCPImportPreview,
+) {
+	payload := map[string]any{
+		"hubId":  r.cfg.HubID,
+		"config": snapshot,
+	}
+	if preview != nil {
+		payload["mcpImportPreview"] = preview
+	}
 	_ = r.writeJSON(conn, "->", envelope{
 		RequestID: req.RequestID,
 		Type:      rp.RegistryEnvelopeTypeResponse,
 		Method:    req.Method,
 		HubID:     r.cfg.HubID,
-		Payload: rp.MustRaw(map[string]any{
-			"hubId":  r.cfg.HubID,
-			"config": snapshot,
-		}),
+		Payload:   rp.MustRaw(payload),
 	})
+}
+
+func (r *Reporter) previewMCPServers(rawPayload string) (hubconfig.MCPImportPreview, error) {
+	var input struct {
+		Source string `json:"source"`
+		Raw    string `json:"raw"`
+	}
+	if err := json.Unmarshal([]byte(rawPayload), &input); err != nil {
+		return hubconfig.MCPImportPreview{}, fmt.Errorf("invalid MCP import payload: %w", err)
+	}
+	if len(input.Raw) > 64*1024 {
+		return hubconfig.MCPImportPreview{}, errors.New("MCP import file exceeds 64 KiB")
+	}
+	existing, err := r.ensureHubConfigStore().MCPServers()
+	if err != nil {
+		return hubconfig.MCPImportPreview{}, err
+	}
+	return hubconfig.PreviewMCPImport(input.Source, []byte(input.Raw), existing)
 }
 
 func (r *Reporter) applyHubConfigUpdate(payload hubConfigUpdatePayload) error {
@@ -1402,9 +1486,109 @@ func (r *Reporter) applyHubConfigUpdate(payload hubConfigUpdatePayload) error {
 			r.deepSeekUsage.SetToken(token)
 		}
 		return nil
+	case "mcpServers":
+		if err := r.applyMCPServerConfigUpdate(store, payload); err != nil {
+			return err
+		}
+		r.publishMCPStatus()
+		return r.reloadConfiguredRuntime(context.Background())
 	default:
 		return fmt.Errorf("unsupported hub config section %q", payload.Section)
 	}
+}
+
+func (r *Reporter) applyMCPServerConfigUpdate(store *hubconfig.Store, payload hubConfigUpdatePayload) error {
+	if store == nil {
+		return errors.New("hub config store is required")
+	}
+	now := time.Now()
+	switch payload.Action {
+	case "add":
+		var server hubconfig.MCPServerConfig
+		if err := json.Unmarshal([]byte(payload.Value), &server); err != nil {
+			return fmt.Errorf("invalid MCP server: %w", err)
+		}
+		return store.AddMCPServer(server, now)
+	case "update":
+		var update hubconfig.MCPServerUpdate
+		if err := json.Unmarshal([]byte(payload.Value), &update); err != nil {
+			return fmt.Errorf("invalid MCP server update: %w", err)
+		}
+		if strings.TrimSpace(update.ID) == "" {
+			update.ID = strings.TrimSpace(payload.Field)
+		}
+		return store.UpdateMCPServer(update, now)
+	case "enable", "disable":
+		id := strings.TrimSpace(payload.Field)
+		if id == "" {
+			return errors.New("MCP server id is required")
+		}
+		return store.SetMCPServerEnabled(id, payload.Action == "enable", now)
+	case "delete":
+		id := strings.TrimSpace(payload.Field)
+		if id == "" {
+			return errors.New("MCP server id is required")
+		}
+		return store.DeleteMCPServer(id)
+	case "import":
+		return r.importMCPServers(store, payload.Value)
+	default:
+		return fmt.Errorf("unsupported MCP server action %q", payload.Action)
+	}
+}
+
+func (r *Reporter) importMCPServers(store *hubconfig.Store, rawPayload string) error {
+	var input struct {
+		Source string `json:"source"`
+		Raw    string `json:"raw"`
+	}
+	if err := json.Unmarshal([]byte(rawPayload), &input); err != nil {
+		return fmt.Errorf("invalid MCP import payload: %w", err)
+	}
+	if len(input.Raw) > 64*1024 {
+		return errors.New("MCP import file exceeds 64 KiB")
+	}
+	source := strings.ToLower(strings.TrimSpace(input.Source))
+	var (
+		result hubconfig.MCPImportResult
+		err    error
+	)
+	switch source {
+	case "codex":
+		result, err = hubconfig.ImportCodexMCPConfig([]byte(input.Raw))
+	case "claude":
+		result, err = hubconfig.ImportClaudeMCPConfig([]byte(input.Raw))
+	default:
+		return fmt.Errorf("unsupported MCP import source %q", input.Source)
+	}
+	if err != nil {
+		return err
+	}
+	if len(result.Issues) > 0 {
+		issues := make([]string, 0, len(result.Issues))
+		for _, issue := range result.Issues {
+			issues = append(issues, fmt.Sprintf("%s: %s", issue.Name, issue.Reason))
+		}
+		return fmt.Errorf("MCP import preview contains unsupported entries: %s", strings.Join(issues, "; "))
+	}
+	existing, err := store.MCPServers()
+	if err != nil {
+		return err
+	}
+	conflicts := hubconfig.FindMCPImportConflicts(existing, result.Servers)
+	if len(conflicts) > 0 {
+		names := make([]string, 0, len(conflicts))
+		for _, conflict := range conflicts {
+			names = append(names, conflict.Name)
+		}
+		return fmt.Errorf("MCP import conflict: %s", strings.Join(names, ", "))
+	}
+	for _, server := range result.Servers {
+		if err := store.AddMCPServer(server, time.Now()); err != nil {
+			return fmt.Errorf("save imported MCP server %q: %w", server.Name, err)
+		}
+	}
+	return nil
 }
 
 func (r *Reporter) reloadConfiguredRuntime(ctx context.Context) error {

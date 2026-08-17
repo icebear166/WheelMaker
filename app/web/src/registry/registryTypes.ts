@@ -213,6 +213,7 @@ export type RegistryHubStateSectionName =
   | 'gatewayUpdate'
   | 'skills'
   | 'flickerBridge'
+  | 'mcp'
   | 'tokenStats'
   | 'fileIndex'
   | string;
@@ -264,22 +265,87 @@ export interface RegistryHubConfigDeepSeekPlatformSnapshot {
   updatedAt?: string;
 }
 
+export type RegistryHubMCPTransport = 'stdio' | 'http';
+
+export type RegistryHubMCPRuntimeState =
+  | 'disabled'
+  | 'not_started'
+  | 'starting'
+  | 'connected'
+  | 'failed';
+
+export interface RegistryHubMCPValueSnapshot {
+  /** Present only for non-secret values. */
+  value?: string;
+  secret: boolean;
+  configured: boolean;
+  updatedAt?: string;
+}
+
+export interface RegistryHubMCPServerSnapshot {
+  id: string;
+  name: string;
+  enabled: boolean;
+  transport: RegistryHubMCPTransport;
+  command?: string;
+  args?: string[];
+  cwd?: string;
+  env?: Record<string, RegistryHubMCPValueSnapshot>;
+  url?: string;
+  headers?: Record<string, RegistryHubMCPValueSnapshot>;
+  createdAt?: string;
+  updatedAt?: string;
+  importedFrom?: string;
+}
+
+export interface RegistryHubMCPRuntimeStatus {
+  serverId: string;
+  name: string;
+  state: RegistryHubMCPRuntimeState;
+  error?: string;
+  updatedAt?: string;
+}
+
+export interface RegistryHubMCPRuntimeStatusData {
+  servers: RegistryHubMCPRuntimeStatus[];
+}
+
+export interface RegistryHubMCPImportIssue {
+  name: string;
+  reason: string;
+}
+
+export interface RegistryHubMCPImportPreview {
+  source: 'codex' | 'claude';
+  servers: RegistryHubMCPServerSnapshot[];
+  issues: RegistryHubMCPImportIssue[];
+  conflicts: string[];
+}
+
 /** Sanitized hub config snapshot — secret values never leave the hub. */
 export interface RegistryHubConfig {
   flickerBridge: RegistryHubConfigFlickerBridgeSnapshot;
   apiKeys: Record<string, RegistryHubConfigAPIKeySnapshot>;
   deepSeekPlatform: RegistryHubConfigDeepSeekPlatformSnapshot;
+  mcpServers: RegistryHubMCPServerSnapshot[];
 }
 
 export interface RegistryHubConfigResponse {
   hubId: string;
   config: RegistryHubConfig;
+  mcpImportPreview?: RegistryHubMCPImportPreview;
 }
 
 export type RegistryHubConfigUpdatePayload =
   | {section: 'apiKeys'; field: string; action: 'set' | 'clear'; value?: string}
   | {section: 'flickerBridge'; field: 'enabled'; action: 'set' | 'clear'}
-  | {section: 'deepSeekPlatform'; field: 'token'; action: 'set' | 'clear'; value?: string};
+  | {section: 'deepSeekPlatform'; field: 'token'; action: 'set' | 'clear'; value?: string}
+  | {
+    section: 'mcpServers';
+    field?: string;
+    action: 'add' | 'update' | 'delete' | 'enable' | 'disable' | 'import' | 'preview';
+    value?: string;
+  };
 
 export interface RegistryDeepSeekUsageDay {
   date: string;

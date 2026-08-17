@@ -22,6 +22,7 @@ const (
 	hubStateSectionTokenStats       = "tokenStats"
 	hubStateSectionFileIndex        = "fileIndex"
 	hubStateSectionFlickerBridge    = "flickerBridge"
+	hubStateSectionMCP              = "mcp"
 )
 
 type hubStateRefreshInput struct {

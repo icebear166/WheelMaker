@@ -78,6 +78,8 @@ type Session struct {
 	registry    *agent.ACPFactory
 	store       Store
 	viewSink    SessionViewSink
+	mcpServers  MCPServerSource
+	mcpStatus   MCPStatusObserver
 
 	createdAt    time.Time
 	lastActiveAt time.Time
@@ -386,10 +388,15 @@ func (s *Session) closeRuntimeInstance() {
 	}
 }
 
-// emptyMCPServers returns an empty MCP server list for session/new and session/load calls.
-// Replace this helper when MCP config support is added.
-func emptyMCPServers() []acp.MCPServer {
-	return []acp.MCPServer{}
+func (s *Session) mcpServersForRuntime() ([]acp.MCPServer, error) {
+	if s == nil || s.mcpServers == nil {
+		return []acp.MCPServer{}, nil
+	}
+	servers, err := s.mcpServers()
+	if err != nil {
+		return nil, fmt.Errorf("read MCP server config: %w", err)
+	}
+	return cloneMCPServers(servers), nil
 }
 
 func (s *Session) ensureInitialized(ctx context.Context) (acp.InitializeResult, error) {
@@ -501,14 +508,28 @@ func (s *Session) ensureReady(ctx context.Context) error {
 		return fmt.Errorf("ensureReady: agent %q does not support session/load", agentName)
 	}
 
+	mcpServers, mcpErr := s.mcpServersForRuntime()
+	if mcpErr != nil {
+		finishLoad()
+		return fmt.Errorf("ensureReady: %w", mcpErr)
+	}
+	if s.mcpStatus != nil {
+		s.mcpStatus(mcpServers, "starting", nil)
+	}
 	loadResult, loadErr := inst.SessionLoad(ctx, acp.SessionLoadParams{
 		SessionID:  savedSID,
 		CWD:        cwd,
-		MCPServers: emptyMCPServers(),
+		MCPServers: mcpServers,
 	})
 	if loadErr != nil {
+		if s.mcpStatus != nil {
+			s.mcpStatus(mcpServers, "failed", loadErr)
+		}
 		finishLoad()
 		return fmt.Errorf("ensureReady: session/load: %w", loadErr)
+	}
+	if s.mcpStatus != nil {
+		s.mcpStatus(mcpServers, "connected", nil)
 	}
 
 	resolved := normalizeAgentConfigOptions(agentName, loadResult.ConfigOptions)

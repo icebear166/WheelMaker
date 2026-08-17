@@ -9,6 +9,8 @@ import type {
   RegistryFlickerBridgeStatus,
   RegistryHubConfig,
   RegistryHubConfigUpdatePayload,
+  RegistryHubMCPImportPreview,
+  RegistryHubMCPRuntimeStatusData,
   RegistrySkillProjectSnapshot,
   RegistrySkillOperation,
   RegistrySkillSnapshot,
@@ -41,6 +43,7 @@ import type {
   ChatHubSkillCompanionProps,
   ChatHubSkillSurface,
 } from './ChatHubSkillCompanion';
+import {ChatHubMcpDetail} from './ChatHubMcpManagement';
 
 const ChatHubSkillCompanion = React.lazy(
   () => import('./ChatHubSkillCompanion').then(module => ({
@@ -157,6 +160,7 @@ export interface ChatHubConfigView {
   /** Non-empty when the hub config could not be loaded (old hubs included). */
   error: string;
   data: RegistryHubConfig | null;
+  mcpImportPreview?: RegistryHubMCPImportPreview;
   /** Field currently being written, e.g. "apiKeys:kimi" or "flickerBridge:enabled". */
   busyField: string;
 }
@@ -231,6 +235,7 @@ export interface ChatHubMenuProps {
   colorMenuExiting: boolean;
   onToggleColorMenu: (hubId: string | null) => void;
   flickerStatuses: Record<string, RegistryFlickerBridgeStatus | undefined>;
+  mcpStatuses: Record<string, RegistryHubMCPRuntimeStatusData | undefined>;
   flickerActionHubId: string;
   onFlickerSwitchMode: (hubId: string, mode: RegistryFlickerBridgeMode) => void;
   hubConfigByHubId: Record<string, ChatHubConfigView | undefined>;
@@ -799,17 +804,6 @@ function ChatHubSkillsDetail({
   );
 }
 
-function ChatHubMcpDetail(): React.JSX.Element {
-  return (
-    <div className="chat-hub-detail chat-hub-mcp-detail">
-      <div className="chat-hub-detail-toolbar">
-        <span className="chat-hub-detail-title">MCP servers</span>
-      </div>
-      <div className="chat-hub-detail-empty">No MCP servers configured.</div>
-    </div>
-  );
-}
-
 function ChatHubProjectSkillsDetail({
   hubId,
   activeProjectId,
@@ -1024,6 +1018,7 @@ function ChatHubBlock(props: ChatHubMenuProps & {hubId: string}): React.JSX.Elem
     colorMenuExiting,
     onToggleColorMenu,
     flickerStatuses,
+    mcpStatuses,
     flickerActionHubId,
     onFlickerSwitchMode,
     hubConfigByHubId,
@@ -1225,7 +1220,7 @@ function ChatHubBlock(props: ChatHubMenuProps & {hubId: string}): React.JSX.Elem
               />
               <ChatHubDisclosureButton
                 label="MCP"
-                info="0"
+                info={`${configView?.data?.mcpServers?.length ?? 0}`}
                 icon="mcp"
                 expanded={sectionOpen('mcp')}
                 onToggle={() => toggleSection('mcp')}
@@ -1243,7 +1238,16 @@ function ChatHubBlock(props: ChatHubMenuProps & {hubId: string}): React.JSX.Elem
           {sectionOpen('npm') ? (
             <ChatHubNpmDetail hubId={hubId} ops={ops} onUpdateAll={onRequestNpmUpdate} onPackageAction={onPackageAction} />
           ) : null}
-          {sectionOpen('mcp') ? <ChatHubMcpDetail /> : null}
+          {sectionOpen('mcp') ? (
+            <ChatHubMcpDetail
+              hubId={hubId}
+              configView={configView}
+              preview={configView?.mcpImportPreview}
+              statuses={mcpStatuses[hubId]}
+              onUpdateHubConfig={onUpdateHubConfig}
+              onRequestRestart={() => onRequestWheelMakerRestart(hubId)}
+            />
+          ) : null}
           {sectionOpen('skills') ? (
             <ChatHubSkillsDetail
               hubId={hubId}

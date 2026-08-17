@@ -54,6 +54,8 @@ type Client struct {
 	projectName string
 	cwd         string
 	stateDir    string
+	mcpServers  MCPServerSource
+	mcpStatus   MCPStatusObserver
 
 	registry *agent.ACPFactory
 
@@ -87,7 +89,19 @@ type Client struct {
 type RuntimeConfig struct {
 	AgentFactory *agent.ACPFactory
 	StateDir     string
+	MCPServers   MCPServerSource
+	MCPStatus    MCPStatusObserver
 }
+
+// MCPServerSource supplies the current Hub-scoped MCP configuration for a
+// newly created or newly connected agent runtime. It is evaluated on the
+// session/new or session/load path so changing the Hub setting does not
+// mutate an already active ACP session.
+type MCPServerSource func() ([]acp.MCPServer, error)
+
+// MCPStatusObserver receives provider/runtime lifecycle observations. It is
+// optional and never participates in the session success path.
+type MCPStatusObserver func([]acp.MCPServer, string, error)
 
 // New creates a Client for the given project.
 func New(store Store, projectName string, cwd string) *Client {
@@ -110,6 +124,8 @@ func NewWithRuntime(store Store, projectName string, cwd string, runtime Runtime
 		projectName:     projectName,
 		cwd:             cwd,
 		stateDir:        stateDir,
+		mcpServers:      runtime.MCPServers,
+		mcpStatus:       runtime.MCPStatus,
 		registry:        runtime.AgentFactory,
 		store:           store,
 		sessions:        make(map[string]*Session),
@@ -152,6 +168,32 @@ func NewWithRuntime(store Store, projectName string, cwd string, runtime Runtime
 	}
 	c.viewSink = c.sessionRecorder
 	return c
+}
+
+func cloneMCPServers(servers []acp.MCPServer) []acp.MCPServer {
+	if len(servers) == 0 {
+		return []acp.MCPServer{}
+	}
+	cloned := make([]acp.MCPServer, len(servers))
+	for index, server := range servers {
+		cloned[index] = server
+		cloned[index].Args = append([]string(nil), server.Args...)
+		cloned[index].Env = append([]acp.EnvVariable(nil), server.Env...)
+		cloned[index].Headers = append([]acp.HttpHeader(nil), server.Headers...)
+		cloned[index].Meta = append([]byte(nil), server.Meta...)
+	}
+	return cloned
+}
+
+func (c *Client) mcpServersForRuntime() ([]acp.MCPServer, error) {
+	if c == nil || c.mcpServers == nil {
+		return []acp.MCPServer{}, nil
+	}
+	servers, err := c.mcpServers()
+	if err != nil {
+		return nil, fmt.Errorf("read MCP server config: %w", err)
+	}
+	return cloneMCPServers(servers), nil
 }
 
 func defaultClientStateDir() string {
@@ -458,12 +500,25 @@ func (c *Client) createSessionState(ctx context.Context, agentType, title, creat
 
 	preference := loadProjectAgentPreferenceState(c.store, c.projectName, agentType)
 
+	mcpServers, err := c.mcpServersForRuntime()
+	if err != nil {
+		return nil, err
+	}
+	if c.mcpStatus != nil {
+		c.mcpStatus(mcpServers, "starting", nil)
+	}
 	newResult, err := inst.SessionNew(ctx, acp.SessionNewParams{
 		CWD:        c.cwd,
-		MCPServers: emptyMCPServers(),
+		MCPServers: mcpServers,
 	})
 	if err != nil {
+		if c.mcpStatus != nil {
+			c.mcpStatus(mcpServers, "failed", err)
+		}
 		return nil, fmt.Errorf("create session new: %w", err)
+	}
+	if c.mcpStatus != nil {
+		c.mcpStatus(mcpServers, "connected", nil)
 	}
 	sessionID := strings.TrimSpace(newResult.SessionID)
 	if sessionID == "" {
@@ -1802,13 +1857,26 @@ func (c *Client) validateCurrentForkTarget(ctx context.Context, source *Session,
 	if !initResult.AgentCapabilities.LoadSession {
 		return nil, fmt.Errorf("agent %q does not support target session/load", agentType)
 	}
+	mcpServers, err := c.mcpServersForRuntime()
+	if err != nil {
+		return nil, err
+	}
+	if c.mcpStatus != nil {
+		c.mcpStatus(mcpServers, "starting", nil)
+	}
 	loaded, err := probe.SessionLoad(ctx, acp.SessionLoadParams{
 		SessionID:  targetSessionID,
 		CWD:        cwd,
-		MCPServers: emptyMCPServers(),
+		MCPServers: mcpServers,
 	})
 	if err != nil {
+		if c.mcpStatus != nil {
+			c.mcpStatus(mcpServers, "failed", err)
+		}
 		return nil, fmt.Errorf("session/load target %s: %w", targetSessionID, err)
+	}
+	if c.mcpStatus != nil {
+		c.mcpStatus(mcpServers, "connected", nil)
 	}
 	closeProbe = false
 	return &validatedCurrentForkTarget{instance: probe, initResult: initResult, loadResult: loaded}, nil
@@ -2126,6 +2194,8 @@ func (c *Client) wireSession(sess *Session) {
 	sess.registry = c.registry
 	sess.viewSink = c.viewSink
 	sess.store = c.store
+	sess.mcpServers = c.mcpServers
+	sess.mcpStatus = c.mcpStatus
 }
 
 // ListSessions returns a merged list of in-memory and persisted sessions,
