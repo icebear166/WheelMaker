@@ -31,7 +31,7 @@
 .app-toast {
   position: fixed;
   left: 50%;
-  bottom: 24px;
+  bottom: calc(24px + var(--wm-safe-area-bottom));
   transform: translateX(-50%);
   z-index: 240;
   max-width: min(420px, calc(100vw - 32px));
@@ -43,14 +43,19 @@
   box-shadow: 0 12px 28px color-mix(in srgb, #000 22%, transparent);
   font-size: 12px;
   line-height: 1.35;
-  pointer-events: none;
+  -webkit-user-select: text;
+  user-select: text;
   animation: app-toast-in var(--motion-standard) var(--ease-out) both;
+}
+
+.app-toast.app-toast-exit {
+  animation: app-toast-out var(--motion-fast) var(--ease-standard) both;
 }
 
 .app-retry-toast {
   position: fixed;
   left: 50%;
-  bottom: 24px;
+  bottom: calc(24px + var(--wm-safe-area-bottom));
   z-index: 241;
   width: max-content;
   max-width: min(520px, calc(100vw - 32px));
@@ -70,6 +75,11 @@
   animation: app-toast-in var(--motion-standard) var(--ease-out) both;
 }
 
+/* Keep the retry notice clear of a simultaneous status toast. */
+.app-retry-toast:has(~ .app-toast) {
+  bottom: calc(72px + var(--wm-safe-area-bottom));
+}
+
 @keyframes app-toast-in {
   from {
     opacity: 0;
@@ -81,9 +91,21 @@
   }
 }
 
+@keyframes app-toast-out {
+  from {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateX(-50%) translateY(4px);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .app-toast,
-  .app-retry-toast {
+  .app-retry-toast,
+  .app-toast.app-toast-exit {
     animation: none;
   }
 }
@@ -91,7 +113,11 @@
 .app-retry-toast-message {
   min-width: 0;
   overflow: hidden;
-  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  -webkit-user-select: text;
+  user-select: text;
 }
 
 .app-retry-toast button {

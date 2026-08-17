@@ -11,9 +11,9 @@ export const MARKDOWN_EXPORT_CONTENT_STYLE = `
   border-radius: 8px;
   background: var(--surface-panel);
   color: var(--text-primary);
-  font-family: "IBM Plex Sans", "Noto Sans", sans-serif;
-  font-size: 13px;
-  line-height: 1.6;
+  font-family: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", Roboto, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans", sans-serif;
+  font-size: 15px;
+  line-height: 1.65;
 }
 .wheelmaker-markdown-export > :first-child { margin-top: 0; }
 .wheelmaker-markdown-export > :last-child { margin-bottom: 0; }
@@ -28,14 +28,26 @@ export const MARKDOWN_EXPORT_CONTENT_STYLE = `
 .wheelmaker-markdown-export h4,
 .wheelmaker-markdown-export h5,
 .wheelmaker-markdown-export h6 { margin: 16px 0 10px; line-height: 1.3; }
+.wheelmaker-markdown-export h1,
+.wheelmaker-markdown-export h2 { margin-top: 22px; font-weight: 650; }
+.wheelmaker-markdown-export h1 {
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border-subtle);
+  font-size: 24px;
+}
+.wheelmaker-markdown-export h2 { font-size: 19px; }
+.wheelmaker-markdown-export h3 { font-size: 16px; font-weight: 600; }
+.wheelmaker-markdown-export h4,
+.wheelmaker-markdown-export h5,
+.wheelmaker-markdown-export h6 { font-size: 15px; font-weight: 600; }
 .wheelmaker-markdown-export a,
 .wheelmaker-markdown-export a:visited {
   color: color-mix(in srgb, var(--accent-primary) 82%, var(--text-primary));
   text-decoration: underline;
-  text-decoration-color: color-mix(in srgb, var(--accent-primary) 60%, transparent);
 }
+.wheelmaker-markdown-export a:hover { text-decoration-thickness: 2px; }
 .wheelmaker-markdown-export code {
-  font-family: "JetBrains Mono", Consolas, "Courier New", monospace;
+  font-family: "JetBrains Mono", ui-monospace, "Cascadia Mono", Consolas, "Courier New", monospace;
   font-size: .92em;
 }
 /* Chat file links carry an inline svg icon; svg defaults to display:block,
@@ -55,7 +67,7 @@ export const MARKDOWN_EXPORT_CONTENT_STYLE = `
 }
 .wheelmaker-markdown-export .chat-file-link-line {
   margin-left: 2px;
-  font-family: "JetBrains Mono", Consolas, "Courier New", monospace;
+  font-family: "JetBrains Mono", ui-monospace, "Cascadia Mono", Consolas, "Courier New", monospace;
   font-size: .92em;
   opacity: .86;
 }
@@ -76,6 +88,10 @@ export const MARKDOWN_EXPORT_CONTENT_STYLE = `
   text-align: left;
   vertical-align: top;
   word-break: break-word;
+}
+.wheelmaker-markdown-export th {
+  background: color-mix(in srgb, var(--surface-canvas) 55%, var(--surface-panel));
+  font-weight: 600;
 }
 .wheelmaker-markdown-export .katex-display {
   margin: 8px 0;
@@ -142,6 +158,37 @@ export const MARKDOWN_EXPORT_CONTENT_STYLE = `
     color: var(--shiki-light);
   }
 }
+/* Exported documents are often printed or saved as PDF; force ink-friendly
+   colors and keep blocks from splitting across pages. */
+@media print {
+  :root {
+    --surface-canvas: #ffffff;
+    --surface-panel: #ffffff;
+    --text-primary: #1c1c1c;
+    --text-secondary: #565656;
+    --border-subtle: #d4d4d4;
+    --accent-primary: #0f6fac;
+  }
+  body {
+    padding: 0;
+    background: #ffffff;
+  }
+  .wheelmaker-markdown-export {
+    max-width: none;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+  }
+  .wheelmaker-markdown-export .code-frame,
+  .wheelmaker-markdown-export .mermaid-block,
+  .wheelmaker-markdown-export table,
+  .wheelmaker-markdown-export blockquote {
+    break-inside: avoid;
+  }
+  .wheelmaker-markdown-export .shiki span {
+    color: var(--shiki-light);
+  }
+}
 `;
 
 const MARKDOWN_HTML_EXPORT_PAGE_STYLE = `
@@ -156,7 +203,12 @@ const MARKDOWN_HTML_EXPORT_PAGE_STYLE = `
   --muted: var(--text-secondary);
 }
 * { box-sizing: border-box; }
-body { margin: 0; background: var(--surface-canvas); color: var(--text-primary); }
+body {
+  margin: 0;
+  padding: clamp(12px, 4vw, 48px) clamp(12px, 3vw, 24px);
+  background: var(--surface-canvas);
+  color: var(--text-primary);
+}
 @media (prefers-color-scheme: light) {
   :root {
     --surface-canvas: #f3f3f3;
