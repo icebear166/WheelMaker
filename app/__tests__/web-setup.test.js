@@ -86,7 +86,7 @@ describe('web runtime setup', () => {
 
     expect(sw).not.toContain("const SHELL = ['/', '/index.html'");
     expect(sw).not.toContain('cache.addAll(SHELL)');
-    expect(sw).toContain("const ICON_ASSETS = ['/icons/icon.svg']");
+    expect(sw).toContain("const ICON_ASSETS = ['/icons/icon.svg', '/icons/icon-192.png', '/icons/badge-96.png']");
     expect(sw).not.toContain("'/bundle.js'");
     expect(sw).not.toContain("'/bundle.css'");
     expect(sw).toContain("event.data?.type === 'WM_PWA_NOTIFY'");
