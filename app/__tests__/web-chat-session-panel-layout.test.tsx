@@ -49,7 +49,7 @@ describe('PC chat session-panel layout', () => {
     const headerSource = workspaceAppSource.slice(headerStart, headerEnd);
     const settingsIndex = headerSource.indexOf('{renderWheelMakerAppMenu(false)}');
     const projectIndex = headerSource.indexOf('{renderDesktopChatProjectSelector()}');
-    const hubsIndex = headerSource.indexOf('{renderChatHubSummary()}');
+    const hubsIndex = headerSource.indexOf('renderChatHubSummary()');
 
     expect(settingsIndex).toBeGreaterThanOrEqual(0);
     expect(projectIndex).toBeGreaterThan(settingsIndex);
@@ -79,7 +79,7 @@ describe('PC chat session-panel layout', () => {
 
     expect(headerSource).toContain('const searchHeaderExpanded = mobile && sessionSearchHeaderExpanded;');
     expect(headerSource).toContain("${searchHeaderExpanded ? ' search-open' : ''}");
-    expect(headerSource).toContain('{!searchHeaderExpanded ? (');
+    expect(headerSource).toContain('{!searchHeaderExpanded && !mobile ? (');
   });
 
   it('keeps the pinned Sessions panel below the permanent shell title bar', () => {

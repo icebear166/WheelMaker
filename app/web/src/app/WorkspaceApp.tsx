@@ -7163,6 +7163,14 @@ export function App() {
     setChatTitleProjectMenuOpen(false);
     setChatTitlePromptMenuOpen(false);
   }, [setChatConfigOverflowOpen]);
+  const closeMobileDrawerForTopLevelSurface = useCallback(() => {
+    if (isWide) {
+      return;
+    }
+    closeSidebarTransientMenus();
+    closeMobileDrawerCompanionOverlays();
+    setDrawerOpen(false);
+  }, [closeMobileDrawerCompanionOverlays, closeSidebarTransientMenus, isWide, setDrawerOpen]);
   const renderChatHubSummary = () => {
     const hubIds = chatHubTreeItems.map(item => item.hubId);
     const hubCount = hubIds.length;
@@ -8344,7 +8352,10 @@ export function App() {
     targetProjectId: string,
     kind: 'new' | 'resume' | 'actions',
   ) => {
-    closeSidebarTransientMenus();
+    if (isWide) {
+      closeSidebarTransientMenus();
+    }
+    closeMobileDrawerForTopLevelSurface();
     resetProjectResumeState();
     setMobileProjectActionMenu(current => {
       if (current?.projectId === targetProjectId && current.kind === kind) {
@@ -8367,7 +8378,7 @@ export function App() {
         popover: null,
       };
     });
-  }, [closeSidebarTransientMenus, resetProjectResumeState]);
+  }, [closeMobileDrawerForTopLevelSurface, closeSidebarTransientMenus, isWide, resetProjectResumeState]);
   const projectSessionActionKey = (targetProjectId: string, sessionId: string) =>
     `${targetProjectId}:${sessionId}`;
   useEffect(() => {
@@ -16483,6 +16494,7 @@ export function App() {
     <WheelMakerAppMenu
       themeMode={themeMode}
       setThemeMode={setThemeMode}
+      onMenuOpen={mobile ? closeMobileDrawerForTopLevelSurface : undefined}
       onOpenSettings={handleDesktopSettingsSelect}
       onOpenPortRelay={openPortRelayScreen}
       onOpenShares={openShares}
@@ -16499,13 +16511,11 @@ export function App() {
     const chatSessionHeaderClassName = `sidebar-title-row chat-session-header${searchHeaderExpanded ? ' search-open' : ''}${mobile ? ' mobile' : ''}`;
     const chatSessionHeaderContent = (
       <>
-        {!searchHeaderExpanded ? (
-          mobile ? renderWheelMakerAppMenu(true) : (
-            <>
-              {renderWheelMakerAppMenu(false)}
-              {renderDesktopChatProjectSelector()}
-            </>
-          )
+        {!searchHeaderExpanded && !mobile ? (
+          <>
+            {renderWheelMakerAppMenu(false)}
+            {renderDesktopChatProjectSelector()}
+          </>
         ) : null}
         <div className="chat-sidebar-title-actions">
           {!searchHeaderExpanded ? renderChatHubSummary() : null}
@@ -18952,6 +18962,8 @@ export function App() {
     : chatBreadcrumbLabel;
   const toggleChatTitlePromptMenu = () => {
     if (!chatTitlePromptMenuAvailable) return;
+    const nextOpen = !chatTitlePromptMenuOpen;
+    if (nextOpen && !isWide) closeMobileDrawerForTopLevelSurface();
     setChatPromptMenuOpen(false);
     setChatFileMentionMenuOpen(false);
     setChatAttachmentTrayOpen(false);
@@ -18959,7 +18971,7 @@ export function App() {
     setChatConfigOverflowOpen(false);
     setChatHubMenuOpen(false);
     setChatTitleProjectMenuOpen(false);
-    setChatTitlePromptMenuOpen(open => !open);
+    setChatTitlePromptMenuOpen(nextOpen);
   };
   const renderDesktopChatProjectSelector = () => (
     <button
@@ -19010,8 +19022,10 @@ export function App() {
         className={`chat-title-project-button${chatTitleProjectMenuOpen ? ' open' : ''}`}
         onPointerDown={event => event.stopPropagation()}
         onClick={() => {
+          const nextOpen = !chatTitleProjectMenuOpen;
+          if (nextOpen && !isWide) closeMobileDrawerForTopLevelSurface();
           setChatTitlePromptMenuOpen(false);
-          setChatTitleProjectMenuOpen(open => !open);
+          setChatTitleProjectMenuOpen(nextOpen);
         }}
         data-tooltip="Switch project"
         aria-label="Switch project"

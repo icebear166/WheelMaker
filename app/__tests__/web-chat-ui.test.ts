@@ -1017,7 +1017,7 @@ describe('web chat integration', () => {
     const chatSessionHeaderBlock = mainTsx.slice(chatSessionHeaderStart, chatSessionHeaderEnd);
     expect(chatSessionHeaderStart).toBeGreaterThanOrEqual(0);
     expect(chatSessionHeaderEnd).toBeGreaterThan(chatSessionHeaderStart);
-    expect(chatSessionHeaderBlock).toContain('mobile ? renderWheelMakerAppMenu(true) : (');
+    expect(chatSessionHeaderBlock).not.toContain('mobile ? renderWheelMakerAppMenu(true) : (');
     expect(chatSessionHeaderBlock).toContain('{renderWheelMakerAppMenu(false)}');
     expect(chatSessionHeaderBlock).toContain('{renderDesktopChatProjectSelector()}');
     expect(chatSessionHeaderBlock).toContain('<div className="chat-sidebar-title-actions">');

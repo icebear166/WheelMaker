@@ -96,6 +96,29 @@ test('browser menu exposes Settings, the current Theme, Port Relay, Public share
   expect(onOpenReleasePublishing).toHaveBeenCalledTimes(1);
 });
 
+test('notifies the host when the menu opens, but not when it closes', async () => {
+  (global as typeof globalThis & {window?: unknown}).window = {};
+  const onMenuOpen = jest.fn();
+  let renderer: ReactTestRenderer.ReactTestRenderer;
+
+  await ReactTestRenderer.act(async () => {
+    renderer = ReactTestRenderer.create(
+      <WheelMakerAppMenu {...baseProps} onMenuOpen={onMenuOpen} />,
+    );
+  });
+
+  const trigger = renderer!.root.findByProps({'aria-label': 'Open WheelMaker menu'});
+  await ReactTestRenderer.act(async () => {
+    trigger.props.onClick();
+  });
+  expect(onMenuOpen).toHaveBeenCalledTimes(1);
+
+  await ReactTestRenderer.act(async () => {
+    trigger.props.onClick();
+  });
+  expect(onMenuOpen).toHaveBeenCalledTimes(1);
+});
+
 test('native update checks on every open and starts only once', async () => {
   (global as typeof globalThis & {window?: unknown}).window = {};
   const check = jest.fn(async () => ({

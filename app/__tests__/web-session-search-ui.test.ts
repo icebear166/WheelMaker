@@ -114,8 +114,8 @@ describe('web session search UI wiring', () => {
     expect(sharedHeader).toContain('renderChatHeaderSearchControls()');
     expect(sharedHeader).toContain('renderChatHubSummary()');
     expect(sharedHeader).toContain('className="chat-sidebar-title-actions"');
-    expect(sharedHeader).toContain('{!searchHeaderExpanded ? (');
-    expect(sharedHeader).toContain('mobile ? renderWheelMakerAppMenu(true) : (');
+    expect(sharedHeader).toContain('{!searchHeaderExpanded && !mobile ? (');
+    expect(sharedHeader).not.toContain('mobile ? renderWheelMakerAppMenu(true) : (');
     expect(sharedHeader).toContain('{renderWheelMakerAppMenu(false)}');
     expect(sharedHeader).not.toContain('renderChatMenuUsageButton');
     expect(sharedHeader.indexOf('renderChatHubSummary()')).toBeLessThan(sharedHeader.lastIndexOf('renderChatHeaderSearchControls()'));

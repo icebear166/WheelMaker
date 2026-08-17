@@ -57,3 +57,24 @@ test('mobile Chat title bar reuses the Drawer WheelMaker logo menu and geometry'
   expect(chatStyles).toContain('.narrow-shell .chat-title-bar .chat-title-project-button {');
   expect(chatStyles).toContain('padding-left: 2px;');
 });
+
+test('mobile top-level menus own an exclusive layer instead of the drawer', () => {
+  const sessionHeaderStart = workspaceApp.indexOf('const renderChatSessionHeader = (mobile: boolean) => {');
+  const sessionHeaderEnd = workspaceApp.indexOf('const renderMobileChatSessionSheet = () => {', sessionHeaderStart);
+  const sessionHeader = workspaceApp.slice(sessionHeaderStart, sessionHeaderEnd);
+  const mobileBreadcrumbStart = workspaceApp.indexOf('const renderMobileChatBreadcrumbTitle = () => (');
+  const mobileBreadcrumbEnd = workspaceApp.indexOf('const renderChatTitleBar = (mobile: boolean) => (', mobileBreadcrumbStart);
+  const mobileBreadcrumb = workspaceApp.slice(mobileBreadcrumbStart, mobileBreadcrumbEnd);
+  const mobileProjectActionStart = workspaceApp.indexOf('const openMobileProjectActionMenu = useCallback(');
+  const mobileProjectActionEnd = workspaceApp.indexOf('const projectSessionActionKey', mobileProjectActionStart);
+  const mobileProjectAction = workspaceApp.slice(mobileProjectActionStart, mobileProjectActionEnd);
+
+  expect(sessionHeader).not.toContain('mobile ? renderWheelMakerAppMenu(true) : (');
+  expect(workspaceApp).toContain('onMenuOpen={mobile ? closeMobileDrawerForTopLevelSurface : undefined}');
+  expect(workspaceApp).toContain('const closeMobileDrawerForTopLevelSurface = useCallback(() => {');
+  expect(workspaceApp).toContain('closeSidebarTransientMenus();');
+  expect(workspaceApp).toContain('setDrawerOpen(false);');
+  expect(mobileBreadcrumb).toContain('if (nextOpen && !isWide) closeMobileDrawerForTopLevelSurface();');
+  expect(workspaceApp).toContain('if (nextOpen && !isWide) closeMobileDrawerForTopLevelSurface();');
+  expect(mobileProjectAction).toContain('closeMobileDrawerForTopLevelSurface();');
+});

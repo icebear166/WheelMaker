@@ -30,6 +30,7 @@ export type ClientUpdateController = {
 export type WheelMakerAppMenuProps = {
   themeMode: 'dark' | 'light';
   setThemeMode: (mode: 'dark' | 'light') => void;
+  onMenuOpen?: () => void;
   onOpenSettings: () => void;
   onOpenPortRelay: () => void;
   onOpenShares?: () => void;
@@ -87,6 +88,7 @@ function MenuRow({
 export function WheelMakerAppMenu({
   themeMode,
   setThemeMode,
+  onMenuOpen,
   onOpenSettings,
   onOpenPortRelay,
   onOpenShares,
@@ -178,11 +180,14 @@ export function WheelMakerAppMenu({
   }, [updateController]);
 
   const toggleMenu = useCallback(() => {
+    if (!menuOpen) {
+      onMenuOpen?.();
+    }
     if ((!menuOpen || menuExiting) && updateController) {
       void checkForUpdate();
     }
     setMenuOpen(open => !open);
-  }, [checkForUpdate, menuExiting, menuOpen, setMenuOpen, updateController]);
+  }, [checkForUpdate, menuExiting, menuOpen, onMenuOpen, setMenuOpen, updateController]);
 
   const updateMenuPosition = useCallback(() => {
     const triggerRect = triggerRef.current?.getBoundingClientRect();
