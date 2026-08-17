@@ -10,5 +10,6 @@
 - [`html-preview.md`](html-preview.md)：HTML 预览的 Registry POST 加载链路、脚本能力、sandbox/CSP 安全模型和来源边界。
 - [`limits-monitoring.md`](limits-monitoring.md)：Agent Limits 监控的数据所有权、刷新机制、Provider 范围和桌面/移动端展示约定。
 - [`model-efficiency.md`](model-efficiency.md)：Model efficiency 的 CodexRadar 数据边界、候选选择规则以及桌面和窄屏展示约定。
+- [`prompt-completion-notifications.md`](prompt-completion-notifications.md)：Prompt 完成通知的统一内容模型、同会话替换语义、点击跳转行为和三端呈现约定。
 - [`public-sharing.md`](public-sharing.md)：项目文档、聊天回答与完整会话公共分享的来源、快照、管理、存储、到期和匿名 Gateway 访问边界。
 - [`skills-management.md`](skills-management.md)：以 Git source 为一级对象的 Skills 目录、刷新、安装状态合成和安全操作边界。
