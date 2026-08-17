@@ -23,13 +23,17 @@ Preview 与 Terminal 是内容不同、Chrome 语言一致的 Workbench。两者
 ## Preview 文件/Git 抽屉
 
 - 文件树与 Git 历史通过竖排 drawer 工具条进入：PC 端工具条悬浮在 Preview 内侧左缘，移动端位于右上角；双端共用同一套按钮样式，激活态与 drawer 内容对应。
-- PC 端 drawer 在 Preview 左侧外部打开，覆盖 chat 列、不占用 Preview 空间，Preview resize 时跟随其左缘；移动端 drawer 仍在 Preview 内部左缘滑出。
-- drawer 是临时层：点击树内文件不关闭 drawer；点击 drawer 外区域、Esc 或再点激活按钮关闭；点击另一工具按钮原地切换内容。
+- PC 端未 pin 的 drawer 在 Preview 左侧外部打开，覆盖 chat 列、不占用 Preview 空间，Preview resize 时跟随其左缘；PC 端 pin 后 drawer 转为 Preview 内部左侧分栏，内容区位于 drawer 右侧，不再覆盖 Chat。
+- pin 是显式布局状态，关闭/重新打开 drawer、切换 Files/Git 或切换文件时保留；只有 Unpin 恢复外部临时层。pin 不跨应用重启持久化。
+- 移动端 drawer 始终在 Preview 内部左缘滑出，保持移动端现有交互，不提供 Desktop companion 浮动。
+- drawer 是临时层：点击树内文件不关闭 drawer；未 pin 时点击 drawer 外区域、Esc 或再点激活按钮关闭；点击另一工具按钮原地切换内容。pin 后外部点击不关闭，但 Esc、toggle 和显式 Unpin 仍可操作。
 - 文件搜索框固定在 files drawer 面板顶部（含定位当前文件）；Git drawer 无搜索。
 - files 与 Git drawer 的顶部工具栏共享同一套高度、间距、分隔线和控件层级：文件搜索与 Git 分支选择占据主控件区域，定位、刷新和 pin 使用同尺寸 ghost 图标按钮。
 - pin 保持 Lucide 线性图标；开启态通过 accent 颜色与柔和背景表达，不把图标填充为实心轮廓。
 - 打开 files drawer 时仅 PC 端自动聚焦文件搜索；移动端保持当前焦点，用户点击搜索框后再唤起输入法。
 - 文件树（含搜索结果树）与 Git 面板共享一套行视觉：缩进参考线、目录/文件层级区分、hover/选中/当前预览文件高亮；Git 文件保持平铺结构，不做树形化。
+
+Desktop Preview 还可以从工具栏显式 Float 为独立 companion window。浮动期间主窗口只保留 Chat，主窗口 Preview 入口负责聚焦 companion；companion 的 Dock 或系统关闭按钮恢复主窗口 Preview。浮动不复制 Preview 业务状态，tabs、drawer、搜索和滚动现场由主窗口状态与 typed app-local channel 共同保持。
 
 ## Terminal 呈现
 
