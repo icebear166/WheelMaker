@@ -202,6 +202,11 @@ describe('web chat recent sessions', () => {
     expect(mainTsx).toContain('setMobileProjectActionMenu(null);');
   });
 
+  test('keeps the fixed Hub menu open when other content scrolls', () => {
+    expect(mainTsx).toContain("closeSidebarTransientMenus(chatHubMenuOpen ? 'hub' : null);");
+    expect(mainTsx).toContain('}, [chatHubMenuOpen, closeSidebarTransientMenus]);');
+  });
+
   test('renders clipped hub and session action menus in the root overlay layer', () => {
     expect(mainTsx).toContain("import {createPortal} from 'react-dom';");
     expect(hubMenuTsx).toContain("import {createPortal} from 'react-dom';");
