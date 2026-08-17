@@ -4450,19 +4450,25 @@ export function App() {
   }, []);
 
   const handleChatAtBottomChange = useCallback((atBottom: boolean) => {
-    const scroller = chatScrollRef.current;
-    if (scroller) {
-      // Recompute from live metrics so the jump-to-top button reflects the real
-      // position even when no scroll event follows this at-bottom flip.
-      applyChatScrollNavVisibility(scroller);
-      return;
-    }
+    // Keep Virtuoso's semantic follow signal; outer metrics can show a transient
+    // gap while pending rows are being measured.
     chatAutoScrollFollowRef.current = atBottom;
     setChatShowScrollToBottom(!atBottom);
+    const scroller = chatScrollRef.current;
+    if (scroller) {
+      const visibility = resolveChatScrollNavVisibility({
+        scrollTop: scroller.scrollTop,
+        scrollHeight: scroller.scrollHeight,
+        clientHeight: scroller.clientHeight,
+        threshold: CHAT_AUTO_SCROLL_BOTTOM_THRESHOLD,
+      });
+      setChatShowScrollToTop(visibility.showScrollToTop);
+      return;
+    }
     if (atBottom) {
       setChatShowScrollToTop(false);
     }
-  }, [applyChatScrollNavVisibility]);
+  }, []);
 
   const handleChatScroll = useCallback((event: React.UIEvent<HTMLDivElement>) => {
     applyChatScrollNavVisibility(event.currentTarget);

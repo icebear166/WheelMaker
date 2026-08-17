@@ -102,6 +102,18 @@ describe('web drag scroll behavior', () => {
     expect(virtualList).not.toContain('if (atBottomRef.current && shouldAutoscrollNow())');
   });
 
+  test('keeps the Virtuoso at-bottom event as the follow source during list remeasurement', () => {
+    const projectRoot = path.join(__dirname, '..');
+    const mainTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'), 'utf8');
+    const handlerStart = mainTsx.indexOf('const handleChatAtBottomChange');
+    const handlerEnd = mainTsx.indexOf('const handleChatScroll', handlerStart);
+    const handler = mainTsx.slice(handlerStart, handlerEnd);
+
+    expect(handler).toContain('chatAutoScrollFollowRef.current = atBottom;');
+    expect(handler).toContain('setChatShowScrollToBottom(!atBottom);');
+    expect(handler).not.toContain('applyChatScrollNavVisibility(scroller);');
+  });
+
   test('shows the scroll-to-bottom button from the actual chat scroll container position', () => {
     const projectRoot = path.join(__dirname, '..');
     const mainTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'), 'utf8');
