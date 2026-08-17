@@ -545,6 +545,9 @@ HubConfig 是 Hub 的持久化配置，存放在 Hub 本地 `<stateDir>/db/hub-c
 | --- | --- | --- | --- |
 | `apiKeys` | `kimi` / `qwen` / `zai` / `deepSeek` / `flicker` | `set`（1 B–16 KiB）/ `clear` | 写入 Hub 本地 hub-config.json；**重启 Hub 后生效**。hub-config.json 是唯一 Key 来源，`clear` 后对应 Key 立即显示为未配置；旧 `config.json` 中的 `api_keys` 仅为启动兼容而接受，加载时整体忽略并记录迁移 warning |
 | `flickerBridge` | `enabled` | `set`（启用）/ `clear`（禁用） | 持久化开关，即时 start/stop bridge；Hub 启动时 enabled=true 会自动 start |
+| `mcpServers` | server `id` 或空（add） | `add` / `update` / `delete` / `enable` / `disable` / `preview` / `import` | Hub 级 MCP 配置；支持 STDIO 与 Streamable HTTP。secret env/header 只返回 `configured` / `updatedAt`，Codex/Claude 原生配置导入先返回脱敏预览；MCP 能力不匹配或运行时连接失败只更新 HubState 状态，不阻塞普通会话 |
+
+`mcpServers` 的 `preview` / `import` value 为 `{"source":"codex"|"claude","raw":"..."}`；预览会返回可导入服务器、冲突和首批不支持字段。`import` 是一次性批量写入，不修改原生配置文件，也不建立持续同步。Codex 的 `-c mcp_servers.*` 是叠加覆盖，未被 Hub materialize 的用户原生 `config.toml` 内容仍由 Codex 保持。
 
 Flicker Bridge 的 API key 不需要用户填写：未显式设置 `apiKeys.flicker` 时，Hub 使用 loopback-only 的内置占位门禁 `00000000000000000000`。设置面板只保留 Off/V1/V2：选择 V1/V2 会持久化 enabled 并立即启动对应模式，Off 会立即停止且 Hub 下次启动不会加载 Bridge。底层 start/stop/restart/switchMode 仍走 `hub.state.action` 的 `flickerBridge` section，但 UI 不再提供独立的临时 Start/Stop toggle。
 

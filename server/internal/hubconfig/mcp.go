@@ -27,7 +27,13 @@ type MCPTransport string
 type MCPValue struct {
 	Value     string    `json:"value,omitempty"`
 	Secret    bool      `json:"secret,omitempty"`
+	EnvVar    string    `json:"envVar,omitempty"`
 	UpdatedAt time.Time `json:"updatedAt,omitempty"`
+}
+
+type MCPValueRename struct {
+	From string `json:"from"`
+	To   string `json:"to"`
 }
 
 // MCPValueSnapshot is the frontend-safe representation of an env/header value.
@@ -76,20 +82,22 @@ type MCPServerSnapshot struct {
 // values. Omitted values are preserved so a sanitized frontend can edit a
 // server without receiving its existing secrets.
 type MCPServerUpdate struct {
-	ID           string              `json:"id"`
-	Name         string              `json:"name,omitempty"`
-	Enabled      *bool               `json:"enabled,omitempty"`
-	Transport    MCPTransport        `json:"transport,omitempty"`
-	Command      string              `json:"command,omitempty"`
-	Args         []string            `json:"args,omitempty"`
-	CWD          string              `json:"cwd,omitempty"`
-	ClearCWD     bool                `json:"clearCwd,omitempty"`
-	Env          map[string]MCPValue `json:"env,omitempty"`
-	ClearEnv     []string            `json:"clearEnv,omitempty"`
-	URL          string              `json:"url,omitempty"`
-	Headers      map[string]MCPValue `json:"headers,omitempty"`
-	ClearHeaders []string            `json:"clearHeaders,omitempty"`
-	ImportedFrom string              `json:"importedFrom,omitempty"`
+	ID            string              `json:"id"`
+	Name          string              `json:"name,omitempty"`
+	Enabled       *bool               `json:"enabled,omitempty"`
+	Transport     MCPTransport        `json:"transport,omitempty"`
+	Command       string              `json:"command,omitempty"`
+	Args          []string            `json:"args,omitempty"`
+	CWD           string              `json:"cwd,omitempty"`
+	ClearCWD      bool                `json:"clearCwd,omitempty"`
+	Env           map[string]MCPValue `json:"env,omitempty"`
+	ClearEnv      []string            `json:"clearEnv,omitempty"`
+	RenameEnv     []MCPValueRename    `json:"renameEnv,omitempty"`
+	URL           string              `json:"url,omitempty"`
+	Headers       map[string]MCPValue `json:"headers,omitempty"`
+	ClearHeaders  []string            `json:"clearHeaders,omitempty"`
+	RenameHeaders []MCPValueRename    `json:"renameHeaders,omitempty"`
+	ImportedFrom  string              `json:"importedFrom,omitempty"`
 }
 
 func (s MCPServerConfig) normalized(now time.Time) (MCPServerConfig, error) {
@@ -106,6 +114,8 @@ func (s MCPServerConfig) normalized(now time.Time) (MCPServerConfig, error) {
 	s.Args = cloneStrings(s.Args)
 	s.Env = cloneMCPValues(s.Env)
 	s.Headers = cloneMCPValues(s.Headers)
+	touchMCPValues(s.Env, now)
+	touchMCPValues(s.Headers, now)
 	if s.CreatedAt.IsZero() {
 		s.CreatedAt = now.UTC()
 	} else {
@@ -138,7 +148,7 @@ func validateMCPServer(s MCPServerConfig) error {
 			return fmt.Errorf("MCP HTTP server %q url is required", s.Name)
 		}
 		parsed, err := url.ParseRequestURI(s.URL)
-		if err != nil || parsed.Scheme != "http" && parsed.Scheme != "https" || parsed.User != nil {
+		if err != nil || parsed.Scheme != "http" && parsed.Scheme != "https" || parsed.User != nil || mcpURLHasCredentialQuery(parsed) {
 			return fmt.Errorf("MCP HTTP server %q url is invalid", s.Name)
 		}
 		if s.Command != "" || len(s.Args) > 0 || s.CWD != "" || len(s.Env) > 0 {
@@ -154,15 +164,67 @@ func validateMCPServer(s MCPServerConfig) error {
 }
 
 func validateMCPValues(values map[string]MCPValue, field string) error {
+	seenNames := make(map[string]string, len(values))
 	for name, value := range values {
-		if strings.TrimSpace(name) == "" || strings.ContainsAny(name, "=\x00\r\n") {
+		if strings.TrimSpace(name) == "" || strings.ContainsAny(name, "=\x00\r\n \t") {
 			return fmt.Errorf("invalid %s name", field)
+		}
+		nameKey := strings.ToLower(name)
+		if previous, ok := seenNames[nameKey]; ok && previous != name {
+			return fmt.Errorf("duplicate %s name %q conflicts with %q", field, name, previous)
+		}
+		seenNames[nameKey] = name
+		if field == "headers" && !validMCPHeaderName(name) {
+			return fmt.Errorf("invalid headers name %q", name)
 		}
 		if len(value.Value) > maxSecretBytes {
 			return fmt.Errorf("%s %q exceeds 16 KiB", field, name)
 		}
+		if strings.Contains(value.Value, "\x00") || field == "headers" && strings.ContainsAny(value.Value, "\r\n") {
+			return fmt.Errorf("invalid %s value for %q", field, name)
+		}
+		if value.EnvVar != "" {
+			if !value.Secret || strings.ContainsAny(value.EnvVar, "=\x00\r\n \t") || strings.TrimSpace(value.EnvVar) == "" {
+				return fmt.Errorf("invalid secret environment reference for %s %q", field, name)
+			}
+		}
 	}
 	return nil
+}
+
+func validMCPHeaderName(name string) bool {
+	for index := 0; index < len(name); index++ {
+		char := name[index]
+		if char >= 'a' && char <= 'z' || char >= 'A' && char <= 'Z' || char >= '0' && char <= '9' {
+			continue
+		}
+		switch char {
+		case '!', '#', '$', '%', '&', '\'', '*', '+', '-', '.', '^', '_', '`', '|', '~':
+			continue
+		default:
+			return false
+		}
+	}
+	return name != ""
+}
+
+func mcpURLHasCredentialQuery(parsed *url.URL) bool {
+	if parsed == nil {
+		return false
+	}
+	for name, values := range parsed.Query() {
+		normalized := strings.ToLower(strings.NewReplacer("-", "_", ".", "_").Replace(strings.TrimSpace(name)))
+		for _, marker := range []string{"token", "access_token", "refresh_token", "password", "secret", "api_key", "apikey", "authorization", "bearer", "key"} {
+			if strings.Contains(normalized, marker) {
+				for _, value := range values {
+					if strings.TrimSpace(value) != "" {
+						return true
+					}
+				}
+			}
+		}
+	}
+	return false
 }
 
 func cloneStrings(values []string) []string {
@@ -181,6 +243,15 @@ func cloneMCPValues(values map[string]MCPValue) map[string]MCPValue {
 		cloned[name] = value
 	}
 	return cloned
+}
+
+func touchMCPValues(values map[string]MCPValue, now time.Time) {
+	for name, value := range values {
+		if value.UpdatedAt.IsZero() {
+			value.UpdatedAt = now.UTC()
+		}
+		values[name] = value
+	}
 }
 
 func cloneMCPServer(server MCPServerConfig) MCPServerConfig {
@@ -221,6 +292,19 @@ func (s *Store) MCPServers() ([]MCPServerConfig, error) {
 func (s *Store) AddMCPServer(server MCPServerConfig, now time.Time) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	return s.addMCPServersLocked([]MCPServerConfig{server}, now)
+}
+
+// AddMCPServers persists a validated batch in one HubConfig write. Callers use
+// this for imports so a later invalid or conflicting entry cannot leave a
+// partially imported collection behind.
+func (s *Store) AddMCPServers(incoming []MCPServerConfig, now time.Time) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.addMCPServersLocked(incoming, now)
+}
+
+func (s *Store) addMCPServersLocked(incoming []MCPServerConfig, now time.Time) error {
 	root, _, err := s.loadLocked()
 	if err != nil {
 		return err
@@ -229,14 +313,16 @@ func (s *Store) AddMCPServer(server MCPServerConfig, now time.Time) error {
 	if err != nil {
 		return err
 	}
-	normalized, err := server.normalized(now)
-	if err != nil {
-		return err
+	for _, server := range incoming {
+		normalized, err := server.normalized(now)
+		if err != nil {
+			return err
+		}
+		if mcpServerIndex(servers, normalized.ID, normalized.Name) >= 0 {
+			return fmt.Errorf("MCP server %q already exists", normalized.Name)
+		}
+		servers = append(servers, normalized)
 	}
-	if mcpServerIndex(servers, normalized.ID, normalized.Name) >= 0 {
-		return fmt.Errorf("MCP server %q already exists", normalized.Name)
-	}
-	servers = append(servers, normalized)
 	return s.writeMCPServersLocked(root, servers)
 }
 
@@ -294,8 +380,19 @@ func (s *Store) UpdateMCPServer(update MCPServerUpdate, now time.Time) error {
 	if update.ImportedFrom != "" {
 		server.ImportedFrom = update.ImportedFrom
 	}
-	server.Env = mergeMCPValues(server.Env, update.Env, update.ClearEnv)
-	server.Headers = mergeMCPValues(server.Headers, update.Headers, update.ClearHeaders)
+	updateEnv := cloneMCPValues(update.Env)
+	updateHeaders := cloneMCPValues(update.Headers)
+	touchMCPValues(updateEnv, now)
+	touchMCPValues(updateHeaders, now)
+	var mergeErr error
+	server.Env, mergeErr = mergeMCPValues(server.Env, updateEnv, update.ClearEnv, update.RenameEnv)
+	if mergeErr != nil {
+		return fmt.Errorf("MCP server %q env update: %w", server.Name, mergeErr)
+	}
+	server.Headers, mergeErr = mergeMCPValues(server.Headers, updateHeaders, update.ClearHeaders, update.RenameHeaders)
+	if mergeErr != nil {
+		return fmt.Errorf("MCP server %q header update: %w", server.Name, mergeErr)
+	}
 	server.UpdatedAt = now.UTC()
 	if err := validateMCPServer(server); err != nil {
 		return err
@@ -309,21 +406,37 @@ func (s *Store) UpdateMCPServer(update MCPServerUpdate, now time.Time) error {
 	return s.writeMCPServersLocked(root, servers)
 }
 
-func mergeMCPValues(existing, updates map[string]MCPValue, clear []string) map[string]MCPValue {
+func mergeMCPValues(existing, updates map[string]MCPValue, clear []string, renames []MCPValueRename) (map[string]MCPValue, error) {
 	merged := cloneMCPValues(existing)
-	if merged == nil && len(updates) == 0 && len(clear) == 0 {
-		return nil
+	if merged == nil && len(updates) == 0 && len(clear) == 0 && len(renames) == 0 {
+		return nil, nil
 	}
 	if merged == nil {
 		merged = map[string]MCPValue{}
 	}
-	for name, value := range updates {
-		merged[name] = value
-	}
 	for _, name := range clear {
 		delete(merged, name)
 	}
-	return merged
+	for _, rename := range renames {
+		from := strings.TrimSpace(rename.From)
+		to := strings.TrimSpace(rename.To)
+		if from == "" || to == "" || strings.EqualFold(from, to) {
+			continue
+		}
+		value, ok := merged[from]
+		if !ok {
+			continue
+		}
+		if _, exists := merged[to]; exists {
+			return nil, fmt.Errorf("cannot rename %q to existing value %q", from, to)
+		}
+		delete(merged, from)
+		merged[to] = value
+	}
+	for name, value := range updates {
+		merged[name] = value
+	}
+	return merged, nil
 }
 
 func (s *Store) SetMCPServerEnabled(id string, enabled bool, now time.Time) error {
@@ -433,7 +546,7 @@ func mcpValueSnapshots(values map[string]MCPValue) map[string]MCPValueSnapshot {
 	for name, value := range values {
 		entry := MCPValueSnapshot{
 			Secret:     value.Secret,
-			Configured: value.Value != "",
+			Configured: value.Value != "" || value.EnvVar != "",
 		}
 		if !value.Secret {
 			entry.Value = value.Value

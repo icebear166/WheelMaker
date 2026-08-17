@@ -3,9 +3,9 @@ package hubconfig
 import (
 	"encoding/json"
 	"fmt"
-	"os"
 	"sort"
 	"strings"
+	"unicode"
 
 	"github.com/BurntSushi/toml"
 	"github.com/google/uuid"
@@ -34,18 +34,20 @@ type MCPImportPreview struct {
 }
 
 type mcpImportEntry struct {
-	Type           string            `json:"type" toml:"type"`
-	Command        string            `json:"command" toml:"command"`
-	Args           []string          `json:"args" toml:"args"`
-	CWD            string            `json:"cwd" toml:"cwd"`
-	Env            map[string]string `json:"env" toml:"env"`
-	EnvVars        []string          `json:"env_vars" toml:"env_vars"`
-	URL            string            `json:"url" toml:"url"`
-	Headers        map[string]string `json:"headers" toml:"headers"`
-	HTTPHeaders    map[string]string `json:"http_headers" toml:"http_headers"`
-	EnvHTTPHeaders map[string]string `json:"env_http_headers" toml:"env_http_headers"`
-	Enabled        *bool             `json:"enabled" toml:"enabled"`
-	Disabled       bool              `json:"disabled" toml:"disabled"`
+	Type              string            `json:"type" toml:"type"`
+	Command           string            `json:"command" toml:"command"`
+	Args              []string          `json:"args" toml:"args"`
+	CWD               string            `json:"cwd" toml:"cwd"`
+	Env               map[string]string `json:"env" toml:"env"`
+	EnvVars           []string          `json:"env_vars" toml:"env_vars"`
+	URL               string            `json:"url" toml:"url"`
+	Headers           map[string]string `json:"headers" toml:"headers"`
+	HTTPHeaders       map[string]string `json:"http_headers" toml:"http_headers"`
+	EnvHTTPHeaders    map[string]string `json:"env_http_headers" toml:"env_http_headers"`
+	BearerTokenEnvVar string            `json:"bearer_token_env_var" toml:"bearer_token_env_var"`
+	Enabled           *bool             `json:"enabled" toml:"enabled"`
+	Disabled          bool              `json:"disabled" toml:"disabled"`
+	Unsupported       []string          `json:"-"`
 }
 
 func (e mcpImportEntry) enabled() bool {
@@ -57,6 +59,19 @@ func (e mcpImportEntry) enabled() bool {
 
 func (e mcpImportEntry) toServer(name, source string) (MCPServerConfig, MCPImportIssue, bool) {
 	name = strings.TrimSpace(name)
+	unsupported := append([]string(nil), e.Unsupported...)
+	if strings.EqualFold(source, "claude") && claudeMCPEntryUsesUnsupportedInterpolation(e) {
+		unsupported = append(unsupported, "environment variable interpolation")
+		sort.SliceStable(unsupported, func(i, j int) bool {
+			return strings.ToLower(unsupported[i]) < strings.ToLower(unsupported[j])
+		})
+	}
+	if len(unsupported) > 0 {
+		return MCPServerConfig{}, MCPImportIssue{
+			Name:   name,
+			Reason: "unsupported MCP fields: " + strings.Join(unsupported, ", "),
+		}, false
+	}
 	typeName := strings.ToLower(strings.TrimSpace(e.Type))
 	if typeName == "sse" || typeName == "websocket" || typeName == "ws" {
 		return MCPServerConfig{}, MCPImportIssue{Name: name, Reason: fmt.Sprintf("%s transport is not supported in the first MCP release", strings.ToUpper(typeName))}, false
@@ -76,30 +91,32 @@ func (e mcpImportEntry) toServer(name, source string) (MCPServerConfig, MCPImpor
 	if server.URL != "" || typeName == "http" || typeName == "streamable-http" || typeName == "remote" {
 		server.Transport = MCPTransportHTTP
 		for name, value := range e.Headers {
-			server.Headers[name] = MCPValue{Value: value, Secret: sensitiveMCPName(name)}
+			server.Headers[name] = importedMCPValue(name, value, source)
 		}
 		for name, value := range e.HTTPHeaders {
-			server.Headers[name] = MCPValue{Value: value, Secret: sensitiveMCPName(name)}
+			server.Headers[name] = importedMCPValue(name, value, source)
 		}
 		for headerName, envName := range e.EnvHTTPHeaders {
-			if value, ok := os.LookupEnv(strings.TrimSpace(envName)); ok {
-				server.Headers[headerName] = MCPValue{Value: value, Secret: true}
-			} else {
-				server.Headers[headerName] = MCPValue{Secret: true}
+			envName = strings.TrimSpace(envName)
+			if envName == "" {
+				continue
 			}
+			server.Headers[headerName] = MCPValue{Secret: true, EnvVar: envName}
+		}
+		if envName := strings.TrimSpace(e.BearerTokenEnvVar); envName != "" {
+			server.Headers["Authorization"] = MCPValue{Secret: true, EnvVar: envName}
 		}
 	} else {
 		server.Transport = MCPTransportStdio
 		for name, value := range e.Env {
-			server.Env[name] = MCPValue{Value: value, Secret: sensitiveMCPName(name)}
+			server.Env[name] = importedMCPValue(name, value, source)
 		}
 		for _, envName := range e.EnvVars {
 			envName = strings.TrimSpace(envName)
 			if envName == "" {
 				continue
 			}
-			value, _ := os.LookupEnv(envName)
-			server.Env[envName] = MCPValue{Value: value, Secret: true}
+			server.Env[envName] = MCPValue{Secret: true, EnvVar: envName}
 		}
 	}
 	if err := validateMCPServer(server); err != nil {
@@ -108,14 +125,127 @@ func (e mcpImportEntry) toServer(name, source string) (MCPServerConfig, MCPImpor
 	return server, MCPImportIssue{}, true
 }
 
+func importedMCPValue(name, value, source string) MCPValue {
+	if strings.EqualFold(source, "claude") {
+		if envName, ok := exactMCPEnvironmentReference(value); ok {
+			return MCPValue{Secret: true, EnvVar: envName}
+		}
+	}
+	return MCPValue{Value: value, Secret: sensitiveMCPName(name)}
+}
+
+func exactMCPEnvironmentReference(value string) (string, bool) {
+	if len(value) < 4 || !strings.HasPrefix(value, "${") || !strings.HasSuffix(value, "}") {
+		return "", false
+	}
+	name := value[2 : len(value)-1]
+	if !validMCPEnvironmentReferenceName(name) {
+		return "", false
+	}
+	return name, true
+}
+
+func validMCPEnvironmentReferenceName(name string) bool {
+	if name == "" || name[0] >= '0' && name[0] <= '9' {
+		return false
+	}
+	for index := 0; index < len(name); index++ {
+		char := name[index]
+		if char >= 'a' && char <= 'z' || char >= 'A' && char <= 'Z' || char >= '0' && char <= '9' || char == '_' {
+			continue
+		}
+		return false
+	}
+	return true
+}
+
+func claudeMCPEntryUsesUnsupportedInterpolation(entry mcpImportEntry) bool {
+	containsUnsupported := func(value string, exactReferenceAllowed bool) bool {
+		if !strings.Contains(value, "${") {
+			return false
+		}
+		return !exactReferenceAllowed || func() bool {
+			_, ok := exactMCPEnvironmentReference(value)
+			return !ok
+		}()
+	}
+	if containsUnsupported(entry.Command, false) || containsUnsupported(entry.CWD, false) || containsUnsupported(entry.URL, false) {
+		return true
+	}
+	for _, value := range entry.Args {
+		if containsUnsupported(value, false) {
+			return true
+		}
+	}
+	for _, values := range []map[string]string{entry.Env, entry.Headers, entry.HTTPHeaders} {
+		for _, value := range values {
+			if containsUnsupported(value, true) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 func sensitiveMCPName(name string) bool {
-	name = strings.ToLower(strings.TrimSpace(name))
-	for _, marker := range []string{"password", "passwd", "token", "secret", "authorization", "api_key", "apikey", "credential"} {
+	name = strings.Map(func(char rune) rune {
+		if unicode.IsLetter(char) || unicode.IsDigit(char) {
+			return unicode.ToLower(char)
+		}
+		return '_'
+	}, strings.TrimSpace(name))
+	for _, marker := range []string{"password", "passwd", "token", "secret", "authorization", "api_key", "apikey", "access_token", "refresh_token", "credential", "private_key", "client_secret", "bearer"} {
 		if strings.Contains(name, marker) {
 			return true
 		}
 	}
-	return false
+	return name == "key" || strings.HasSuffix(name, "_key") || strings.HasPrefix(name, "key_")
+}
+
+var unsupportedMCPImportFields = map[string]struct{}{
+	"auth":                {},
+	"authorization":       {},
+	"access_token":        {},
+	"refresh_token":       {},
+	"token":               {},
+	"api_key":             {},
+	"apikey":              {},
+	"client_id":           {},
+	"client_secret":       {},
+	"oauth":               {},
+	"oauth_client_id":     {},
+	"oauth_client_secret": {},
+	"oauth_scopes":        {},
+	"required":            {},
+	"startup_timeout_sec": {},
+	"tool_timeout_sec":    {},
+	"tools":               {},
+	"allowed_tools":       {},
+	"denied_tools":        {},
+	"tool_allowlist":      {},
+	"tool_denylist":       {},
+}
+
+func unsupportedMCPImportFieldNames(raw any) []string {
+	encoded, err := json.Marshal(raw)
+	if err != nil {
+		return nil
+	}
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(encoded, &fields); err != nil {
+		return nil
+	}
+	unsupported := make([]string, 0)
+	for name := range fields {
+		normalized := strings.ToLower(strings.TrimSpace(name))
+		if _, ok := unsupportedMCPImportFields[normalized]; ok {
+			unsupported = append(unsupported, name)
+		}
+	}
+	sort.SliceStable(unsupported, func(i, j int) bool {
+		return strings.ToLower(unsupported[i]) < strings.ToLower(unsupported[j])
+	})
+	return unsupported
 }
 
 // ImportCodexMCPConfig parses a Codex config.toml MCP section without writing
@@ -139,6 +269,7 @@ func ImportCodexMCPConfig(raw []byte) (MCPImportResult, error) {
 		if err := json.Unmarshal(encoded, &entry); err != nil {
 			return MCPImportResult{}, fmt.Errorf("decode Codex MCP server %q: %w", name, err)
 		}
+		entry.Unsupported = unsupportedMCPImportFieldNames(rawEntry)
 		entries[name] = entry
 	}
 	return importMCPEntries(entries, "codex"), nil
@@ -160,6 +291,10 @@ func ImportClaudeMCPConfig(raw []byte) (MCPImportResult, error) {
 		var entry mcpImportEntry
 		if err := json.Unmarshal(rawEntry, &entry); err != nil {
 			return MCPImportResult{}, fmt.Errorf("parse Claude MCP server %q: %w", name, err)
+		}
+		var rawFields map[string]json.RawMessage
+		if err := json.Unmarshal(rawEntry, &rawFields); err == nil {
+			entry.Unsupported = unsupportedMCPImportFieldNames(rawFields)
 		}
 		entries[name] = entry
 	}
@@ -236,9 +371,12 @@ func FindMCPImportConflicts(existing, imported []MCPServerConfig) []MCPImportCon
 	conflicts := make([]MCPImportConflict, 0)
 	for _, server := range imported {
 		name := strings.TrimSpace(server.Name)
-		if _, ok := known[strings.ToLower(name)]; ok {
+		key := strings.ToLower(name)
+		if _, ok := known[key]; ok {
 			conflicts = append(conflicts, MCPImportConflict{Name: name})
+			continue
 		}
+		known[key] = struct{}{}
 	}
 	sort.SliceStable(conflicts, func(i, j int) bool { return conflicts[i].Name < conflicts[j].Name })
 	return conflicts

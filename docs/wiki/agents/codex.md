@@ -44,6 +44,6 @@ Codex 原生 Goal status 直接映射为 WheelMaker 通用 status。`thread/goal
 
 ## Hub MCP
 
-Codex 的 MCP 配置由 WheelMaker HubConfig 统一持有。新建 Codex app-server runtime 时，Hub 将启用的 STDIO 与 Streamable HTTP 条目 materialize 为 `-c mcp_servers.*` 覆盖；普通值进入配置覆盖，secret env/header 值只通过子进程环境注入，并以 `env_vars` / `env_http_headers` 引用。WheelMaker 不回写用户原生 `config.toml`，MCP 变化通过 launch fingerprint 区分 runtime，现有 Session 继续使用原 runtime。
+Codex 的 WheelMaker 托管 MCP 配置由 HubConfig 持有。新建 Codex app-server runtime 时，Hub 将启用的 STDIO 与 Streamable HTTP 条目 materialize 为 `-c mcp_servers.*` 分层覆盖；普通值进入配置覆盖，secret env/header 值只通过子进程环境注入，并以 `env_vars` / `env_http_headers` 引用。用户原生 `config.toml` 不会被清空或回写，未被 Hub materialize 的原生条目仍由 Codex 保持，同名字段遵循 Codex 原生的合并/覆盖规则。MCP 变化通过 launch fingerprint 区分 runtime，现有 Session 继续使用原 runtime。
 
-Codex ACP capability 当前声明 HTTP MCP，未声明 SSE；MCP server 的单项连接失败由 HubState `mcp` 作为非阻塞状态展示。Hub 菜单支持一次性导入 Codex 原生 TOML，当前 Neo4j 形态（python executable、`-m neo4j_mcp_server`、`NEO4J_*` 环境变量）可以映射到该配置模型。完整的 Hub 配置、Claude 适配、导入与安全边界见 [`../features/mcp-management.md`](../features/mcp-management.md)。
+Codex ACP capability 当前声明 HTTP MCP，未声明 SSE；MCP server 的单项连接失败由 HubState `mcp` 作为非阻塞状态展示，能力不匹配的 transport 会在 ACP session 参数中被过滤；带 MCP 的 session 尝试失败时会自动用空 MCP 列表重试普通会话。Hub 菜单支持一次性导入 Codex 原生 TOML，当前 Neo4j 形态（python executable、`-m neo4j_mcp_server`、`NEO4J_*` 环境变量）可以映射到该配置模型。完整的 Hub 配置、Claude 适配、导入与安全边界见 [`../features/mcp-management.md`](../features/mcp-management.md)。

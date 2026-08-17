@@ -20,6 +20,7 @@ export interface ChatHubMcpConfigView {
 
 interface MCPValueDraft {
   key: string;
+  originalKey?: string;
   value: string;
   secret: boolean;
   configured: boolean;
@@ -70,6 +71,7 @@ function draftFromServer(server: RegistryHubMCPServerSnapshot): MCPFormState {
     .sort(([left], [right]) => left.localeCompare(right))
     .map(([key, snapshot]) => ({
       key,
+      originalKey: key,
       value: snapshot.secret ? '' : snapshot.value ?? '',
       secret: snapshot.secret,
       configured: snapshot.configured,
@@ -130,7 +132,7 @@ function formPayload(form: MCPFormState): Record<string, unknown> {
   if (form.transport === 'stdio') {
     payload.command = form.command.trim();
     const args = form.args.split(/\r?\n/).map(item => item.trim()).filter(Boolean);
-    if (args.length > 0) payload.args = args;
+    payload.args = args;
     if (form.cwd.trim()) {
       payload.cwd = form.cwd.trim();
     } else if (form.id && form.originalCwd.trim()) {
@@ -139,11 +141,23 @@ function formPayload(form: MCPFormState): Record<string, unknown> {
     const env = valueMap(form.values);
     if (env) payload.env = env;
     if (form.id && form.clearValues.length > 0) payload.clearEnv = form.clearValues;
+    if (form.id) {
+      const renameEnv = form.values
+        .map(item => ({from: item.originalKey?.trim() ?? '', to: item.key.trim()}))
+        .filter(item => item.from && item.to && item.from !== item.to);
+      if (renameEnv.length > 0) payload.renameEnv = renameEnv;
+    }
   } else {
     payload.url = form.url.trim();
     const headers = valueMap(form.values);
     if (headers) payload.headers = headers;
     if (form.id && form.clearValues.length > 0) payload.clearHeaders = form.clearValues;
+    if (form.id) {
+      const renameHeaders = form.values
+        .map(item => ({from: item.originalKey?.trim() ?? '', to: item.key.trim()}))
+        .filter(item => item.from && item.to && item.from !== item.to);
+      if (renameHeaders.length > 0) payload.renameHeaders = renameHeaders;
+    }
   }
   if (form.importedFrom) payload.importedFrom = form.importedFrom;
   return payload;
@@ -264,11 +278,12 @@ export function ChatHubMcpDetail({
   const removeValue = (index: number) => {
     if (!form) return;
     const value = form.values[index];
-    const key = value?.key.trim() ?? '';
+    const keys = [value?.key.trim() ?? '', value?.originalKey?.trim() ?? '']
+      .filter((key, keyIndex, all) => key && all.indexOf(key) === keyIndex);
     updateForm({
       values: form.values.filter((_, itemIndex) => itemIndex !== index),
-      clearValues: key && value.configured && !form.clearValues.includes(key)
-        ? [...form.clearValues, key]
+      clearValues: value?.configured
+        ? [...form.clearValues, ...keys.filter(key => !form.clearValues.includes(key))]
         : form.clearValues,
     });
   };

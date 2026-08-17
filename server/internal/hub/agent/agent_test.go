@@ -1548,6 +1548,23 @@ func TestCodexAppProviderLaunchMaterializesMCPWithoutSecretsInArgs(t *testing.T)
 	}
 }
 
+func TestCodexAppProviderRejectsConflictingSecretMCPEnvironmentNames(t *testing.T) {
+	provider := NewCodexProviderWithMCP([]hubconfig.MCPServerConfig{
+		{
+			Name: "first", Enabled: true, Transport: hubconfig.MCPTransportStdio, Command: "first",
+			Env: map[string]hubconfig.MCPValue{"API_KEY": {Value: "first-secret", Secret: true}},
+		},
+		{
+			Name: "second", Enabled: true, Transport: hubconfig.MCPTransportStdio, Command: "second",
+			Env: map[string]hubconfig.MCPValue{"API_KEY": {Value: "second-secret", Secret: true}},
+		},
+	})
+	provider.lookPath = func(string) (string, error) { return `C:\\bin\\codex.exe`, nil }
+	if _, _, _, err := provider.Launch(); err == nil || !strings.Contains(strings.ToLower(err.Error()), "api_key") {
+		t.Fatalf("Launch error = %v, want secret environment collision", err)
+	}
+}
+
 func TestCodexAppLaunchFingerprintChangesWithMCPConfigWithoutExposingSecrets(t *testing.T) {
 	first := codexappLaunchFingerprint("codex", []string{"app-server"}, []string{"NEO4J_PASSWORD=first"})
 	second := codexappLaunchFingerprint("codex", []string{"app-server"}, []string{"NEO4J_PASSWORD=second"})
@@ -6586,6 +6603,46 @@ func TestCodexAppAcceptsMCPAndRejectsUnsupportedInputs(t *testing.T) {
 		Prompt:    []protocol.ContentBlock{{Type: protocol.ContentBlockTypeAudio, Data: "abc"}},
 	}, &promptRes); err == nil {
 		t.Fatal("SessionPrompt accepted audio input")
+	}
+}
+
+func TestCodexAppEmptyMCPRetryDisablesLaunchOverlayPerThread(t *testing.T) {
+	tr := newFakeCodexappTransport()
+	rt := newCodexappRuntimeWithTransport(tr)
+	t.Cleanup(func() { _ = rt.close() })
+	conn := newCodexappConnWithRuntimeAndProfile(rt, t.TempDir(), "proj", codexappConnProfile{
+		Provider:       protocol.ACPProviderCodex,
+		MCPServerNames: []string{"neo4j", "remote"},
+	})
+	tr.onSend = func(msg map[string]any) {
+		switch msg["method"] {
+		case "model/list":
+			_ = tr.emit(map[string]any{"id": msg["id"], "result": map[string]any{
+				"data": []map[string]any{{"id": "gpt-5", "supportedReasoningEfforts": []map[string]any{{"reasoningEffort": "medium"}}, "defaultReasoningEffort": "medium"}},
+			}})
+		case "thread/start":
+			params, _ := msg["params"].(map[string]any)
+			config, _ := params["config"].(map[string]any)
+			if config["mcp_servers.neo4j.enabled"] != false || config["mcp_servers.remote.enabled"] != false {
+				t.Errorf("thread/start fallback config = %#v, want Hub MCP entries disabled", config)
+			}
+			_ = tr.emit(map[string]any{"id": msg["id"], "result": map[string]any{
+				"thread": map[string]any{"id": "thread-without-mcp"},
+			}})
+		default:
+			t.Errorf("unexpected app-server method %q", msg["method"])
+		}
+	}
+
+	var result protocol.SessionNewResult
+	if err := conn.Send(context.Background(), protocol.MethodSessionNew, protocol.SessionNewParams{
+		CWD:        t.TempDir(),
+		MCPServers: []protocol.MCPServer{},
+	}, &result); err != nil {
+		t.Fatalf("SessionNew fallback: %v", err)
+	}
+	if result.SessionID != "thread-without-mcp" {
+		t.Fatalf("session id = %q", result.SessionID)
 	}
 }
 

@@ -40,6 +40,93 @@ NEO4J_USERNAME = "neo4j"
 	}
 }
 
+func TestImportCodexMCPConfigTreatsAPIKeyHeaderAsSecret(t *testing.T) {
+	raw := []byte(`
+[mcp_servers.remote]
+type = "http"
+url = "https://example.test/mcp"
+http_headers = { X-API-Key = "header-secret" }
+`)
+	result, err := ImportCodexMCPConfig(raw)
+	if err != nil {
+		t.Fatalf("ImportCodexMCPConfig: %v", err)
+	}
+	if len(result.Servers) != 1 || len(result.Issues) != 0 {
+		t.Fatalf("result = %#v", result)
+	}
+	value := result.Servers[0].Headers["X-API-Key"]
+	if !value.Secret || value.Value != "header-secret" {
+		t.Fatalf("API key header = %#v", value)
+	}
+}
+
+func TestImportCodexMCPConfigPreservesBearerEnvironmentReference(t *testing.T) {
+	raw := []byte(`
+[mcp_servers.remote]
+type = "http"
+url = "https://example.test/mcp"
+bearer_token_env_var = "REMOTE_TOKEN"
+`)
+	result, err := ImportCodexMCPConfig(raw)
+	if err != nil {
+		t.Fatalf("ImportCodexMCPConfig: %v", err)
+	}
+	if len(result.Servers) != 1 || len(result.Issues) != 0 {
+		t.Fatalf("result = %#v", result)
+	}
+	value := result.Servers[0].Headers["Authorization"]
+	if !value.Secret || value.EnvVar != "REMOTE_TOKEN" || value.Value != "" {
+		t.Fatalf("bearer header = %#v", value)
+	}
+}
+
+func TestImportClaudeMCPConfigPreservesExactEnvironmentReference(t *testing.T) {
+	raw := []byte(`{
+  "mcpServers": {
+    "remote": {
+      "type": "http",
+      "url": "https://example.test/mcp",
+      "headers": {"Authorization": "${REMOTE_TOKEN}"}
+    },
+    "composite": {
+      "type": "http",
+      "url": "https://example.test/composite",
+      "headers": {"Authorization": "Bearer ${REMOTE_TOKEN}"}
+    }
+  }
+}`)
+	result, err := ImportClaudeMCPConfig(raw)
+	if err != nil {
+		t.Fatalf("ImportClaudeMCPConfig: %v", err)
+	}
+	if len(result.Servers) != 1 || len(result.Issues) != 1 {
+		t.Fatalf("result = %#v", result)
+	}
+	value := result.Servers[0].Headers["Authorization"]
+	if !value.Secret || value.EnvVar != "REMOTE_TOKEN" || value.Value != "" {
+		t.Fatalf("Claude environment reference = %#v", value)
+	}
+	if !strings.Contains(strings.ToLower(result.Issues[0].Reason), "interpolation") {
+		t.Fatalf("composite interpolation issue = %#v", result.Issues[0])
+	}
+}
+
+func TestImportMCPConfigReportsUnsupportedAuthFields(t *testing.T) {
+	raw := []byte(`
+[mcp_servers.remote]
+type = "http"
+url = "https://example.test/mcp"
+auth = "oauth"
+`)
+	result, err := ImportCodexMCPConfig(raw)
+	if err != nil {
+		t.Fatalf("ImportCodexMCPConfig: %v", err)
+	}
+	if len(result.Servers) != 0 || len(result.Issues) != 1 || !strings.Contains(strings.ToLower(result.Issues[0].Reason), "auth") {
+		t.Fatalf("result = %#v", result)
+	}
+}
+
 func TestImportClaudeMCPConfigSkipsSSEWithReason(t *testing.T) {
 	raw := []byte(`{
   "mcpServers": {
@@ -64,6 +151,14 @@ func TestImportMCPNameConflictRequiresResolution(t *testing.T) {
 	imported := []MCPServerConfig{{Name: "neo4j"}, {Name: "docs"}}
 	conflicts := FindMCPImportConflicts(existing, imported)
 	if len(conflicts) != 1 || conflicts[0].Name != "neo4j" {
+		t.Fatalf("conflicts = %#v", conflicts)
+	}
+}
+
+func TestImportMCPNameConflictIncludesCaseInsensitiveDuplicates(t *testing.T) {
+	imported := []MCPServerConfig{{Name: "neo4j"}, {Name: "Neo4j"}}
+	conflicts := FindMCPImportConflicts(nil, imported)
+	if len(conflicts) != 1 || conflicts[0].Name != "Neo4j" {
 		t.Fatalf("conflicts = %#v", conflicts)
 	}
 }

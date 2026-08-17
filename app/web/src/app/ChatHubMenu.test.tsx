@@ -553,6 +553,48 @@ test('MCP add form serializes STDIO configuration without exposing existing secr
   expect(JSON.stringify(payload)).not.toContain('NEO4J_PASSWORD');
 });
 
+test('MCP edit can clear args and rename a configured secret key', async () => {
+  const {props, callbacks} = createHarness({
+    expandedSections: {'hub-a': ['mcp']},
+    hubConfigByHubId: {
+      'hub-a': {
+        loading: false,
+        error: '',
+        busyField: '',
+        data: {
+          flickerBridge: {mode: 'v1', enabled: false},
+          apiKeys: {},
+          deepSeekPlatform: {configured: false},
+          mcpServers: [{
+            id: 'mcp-neo4j',
+            name: 'neo4j',
+            enabled: true,
+            transport: 'stdio',
+            command: 'python',
+            args: ['-m', 'neo4j_mcp_server'],
+            env: {NEO4J_PASSWORD: {secret: true, configured: true}},
+          }],
+        },
+      },
+    },
+  });
+  let renderer!: TestRenderer.ReactTestRenderer;
+  await act(async () => {
+    renderer = TestRenderer.create(<ChatHubMenu {...props} />);
+  });
+  act(() => renderer.root.findByProps({'aria-label': 'Edit neo4j'}).props.onClick());
+  const form = renderer.root.findByProps({className: 'chat-hub-mcp-form'});
+  act(() => form.findByProps({'aria-label': 'MCP arguments'}).props.onChange({target: {value: ''}}));
+  act(() => form.findByProps({'aria-label': 'MCP value name 1'}).props.onChange({target: {value: 'NEO4J_PASSWORD_NEW'}}));
+  await act(async () => {
+    form.props.onSubmit({preventDefault: jest.fn()});
+  });
+  const payload = JSON.parse(callbacks.onUpdateHubConfig.mock.calls.at(-1)[1].value);
+  expect(payload.args).toEqual([]);
+  expect(payload.renameEnv).toEqual([{from: 'NEO4J_PASSWORD', to: 'NEO4J_PASSWORD_NEW'}]);
+  expect(JSON.stringify(payload)).not.toContain('neo4j-secret');
+});
+
 test('MCP import shows a preview before applying entries', async () => {
   const {props, callbacks} = createHarness({
     expandedSections: {'hub-a': ['mcp']},

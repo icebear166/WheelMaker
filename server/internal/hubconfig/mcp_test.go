@@ -134,6 +134,34 @@ func TestStoreMCPUpdateClearSecret(t *testing.T) {
 	}
 }
 
+func TestStoreMCPUpdateSetWinsWhenClearAndSetUseSameKey(t *testing.T) {
+	store := New(filepath.Join(t.TempDir(), "db", "hub-config.json"))
+	if err := store.AddMCPServer(MCPServerConfig{
+		Name: "remote", Transport: MCPTransportStdio, Command: "python",
+		Env: map[string]MCPValue{"TOKEN": {Value: "old", Secret: true}},
+	}, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	servers, err := store.MCPServers()
+	if err != nil || len(servers) != 1 {
+		t.Fatalf("MCPServers = %#v, %v", servers, err)
+	}
+	if err := store.UpdateMCPServer(MCPServerUpdate{
+		ID:       servers[0].ID,
+		ClearEnv: []string{"TOKEN"},
+		Env:      map[string]MCPValue{"TOKEN": {Value: "replacement", Secret: true}},
+	}, time.Now()); err != nil {
+		t.Fatalf("UpdateMCPServer: %v", err)
+	}
+	servers, err = store.MCPServers()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := servers[0].Env["TOKEN"].Value; got != "replacement" {
+		t.Fatalf("TOKEN = %q, want replacement", got)
+	}
+}
+
 func TestStoreMCPUpdateTransportClearsProviderSpecificFields(t *testing.T) {
 	store := New(filepath.Join(t.TempDir(), "hub-config.json"))
 	now := time.Now().UTC()
@@ -191,6 +219,68 @@ func TestStoreMCPUpdateCanClearCWD(t *testing.T) {
 	}
 }
 
+func TestStoreMCPRejectsCredentialQueryURL(t *testing.T) {
+	store := New(filepath.Join(t.TempDir(), "hub-config.json"))
+	err := store.AddMCPServer(MCPServerConfig{
+		Name:      "remote",
+		Transport: MCPTransportHTTP,
+		URL:       "https://example.test/mcp?access_token=query-secret",
+	}, time.Now())
+	if err == nil {
+		t.Fatal("credential-bearing query URL was accepted")
+	}
+}
+
+func TestStoreMCPAddServersIsAtomic(t *testing.T) {
+	store := New(filepath.Join(t.TempDir(), "hub-config.json"))
+	err := store.AddMCPServers([]MCPServerConfig{
+		{Name: "valid", Transport: MCPTransportStdio, Command: "python"},
+		{Name: "invalid", Transport: MCPTransportStdio},
+	}, time.Now())
+	if err == nil {
+		t.Fatal("invalid batch was accepted")
+	}
+	servers, readErr := store.MCPServers()
+	if readErr != nil {
+		t.Fatalf("MCPServers: %v", readErr)
+	}
+	if len(servers) != 0 {
+		t.Fatalf("partial batch persisted: %#v", servers)
+	}
+}
+
+func TestStoreMCPUpdateRenamesSecretWithoutReturningItsValue(t *testing.T) {
+	store := New(filepath.Join(t.TempDir(), "hub-config.json"))
+	if err := store.AddMCPServer(MCPServerConfig{
+		Name:      "remote",
+		Transport: MCPTransportStdio,
+		Command:   "python",
+		Env:       map[string]MCPValue{"OLD_TOKEN": {Value: "keep-secret", Secret: true}},
+	}, time.Now()); err != nil {
+		t.Fatalf("AddMCPServer: %v", err)
+	}
+	servers, err := store.MCPServers()
+	if err != nil || len(servers) != 1 {
+		t.Fatalf("MCPServers = %#v, %v", servers, err)
+	}
+	if err := store.UpdateMCPServer(MCPServerUpdate{
+		ID:        servers[0].ID,
+		RenameEnv: []MCPValueRename{{From: "OLD_TOKEN", To: "NEW_TOKEN"}},
+	}, time.Now()); err != nil {
+		t.Fatalf("UpdateMCPServer: %v", err)
+	}
+	servers, err = store.MCPServers()
+	if err != nil {
+		t.Fatalf("MCPServers after rename: %v", err)
+	}
+	if _, ok := servers[0].Env["OLD_TOKEN"]; ok {
+		t.Fatalf("old token key survived rename: %#v", servers[0].Env)
+	}
+	if got := servers[0].Env["NEW_TOKEN"]; got.Value != "keep-secret" || !got.Secret {
+		t.Fatalf("renamed token = %#v", got)
+	}
+}
+
 func TestStoreMCPRejectsInvalidTransportAndMissingCommand(t *testing.T) {
 	store := New(filepath.Join(t.TempDir(), "hub-config.json"))
 	now := time.Now().UTC()
@@ -204,5 +294,33 @@ func TestStoreMCPRejectsInvalidTransportAndMissingCommand(t *testing.T) {
 				t.Fatal("invalid MCP server was accepted")
 			}
 		})
+	}
+}
+
+func TestStoreMCPRejectsInvalidValueNamesAndHeaderLineBreaks(t *testing.T) {
+	store := New(filepath.Join(t.TempDir(), "db", "hub-config.json"))
+	if err := store.AddMCPServer(MCPServerConfig{
+		Name: "bad-env", Transport: MCPTransportStdio, Command: "python",
+		Env: map[string]MCPValue{"BAD NAME": {Value: "value"}},
+	}, time.Now()); err == nil {
+		t.Fatal("environment name with spaces was accepted")
+	}
+	if err := store.AddMCPServer(MCPServerConfig{
+		Name: "bad-header", Transport: MCPTransportHTTP, URL: "https://example.test/mcp",
+		Headers: map[string]MCPValue{"X-Trace": {Value: "first\r\nsecond"}},
+	}, time.Now()); err == nil {
+		t.Fatal("header line break was accepted")
+	}
+	if err := store.AddMCPServer(MCPServerConfig{
+		Name: "bad-header-name", Transport: MCPTransportHTTP, URL: "https://example.test/mcp",
+		Headers: map[string]MCPValue{"X Trace": {Value: "value"}},
+	}, time.Now()); err == nil {
+		t.Fatal("invalid header name was accepted")
+	}
+	if err := store.AddMCPServer(MCPServerConfig{
+		Name: "duplicate-env", Transport: MCPTransportStdio, Command: "python",
+		Env: map[string]MCPValue{"TOKEN": {Value: "one"}, "token": {Value: "two"}},
+	}, time.Now()); err == nil {
+		t.Fatal("case-insensitive duplicate environment names were accepted")
 	}
 }

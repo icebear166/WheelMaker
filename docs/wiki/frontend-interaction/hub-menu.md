@@ -28,7 +28,7 @@ Latest v1.3                                  Update all hubs
 - **Hub 标题行**：颜色点在名称前；版本号是只读状态，右侧提供独立的 Update 与 Restart 图标动作，无展开行为。已安装的正常 Hub 有新版本时同时显示两个动作；已是最新版或本地版本较新时只显示 Restart；未安装或 `update_only` Hub 只显示 Update。Update 使用 `cloudDownload`，Restart 使用 `power`，存在新版本时红色提示点附着在 Update 动作上。两个动作都走 `wheelmakerUpdate` confirm 流程，pending 时动作组禁用。版本动作默认透明，仅 hover/focus/active 时出现背景。
 - **Global 行**：固定三个等宽入口，顺序为 NPM、MCP、Skills。入口都采用“图标 + 数量”，不显示文字标签和 disclosure chevron：
   - NPM 使用 package 图标，数量沿用现有统计；存在可更新包时显示不占布局空间的红色提示点。展开逐包列表，批量 `Update all` 位于 detail 工具栏。
-  - MCP 使用官方 MCP 图标，数量是当前 Hub 已配置的服务器总数（包含 disabled 项）；点击展开 `MCP servers` detail，可新增、编辑、删除、启用/禁用、导入 Codex/Claude 原生配置，并显示每个服务器的运行态。支持 STDIO 与 Streamable HTTP；导入先生成预览，冲突或首批不支持的 SSE/WebSocket 项会阻止确认写入。
+  - MCP 使用官方 MCP 图标，数量是当前 Hub 已配置的服务器总数（包含 disabled 项）；点击展开 `MCP servers` detail，可新增、编辑、删除、启用/禁用、导入 Codex/Claude 原生配置，并显示每个服务器的运行态。支持 STDIO 与 Streamable HTTP；导入先生成预览，冲突或首批不支持的 SSE/WebSocket、OAuth/工具权限字段会阻止确认写入。
   - Skills 使用 sparkles 图标，只展示当前 Hub 的全局 Skills，不混入 Project Skills；批量 `Update all` 位于 detail 工具栏且只更新 Hub 全局 Skills。
 - **Projects 行**：固定三个等宽入口，顺序为 Visibility、Scan、Skills，同样只显示图标和数量：
   - Visibility 使用 eye 图标，数量沿用当前可见/总数语义；展开逐项目可见性勾选，不提供 Show All / Hide All。

@@ -132,7 +132,9 @@ func (h *Hub) observeMCPRuntime(servers []rp.MCPServer, state string, err error)
 	}
 	status.Observe(configs, names, mcpRuntimeState(strings.TrimSpace(state)), err)
 	if h.regSync != nil {
-		h.regSync.publishMCPStatus()
+		// Runtime status is observational. Do not let registry publication
+		// latency participate in session/new or session/load success.
+		go h.regSync.publishMCPStatus()
 	}
 }
 

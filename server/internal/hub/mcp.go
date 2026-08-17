@@ -2,6 +2,7 @@ package hub
 
 import (
 	"fmt"
+	"os"
 	"sort"
 	"strings"
 
@@ -47,10 +48,18 @@ func hubMCPServers(store *hubconfig.Store) ([]rp.MCPServer, error) {
 			URL:     server.URL,
 		}
 		for name, value := range server.Env {
-			converted.Env = append(converted.Env, rp.EnvVariable{Name: name, Value: value.Value})
+			resolved, ok := resolvedMCPValue(value)
+			if !ok {
+				continue
+			}
+			converted.Env = append(converted.Env, rp.EnvVariable{Name: name, Value: resolved})
 		}
 		for name, value := range server.Headers {
-			converted.Headers = append(converted.Headers, rp.HttpHeader{Name: name, Value: value.Value})
+			resolved, ok := resolvedMCPValue(value)
+			if !ok {
+				continue
+			}
+			converted.Headers = append(converted.Headers, rp.HttpHeader{Name: name, Value: resolved})
 		}
 		sort.Slice(converted.Env, func(i, j int) bool {
 			return strings.ToLower(converted.Env[i].Name) < strings.ToLower(converted.Env[j].Name)
@@ -61,4 +70,12 @@ func hubMCPServers(store *hubconfig.Store) ([]rp.MCPServer, error) {
 		servers = append(servers, converted)
 	}
 	return servers, nil
+}
+
+func resolvedMCPValue(value hubconfig.MCPValue) (string, bool) {
+	if value.EnvVar == "" {
+		return value.Value, true
+	}
+	resolved, ok := os.LookupEnv(value.EnvVar)
+	return resolved, ok
 }

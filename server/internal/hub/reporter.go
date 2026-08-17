@@ -1583,10 +1583,8 @@ func (r *Reporter) importMCPServers(store *hubconfig.Store, rawPayload string) e
 		}
 		return fmt.Errorf("MCP import conflict: %s", strings.Join(names, ", "))
 	}
-	for _, server := range result.Servers {
-		if err := store.AddMCPServer(server, time.Now()); err != nil {
-			return fmt.Errorf("save imported MCP server %q: %w", server.Name, err)
-		}
+	if err := store.AddMCPServers(result.Servers, time.Now()); err != nil {
+		return fmt.Errorf("save imported MCP servers: %w", err)
 	}
 	return nil
 }

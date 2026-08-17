@@ -510,26 +510,47 @@ func (s *Session) ensureReady(ctx context.Context) error {
 
 	mcpServers, mcpErr := s.mcpServersForRuntime()
 	if mcpErr != nil {
-		finishLoad()
-		return fmt.Errorf("ensureReady: %w", mcpErr)
+		hubLogger(s.projectName).Warn("read MCP server config for session load failed; continuing without MCP")
+		mcpServers = emptyMCPServers()
+	}
+	supportedMCPServers, unsupportedMCPServers := splitMCPServersForCapabilities(mcpServers, initResult.AgentCapabilities)
+	if len(unsupportedMCPServers) > 0 && s.mcpStatus != nil {
+		s.mcpStatus(unsupportedMCPServers, "failed", mcpCapabilityError(unsupportedMCPServers))
 	}
 	if s.mcpStatus != nil {
-		s.mcpStatus(mcpServers, "starting", nil)
+		s.mcpStatus(supportedMCPServers, "starting", nil)
 	}
 	loadResult, loadErr := inst.SessionLoad(ctx, acp.SessionLoadParams{
 		SessionID:  savedSID,
 		CWD:        cwd,
-		MCPServers: mcpServers,
+		MCPServers: supportedMCPServers,
 	})
+	mcpFailed := false
 	if loadErr != nil {
-		if s.mcpStatus != nil {
-			s.mcpStatus(mcpServers, "failed", loadErr)
+		// The only material difference in this request is MCPServers. Treat any
+		// failure from the MCP-enabled load as a provider/MCP compatibility
+		// failure and retry without MCP so MCP cannot block session restoration.
+		if len(supportedMCPServers) > 0 && ctx.Err() == nil {
+			mcpFailed = true
+			if s.mcpStatus != nil {
+				s.mcpStatus(supportedMCPServers, "failed", loadErr)
+			}
+			loadResult, loadErr = inst.SessionLoad(ctx, acp.SessionLoadParams{
+				SessionID:  savedSID,
+				CWD:        cwd,
+				MCPServers: emptyMCPServers(),
+			})
 		}
-		finishLoad()
-		return fmt.Errorf("ensureReady: session/load: %w", loadErr)
+		if loadErr != nil && s.mcpStatus != nil && !mcpFailed {
+			s.mcpStatus(supportedMCPServers, "failed", loadErr)
+		}
+		if loadErr != nil {
+			finishLoad()
+			return fmt.Errorf("ensureReady: session/load: %w", loadErr)
+		}
 	}
-	if s.mcpStatus != nil {
-		s.mcpStatus(mcpServers, "connected", nil)
+	if s.mcpStatus != nil && !mcpFailed {
+		s.mcpStatus(supportedMCPServers, "connected", nil)
 	}
 
 	resolved := normalizeAgentConfigOptions(agentName, loadResult.ConfigOptions)

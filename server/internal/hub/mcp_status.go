@@ -1,6 +1,7 @@
 package hub
 
 import (
+	"os"
 	"regexp"
 	"sort"
 	"strings"
@@ -160,7 +161,7 @@ func (s *mcpStatusStore) nowTime() time.Time {
 
 var (
 	mcpCredentialURLPattern   = regexp.MustCompile(`(?i)(https?://)([^/\s@]+@)`)
-	mcpQueryCredentialPattern = regexp.MustCompile(`(?i)([?&](?:token|password|secret|api[_-]?key|key)=[^&#\s]+)`)
+	mcpQueryCredentialPattern = regexp.MustCompile(`(?i)([?&](?:access[_-]?token|refresh[_-]?token|token|password|secret|api[_-]?key|apikey|authorization|bearer|key)=[^&#\s]+)`)
 	mcpBearerPattern          = regexp.MustCompile(`(?i)\bbearer\s+[^\s,;]+`)
 	mcpAssignmentPattern      = regexp.MustCompile(`(?i)\b(password|passphrase|token|secret|authorization|api[_-]?key|credential)\b(\s*[:=]\s*|\s+)[^\s,;]+`)
 )
@@ -169,9 +170,19 @@ func sanitizeMCPError(message string, configs []hubconfig.MCPServerConfig) strin
 	for _, config := range configs {
 		for _, value := range config.Env {
 			message = redactMCPSecret(message, value.Value)
+			if value.EnvVar != "" {
+				if resolved, ok := os.LookupEnv(value.EnvVar); ok {
+					message = redactMCPSecret(message, resolved)
+				}
+			}
 		}
 		for _, value := range config.Headers {
 			message = redactMCPSecret(message, value.Value)
+			if value.EnvVar != "" {
+				if resolved, ok := os.LookupEnv(value.EnvVar); ok {
+					message = redactMCPSecret(message, resolved)
+				}
+			}
 		}
 	}
 	message = mcpCredentialURLPattern.ReplaceAllString(message, `$1[redacted]@`)

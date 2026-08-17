@@ -54,15 +54,51 @@ func TestMCPStatusErrorRedactsCredentials(t *testing.T) {
 			},
 		},
 	}
-	message := `request failed: https://user:pass@mcp.example.test/mcp?token=query-secret Authorization: Bearer super-secret-token password=neo4j-password`
+	message := `request failed: https://user:pass@mcp.example.test/mcp?access_token=query-access-secret&refresh_token=query-refresh-secret Authorization: Bearer super-secret-token password=neo4j-password`
 	got := sanitizeMCPError(message, configs)
-	for _, secret := range []string{"user:pass", "query-secret", "super-secret-token", "neo4j-password"} {
+	for _, secret := range []string{"user:pass", "query-access-secret", "query-refresh-secret", "super-secret-token", "neo4j-password"} {
 		if strings.Contains(got, secret) {
 			t.Fatalf("sanitized error contains %q: %q", secret, got)
 		}
 	}
 	if !strings.Contains(got, "[redacted]") {
 		t.Fatalf("sanitized error = %q, want redaction marker", got)
+	}
+}
+
+func TestMCPStatusErrorRedactsEnvironmentReferencedCredentials(t *testing.T) {
+	t.Setenv("MCP_RUNTIME_TOKEN", "runtime-secret-token")
+	configs := []hubconfig.MCPServerConfig{
+		{
+			ID: "remote-id", Name: "remote", Enabled: true,
+			Transport: hubconfig.MCPTransportHTTP,
+			URL:       "https://mcp.example.test/mcp",
+			Headers: map[string]hubconfig.MCPValue{
+				"Authorization": {Secret: true, EnvVar: "MCP_RUNTIME_TOKEN"},
+			},
+		},
+	}
+	got := sanitizeMCPError("remote rejected runtime-secret-token", configs)
+	if strings.Contains(got, "runtime-secret-token") {
+		t.Fatalf("sanitized error leaked environment secret: %q", got)
+	}
+}
+
+func TestMCPStatusErrorRedactsEnvironmentReferencedCredentialWithDefault(t *testing.T) {
+	t.Setenv("MCP_RUNTIME_TOKEN", "runtime-secret-token")
+	configs := []hubconfig.MCPServerConfig{
+		{
+			ID: "remote-id", Name: "remote", Enabled: true,
+			Transport: hubconfig.MCPTransportHTTP,
+			URL:       "https://mcp.example.test/mcp",
+			Headers: map[string]hubconfig.MCPValue{
+				"Authorization": {Value: "fallback-token", Secret: true, EnvVar: "MCP_RUNTIME_TOKEN"},
+			},
+		},
+	}
+	got := sanitizeMCPError("remote rejected runtime-secret-token", configs)
+	if strings.Contains(got, "runtime-secret-token") {
+		t.Fatalf("sanitized error leaked environment secret with default: %q", got)
 	}
 }
 

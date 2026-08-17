@@ -122,7 +122,10 @@ func (p *codexAppProvider) Launch() (string, []string, []string, error) {
 		return "", nil, nil, err
 	}
 	args := []string{"app-server", "--listen", "stdio://"}
-	mcpArgs, mcpEnv := codexappMCPLaunchConfig(p.options.MCPServers)
+	mcpArgs, mcpEnv, err := codexappMCPLaunchConfig(p.options.MCPServers, p.options.Environment)
+	if err != nil {
+		return "", nil, nil, fmt.Errorf("%s: prepare MCP configuration: %w", p.Name(), err)
+	}
 	args = append(args, mcpArgs...)
 	env := append([]string(nil), p.options.Environment...)
 	env = append(env, mcpEnv...)
@@ -185,6 +188,7 @@ func (p *codexAppProvider) connectionProfile() codexappConnProfile {
 		path := p.options.SessionMapPath
 		profile.SessionMapPath = func() (string, error) { return path, nil }
 	}
+	profile.MCPServerNames = enabledMCPServerNames(p.options.MCPServers)
 	return profile
 }
 
@@ -209,6 +213,7 @@ type codexappConnProfile struct {
 	Title          string
 	AllowImages    bool
 	SessionMapPath func() (string, error)
+	MCPServerNames []string
 }
 
 func nativeCodexappConnProfile() codexappConnProfile {
@@ -1177,6 +1182,7 @@ func (c *codexappConn) sendSessionNew(ctx context.Context, p protocol.SessionNew
 		return err
 	}
 	req := c.config.threadStartParams(firstNonEmptyString(p.CWD, c.cwd))
+	req.Config = codexappMCPThreadDisableConfig(c.profile.MCPServerNames, len(p.MCPServers) == 0)
 	var resp appServerThreadStartResponse
 	if err := c.runtime.request(ctx, "thread/start", req, &resp); err != nil {
 		return err
@@ -1219,6 +1225,7 @@ func (c *codexappConn) sendSessionLoad(ctx context.Context, p protocol.SessionLo
 	// dropped by the shared runtime dispatcher.
 	c.bindSessionIDs(acpSessionID, runtimeThreadID)
 	req := c.config.threadResumeParams(runtimeThreadID, cwd)
+	req.Config = codexappMCPThreadDisableConfig(c.profile.MCPServerNames, len(p.MCPServers) == 0)
 	var resp appServerThreadStartResponse
 	recreatedThread := false
 	if err := c.runtime.request(ctx, "thread/resume", req, &resp); err != nil {
@@ -1226,6 +1233,7 @@ func (c *codexappConn) sendSessionLoad(ctx context.Context, p protocol.SessionLo
 			return err
 		}
 		startReq := c.config.threadStartParams(cwd)
+		startReq.Config = codexappMCPThreadDisableConfig(c.profile.MCPServerNames, len(p.MCPServers) == 0)
 		if err := c.runtime.request(ctx, "thread/start", startReq, &resp); err != nil {
 			return err
 		}
