@@ -26,7 +26,7 @@
 
 **Acceptance:** 主窗口与 Preview-only window 使用同一个带版本号的 app-local channel；消息只包含可 structured-clone 的 Preview snapshot、intent 和 lifecycle 事件；关闭 channel 不遗留监听器。
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 测试以下真实行为：
 
@@ -58,23 +58,23 @@ test('close removes the subscription and ignores messages after close', () => {
 
 契约包含 `PREVIEW_WORKBENCH_CHANNEL_NAME`、`version: 1`、`preview-ready`、`preview-state`、`preview-intent` 和 `preview-host-status`；intent 覆盖 tab select/close、drawer mode、pin、search、scroll、open target、focus、dock。state 使用现有 `PreviewWorkbenchState` 加上 drawer pin、search、file tree、Git snapshot 和代码显示设置的可序列化结构。
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `cd app && npm test -- --runTestsByPath web/preview/previewWorkbenchChannel.test.ts`
 
 Expected: FAIL，因为 channel 工厂、消息类型和 fake transport 尚不存在。
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 实现 typed wrapper：优先使用浏览器 `BroadcastChannel`，测试和不支持 BroadcastChannel 的环境通过注入的 factory；`post` 只发送已声明消息，`subscribe` 返回取消函数，`close` 幂等。不要在 channel 层访问 Registry、Workspace 或 Desktop bridge。
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `cd app && npm test -- --runTestsByPath web/preview/previewWorkbenchChannel.test.ts`
 
 Expected: PASS。
 
-- [ ] **Step 5: Git checkpoint**
+- [x] **Step 5: Git checkpoint**
 
 通过后只 checkpoint `previewWorkbenchChannel.ts` 与对应测试。
 
