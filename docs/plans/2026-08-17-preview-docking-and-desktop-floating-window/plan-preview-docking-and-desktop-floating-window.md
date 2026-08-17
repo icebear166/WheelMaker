@@ -361,6 +361,6 @@ Expected: PASS；若非 Windows 环境跳过实际 WebView2 smoke，只记录 Wi
 
 只提交两个 Wiki 页面、目录索引和本任务验证相关文件。
 
-- [ ] **Step 6: Git finalize**
+- [x] **Step 6: Git finalize**
 
 调用 `git-workflow` finalize，按项目偏好提交剩余修改、push 当前分支；仅在主工作树干净且 finalize 结果允许时合入并 push `main`，之后清理已成功合入的 worktree/branch。
