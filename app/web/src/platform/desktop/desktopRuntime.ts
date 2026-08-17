@@ -25,6 +25,9 @@ export type DesktopWindowBridge = {
   getDesktopUpdateInfo?: () => Promise<DesktopUpdateInfo>;
   requestDesktopUpdate?: () => Promise<void>;
   showNotification?: (rawJson: string) => Promise<string> | string;
+  openPreviewWindow?: () => Promise<void> | void;
+  focusPreviewWindow?: () => Promise<void> | void;
+  dockPreviewWindow?: () => Promise<void> | void;
 };
 
 export type DesktopLocalDevOperation = 'build' | 'start' | 'stop' | 'restart' | 'open-directory' | 'exit';

@@ -12,22 +12,37 @@ import '@fontsource/ibm-plex-sans/latin-600.css';
 import '@fontsource/ibm-plex-sans/latin-ext-600.css';
 import '@fontsource/jetbrains-mono/latin-400.css';
 import '@fontsource/jetbrains-mono/latin-ext-400.css';
-import { App, workspaceAppReady } from './app/WorkspaceApp';
 import { GlobalTooltip } from './common/Tooltip';
 import { requestPersistentBrowserStorageOnStartup } from './platform/storagePersistence';
 import './styles/index.css';
 
-requestPersistentBrowserStorageOnStartup();
+function isPreviewWindowPath(pathname: string): boolean {
+  const normalized = pathname.replace(/\/+$/, '') || '/';
+  return normalized === '/preview-window' || normalized.endsWith('/preview-window');
+}
 
-workspaceAppReady.then(() => {
-  createRoot(document.getElementById('root')!).render(<><App /><GlobalTooltip /></>);
-}).catch(error => {
+async function startApp(): Promise<void> {
+  const root = document.getElementById('root');
+  if (!root) return;
+  if (isPreviewWindowPath(window.location.pathname)) {
+    const {PreviewWindowApp} = await import('./preview/PreviewWindowApp');
+    createRoot(root).render(<><PreviewWindowApp /><GlobalTooltip /></>);
+    return;
+  }
+
+  requestPersistentBrowserStorageOnStartup();
+  const {App, workspaceAppReady} = await import('./app/WorkspaceApp');
+  await workspaceAppReady;
+  createRoot(root).render(<><App /><GlobalTooltip /></>);
+}
+
+startApp().catch(error => {
   const root = document.getElementById('root');
   if (!root) return;
   const message = error instanceof Error ? error.message : String(error);
   root.innerHTML = '';
   const box = document.createElement('div');
   box.style.cssText = 'padding:16px;color:#ff7b72;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;';
-  box.textContent = `IndexedDB initialization failed: ${message}`;
+  box.textContent = `Application initialization failed: ${message}`;
   root.appendChild(box);
 });

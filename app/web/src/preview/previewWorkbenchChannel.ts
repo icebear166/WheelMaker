@@ -21,6 +21,7 @@ export type PreviewWorkbenchFileTreeState = {
   dirEntries: Record<string, RegistryFsEntry[]>;
   loadingDirs: Record<string, boolean>;
   expandedDirs: Record<string, string[]>;
+  searchQuery: string;
   rootState: 'ready' | 'loading' | 'error' | 'empty';
   rootError: string;
 };
@@ -50,9 +51,17 @@ export type PreviewWorkbenchIntent =
   | {kind: 'drawer-mode'; mode: 'closed' | 'files' | 'git'}
   | {kind: 'toggle-drawer-pin'}
   | {kind: 'search'; open: boolean; query: string; activeIndex: number}
+  | {kind: 'file-tree-search'; query: string}
   | {kind: 'scroll'; scrollTop: number}
+  | {kind: 'toggle-directory'; projectId: string; path: string}
   | {kind: 'open-file'; projectId: string; path: string; targetLine: number | null}
   | {kind: 'open-git'; projectId: string; source: GitDiffSource; file: GitDiffFileMeta}
+  | {kind: 'git-selected-refs'; projectId: string; refs: string[]}
+  | {kind: 'git-toggle-commit'; projectId: string; sha: string}
+  | {kind: 'git-refresh'; projectId: string}
+  | {kind: 'git-load-more'; projectId: string}
+  | {kind: 'git-retry'; projectId: string}
+  | {kind: 'copy-commit-sha'; sha: string}
   | {kind: 'focus'}
   | {kind: 'dock'};
 

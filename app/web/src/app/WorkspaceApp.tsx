@@ -571,20 +571,16 @@ import {
   type CodeFontId,
   type CodeThemeId,
 } from '../code/shikiSettings';
-import {ShikiCodeBlock, preloadShikiRenderer} from '../code/ShikiCodeBlock';
-import {detectCodeLanguage} from '../code/codeLanguage';
+import {preloadShikiRenderer} from '../code/ShikiCodeBlock';
 import {
-  MarkdownPreview,
   markdownCodeRenderer,
   markdownPreRenderer,
   useMarkdownCapabilityPlugins,
 } from '../code/markdownPreview';
-import {HtmlPreview} from '../preview/HtmlPreview';
 import {UnifiedDiffPreview} from '../preview/UnifiedDiffPreview';
 import {
   isHtmlPreviewAttachment,
   isHtmlPreviewPath,
-  type HtmlPreviewSource,
 } from '../preview/htmlPreviewSource';
 import {createVoiceInputSession, type VoiceInputSession} from '../features/speech/useVoiceInputController';
 import {
@@ -697,7 +693,22 @@ import {
   type PromptDiffPreviewFile,
   type PromptDiffPreviewTab,
 } from '../preview/previewWorkbenchState';
-import {PreviewWorkbenchChrome} from '../preview/PreviewWorkbenchChrome';
+import {PreviewWorkbenchView} from '../preview/PreviewWorkbenchView';
+import {
+  createPreviewWorkbenchChannel,
+  PREVIEW_WORKBENCH_CHANNEL_VERSION,
+  type PreviewWorkbenchChannel,
+  type PreviewWorkbenchIntent,
+  type PreviewWorkbenchMirrorState,
+} from '../preview/previewWorkbenchChannel';
+import {createPreviewWorkbenchHost} from '../preview/previewWorkbenchHost';
+import {
+  attachmentHTMLPreviewSource as sharedAttachmentHTMLPreviewSource,
+  attachmentPreviewReadPayloadFromKey as sharedAttachmentPreviewReadPayloadFromKey,
+  ChatAttachmentPreviewViewer as SharedChatAttachmentPreviewViewer,
+  ChatFilePeekViewer as SharedChatFilePeekViewer,
+  ChatPromptArtifactPreviewViewer as SharedChatPromptArtifactPreviewViewer,
+} from '../preview/PreviewWorkbenchViewers';
 import {PreviewTabContextMenu} from '../preview/PreviewTabContextMenu';
 import {
   fetchPreviewDirectoryEntries,
@@ -1471,47 +1482,6 @@ function chatAttachmentBlockCacheKey(projectId: string, sessionId: string, block
   return `${projectId}\u001f${sessionId}\u001f${identity}`;
 }
 
-function attachmentPreviewReadPayloadFromKey(tab: AttachmentPreviewTab): {sessionId: string; uri?: string; attachmentId?: string} | null {
-  const identity = tab.attachmentKey.split('\u001f').pop() || '';
-  if (!identity || identity === 'attachment') {
-    return null;
-  }
-  if (identity.startsWith('sha256-')) {
-    return {sessionId: tab.sessionId, attachmentId: identity};
-  }
-  if (identity.includes('/') || identity.includes('\\') || identity.includes(':')) {
-    return {sessionId: tab.sessionId, uri: identity};
-  }
-  return null;
-}
-
-function attachmentHTMLPreviewSource(tab: AttachmentPreviewTab): HtmlPreviewSource | null {
-  if (!isHtmlPreviewAttachment(tab.title, tab.mimeType)) {
-    return null;
-  }
-  const payload = attachmentPreviewReadPayloadFromKey(tab);
-  if (!payload) {
-    return null;
-  }
-  if (payload.attachmentId) {
-    return {
-      source: 'session-attachment',
-      projectId: tab.projectId,
-      sessionId: payload.sessionId,
-      attachmentId: payload.attachmentId,
-    };
-  }
-  if (payload.uri) {
-    return {
-      source: 'session-attachment',
-      projectId: tab.projectId,
-      sessionId: payload.sessionId,
-      uri: payload.uri,
-    };
-  }
-  return null;
-}
-
 function attachmentBase64DataUrl(content: string, mimeType?: string): string {
   const normalizedMime = (mimeType || '').trim() || 'application/octet-stream';
   return content ? `data:${normalizedMime};base64,${content}` : '';
@@ -2013,42 +1983,30 @@ function isMarkdownPath(path: string): boolean {
   return ext === 'md' || ext === 'markdown';
 }
 
-function resolveFileMenuPlatform(desktopBridge: unknown): FileMenuPlatform {
-  if (desktopBridge) return 'desktop';
-  return isNativeWebViewHost() ? 'android' : 'browser';
-}
-
 function inferImageMimeType(path: string): string {
   const ext = getFileExtension(path);
   switch (ext) {
-    case 'svg':
-      return 'image/svg+xml';
-    case 'png':
-      return 'image/png';
+    case 'svg': return 'image/svg+xml';
+    case 'png': return 'image/png';
     case 'jpg':
-    case 'jpeg':
-      return 'image/jpeg';
-    case 'gif':
-      return 'image/gif';
-    case 'webp':
-      return 'image/webp';
-    case 'bmp':
-      return 'image/bmp';
-    case 'ico':
-      return 'image/x-icon';
-    case 'avif':
-      return 'image/avif';
-    default:
-      return '';
+    case 'jpeg': return 'image/jpeg';
+    case 'gif': return 'image/gif';
+    case 'webp': return 'image/webp';
+    case 'bmp': return 'image/bmp';
+    case 'ico': return 'image/x-icon';
+    case 'avif': return 'image/avif';
+    default: return '';
   }
 }
 
 function isImageFile(path: string, mimeType?: string): boolean {
   const normalizedMime = (mimeType || '').trim().toLowerCase();
-  if (normalizedMime.startsWith('image/')) {
-    return true;
-  }
-  return inferImageMimeType(path) !== '';
+  return normalizedMime.startsWith('image/') || inferImageMimeType(path) !== '';
+}
+
+function resolveFileMenuPlatform(desktopBridge: unknown): FileMenuPlatform {
+  if (desktopBridge) return 'desktop';
+  return isNativeWebViewHost() ? 'android' : 'browser';
 }
 
 function createChatFilePeekHistoryState(): {kind: typeof CHAT_FILE_PEEK_HISTORY_KIND} {
@@ -2063,39 +2021,6 @@ function isChatFilePeekHistoryState(value: unknown): value is {kind: typeof CHAT
   );
 }
 
-function encodeUtf8ToBase64(value: string): string {
-  try {
-    if (typeof TextEncoder !== 'undefined') {
-      const bytes = new TextEncoder().encode(value);
-      let binary = '';
-      for (let i = 0; i < bytes.length; i += 1) {
-        binary += String.fromCharCode(bytes[i]);
-      }
-      return btoa(binary);
-    }
-  } catch {
-    // fallback below
-  }
-  return btoa(unescape(encodeURIComponent(value)));
-}
-
-function buildImageDataUrl(params: {
-  content: string;
-  path: string;
-  mimeType?: string;
-  isBinary?: boolean;
-}): string {
-  const { content, path, mimeType, isBinary } = params;
-  if (!content) {
-    return '';
-  }
-  const inferredMime = inferImageMimeType(path);
-  const normalizedMime = inferredMime || (mimeType || '').trim() || 'image/png';
-  if (isBinary) {
-    return `data:${normalizedMime};base64,${content}`;
-  }
-  return `data:${normalizedMime};base64,${encodeUtf8ToBase64(content)}`;
-}
 function parseTrailingLineNumber(value: string): number | null {
   const input = value.trim();
   if (!input) return null;
@@ -2276,409 +2201,6 @@ function buildPromptArtifactPreviewFiles(
   }
   return files;
 }
-
-function promptArtifactPreviewCountLabel(fileCount: number): string {
-  return `${fileCount} changed ${fileCount === 1 ? 'file' : 'files'}`;
-}
-
-function splitPathForDisplay(path: string): {fileName: string; parentPath: string} {
-  const normalized = path.replaceAll('\\', '/');
-  const separator = normalized.lastIndexOf('/');
-  if (separator < 0) {
-    return {fileName: normalized, parentPath: ''};
-  }
-  return {
-    fileName: normalized.slice(separator + 1),
-    parentPath: normalized.slice(0, separator),
-  };
-}
-
-type HTMLPreviewConnectionProps = {
-  htmlPreviewEndpoint: string;
-  htmlPreviewCSRFToken: string;
-};
-
-type ChatFilePeekViewerProps = HTMLPreviewConnectionProps & {
-  peek: FilePreviewTab | null;
-  mode: 'desktop' | 'mobile';
-  tabs: FilePreviewTab[];
-  treeOpen: boolean;
-  themeMode: 'dark' | 'light';
-  codeTheme: CodeThemeId;
-  codeFont: CodeFontId;
-  codeFontSize: number;
-  codeLineHeight: number;
-  codeTabSize: number;
-  wrapLines: boolean;
-  showLineNumbers: boolean;
-  highlightedLines: Set<number>;
-  onLineClick?: (line: number, event: MouseEvent) => void;
-  onClose: () => void;
-  onCopyPath: () => void;
-  onTabSelect: (path: string) => void;
-  onTabClose: (path: string) => void;
-  onToggleTree: () => void;
-  treeContent: React.ReactNode;
-  scrollRef: React.RefObject<HTMLDivElement | null>;
-};
-
-const ChatFilePeekViewer = React.memo(function ChatFilePeekViewer({
-  peek,
-  mode,
-  tabs,
-  treeOpen,
-  themeMode,
-  codeTheme,
-  codeFont,
-  codeFontSize,
-  codeLineHeight,
-  codeTabSize,
-  wrapLines,
-  showLineNumbers,
-  highlightedLines,
-  onLineClick,
-  onClose,
-  onCopyPath,
-  onTabSelect,
-  onTabClose,
-  onToggleTree,
-  treeContent,
-  scrollRef,
-  htmlPreviewEndpoint,
-  htmlPreviewCSRFToken,
-}: ChatFilePeekViewerProps) {
-  let body: React.ReactNode;
-  if (!peek) {
-    body = (
-      <div className="chat-file-workbench-empty">
-        <ChatIcon name="files" />
-        <span>No file selected</span>
-      </div>
-    );
-  } else if (peek.loading) {
-    body = <div className="muted block">Loading file...</div>;
-  } else if (peek.error) {
-    body = (
-      <div className="chat-file-peek-error" role="alert">
-        <ChatIcon name="circleX" />
-        <span>{peek.error || 'Failed to load file'}</span>
-      </div>
-    );
-  } else if (isImageFile(peek.path, peek.info?.mimeType)) {
-    const imageSrc = buildImageDataUrl({
-      content: peek.content,
-      path: peek.path,
-      mimeType: peek.info?.mimeType,
-      isBinary: peek.info?.isBinary,
-    });
-    body = imageSrc ? (
-      <div className="file-image-preview-wrap chat-file-peek-image-wrap">
-        <img
-          className="file-image-preview"
-          src={imageSrc}
-          alt={peek.path.split('/').pop() || 'image preview'}
-        />
-      </div>
-    ) : (
-      <div className="muted block">Image content is unavailable.</div>
-    );
-  } else if (isMarkdownPath(peek.path)) {
-    body = (
-      <MarkdownPreview
-        content={peek.content}
-        themeMode={themeMode}
-        codeTheme={codeTheme}
-        codeFont={codeFont}
-        codeFontSize={codeFontSize}
-        codeLineHeight={codeLineHeight}
-        codeTabSize={codeTabSize}
-        wrap={wrapLines}
-        lineNumbers={showLineNumbers}
-        targetLine={peek.targetLine}
-      />
-    );
-  } else if (isHtmlPreviewPath(peek.path)) {
-    body = (
-      <HtmlPreview
-        endpoint={htmlPreviewEndpoint}
-        csrfToken={htmlPreviewCSRFToken}
-        source={{
-          source: isAbsolutePreviewFilePath(peek.path) ? 'external-file' : 'project-file',
-          projectId: peek.projectId,
-          path: peek.path,
-        }}
-      />
-    );
-  } else {
-    body = (
-      <ShikiCodeBlock
-        content={peek.content}
-        language={detectCodeLanguage(peek.path)}
-        wrap={false}
-        lineNumbers={true}
-        themeMode={themeMode}
-        codeTheme={codeTheme}
-        codeFont={codeFont}
-        codeFontSize={codeFontSize}
-        codeLineHeight={codeLineHeight}
-        codeTabSize={codeTabSize}
-        highlightedLines={highlightedLines}
-        onLineClick={onLineClick}
-      />
-    );
-  }
-
-  return <>{body}</>;
-}, (prev, next) => {
-  const p = prev.peek;
-  const n = next.peek;
-  return (
-    p?.projectId === n?.projectId &&
-    p?.path === n?.path &&
-    p?.targetLine === n?.targetLine &&
-    p?.content === n?.content &&
-    p?.loading === n?.loading &&
-    p?.error === n?.error &&
-    prev.mode === next.mode &&
-    prev.tabs === next.tabs &&
-    prev.treeOpen === next.treeOpen &&
-    prev.themeMode === next.themeMode &&
-    prev.codeTheme === next.codeTheme &&
-    prev.codeFont === next.codeFont &&
-    prev.codeFontSize === next.codeFontSize &&
-    prev.codeLineHeight === next.codeLineHeight &&
-    prev.codeTabSize === next.codeTabSize &&
-    prev.wrapLines === next.wrapLines &&
-    prev.showLineNumbers === next.showLineNumbers &&
-    prev.highlightedLines === next.highlightedLines &&
-    prev.htmlPreviewEndpoint === next.htmlPreviewEndpoint &&
-    prev.htmlPreviewCSRFToken === next.htmlPreviewCSRFToken
-  );
-});
-
-const ChatEmptyPreviewViewer = React.memo(function ChatEmptyPreviewViewer({
-  mode,
-  onClose,
-}: {
-  mode: 'desktop' | 'mobile';
-  onClose: () => void;
-}) {
-  return (
-    <div className={`chat-file-peek-surface chat-empty-preview-surface ${mode}`} aria-label="Chat preview">
-      <div className="chat-preview-toolbar">
-        <button
-          type="button"
-          className="chat-preview-icon-button"
-          onClick={onClose}
-          aria-label={mode === 'mobile' ? 'Back' : 'Close preview'}
-        >
-          <ChatIcon name={mode === 'mobile' ? 'arrowLeft' : 'x'} />
-        </button>
-        <div className="chat-preview-title">Preview</div>
-      </div>
-      <div className="chat-empty-preview-body">
-        <ChatIcon name="appWindow" size={16} />
-        <span className="chat-empty-preview-copy">No preview selected</span>
-      </div>
-    </div>
-  );
-});
-
-type ChatAttachmentPreviewViewerProps = HTMLPreviewConnectionProps & {
-  preview: AttachmentPreviewTab;
-  mode: 'desktop' | 'mobile';
-  onClose: () => void;
-  scrollRef: React.RefObject<HTMLDivElement | null>;
-  themeMode: 'dark' | 'light';
-  codeTheme: CodeThemeId;
-  codeFont: CodeFontId;
-  codeFontSize: number;
-  codeLineHeight: number;
-  codeTabSize: number;
-  wrapLines: boolean;
-  showLineNumbers: boolean;
-  highlightedLines: Set<number>;
-  onLineClick?: (line: number, event: MouseEvent) => void;
-};
-
-const ChatAttachmentPreviewViewer = React.memo(function ChatAttachmentPreviewViewer({
-  preview,
-  mode,
-  onClose,
-  scrollRef,
-  themeMode,
-  codeTheme,
-  codeFont,
-  codeFontSize,
-  codeLineHeight,
-  codeTabSize,
-  wrapLines,
-  showLineNumbers,
-  highlightedLines,
-  onLineClick,
-  htmlPreviewEndpoint,
-  htmlPreviewCSRFToken,
-}: ChatAttachmentPreviewViewerProps) {
-  const htmlSource = attachmentHTMLPreviewSource(preview);
-  let body: React.ReactNode;
-  if (preview.loading) {
-    body = <div className="muted block">Loading attachment...</div>;
-  } else if (preview.error) {
-    body = (
-      <div className="chat-file-peek-error" role="alert">
-        <ChatIcon name="circleX" />
-        <span>{preview.error}</span>
-      </div>
-    );
-  } else if (htmlSource) {
-    body = (
-      <HtmlPreview
-        endpoint={htmlPreviewEndpoint}
-        csrfToken={htmlPreviewCSRFToken}
-        source={htmlSource}
-      />
-    );
-  } else if (preview.kind === 'image' && preview.src) {
-    body = (
-      <div className="chat-attachment-original-wrap">
-        <img
-          className="chat-attachment-original-image"
-          src={preview.src}
-          alt={preview.title}
-        />
-      </div>
-    );
-  } else if (preview.content === undefined && preview.isBinary === false) {
-    body = (
-      <div className="chat-file-peek-error" role="alert">
-        <ChatIcon name="circleX" />
-        <span>Failed to decode file content (UTF-8 expected).</span>
-      </div>
-    );
-  } else if (preview.content !== undefined) {
-    const fileName = preview.title || 'attachment';
-    if (isMarkdownPath(fileName)) {
-      body = (
-        <MarkdownPreview
-          content={preview.content}
-          themeMode={themeMode}
-          codeTheme={codeTheme}
-          codeFont={codeFont}
-          codeFontSize={codeFontSize}
-          codeLineHeight={codeLineHeight}
-          codeTabSize={codeTabSize}
-          wrap={wrapLines}
-          lineNumbers={showLineNumbers}
-        />
-      );
-    } else {
-      body = (
-        <ShikiCodeBlock
-          content={preview.content}
-          language={detectCodeLanguage(fileName)}
-          wrap={false}
-          lineNumbers={true}
-          themeMode={themeMode}
-          codeTheme={codeTheme}
-          codeFont={codeFont}
-          codeFontSize={codeFontSize}
-          codeLineHeight={codeLineHeight}
-          codeTabSize={codeTabSize}
-          highlightedLines={highlightedLines}
-          onLineClick={onLineClick}
-        />
-      );
-    }
-  } else {
-    body = (
-      <div className="chat-attachment-preview-placeholder">
-        <ChatIcon name="file" />
-        <div className="chat-attachment-preview-placeholder-main">
-          <div className="chat-attachment-preview-placeholder-title">{preview.title}</div>
-          {preview.meta ? (
-            <div className="chat-attachment-preview-placeholder-meta">{preview.meta}</div>
-          ) : null}
-          <div className="chat-attachment-preview-placeholder-status">Preview is being implemented.</div>
-        </div>
-      </div>
-    );
-  }
-
-  return <>{body}</>;
-}, (prev, next) => (
-  prev.preview === next.preview &&
-  prev.mode === next.mode &&
-  prev.themeMode === next.themeMode &&
-  prev.codeTheme === next.codeTheme &&
-  prev.codeFont === next.codeFont &&
-  prev.codeFontSize === next.codeFontSize &&
-  prev.codeLineHeight === next.codeLineHeight &&
-  prev.codeTabSize === next.codeTabSize &&
-  prev.wrapLines === next.wrapLines &&
-  prev.showLineNumbers === next.showLineNumbers &&
-  prev.highlightedLines === next.highlightedLines &&
-  prev.htmlPreviewEndpoint === next.htmlPreviewEndpoint &&
-  prev.htmlPreviewCSRFToken === next.htmlPreviewCSRFToken
-));
-
-type ChatPromptArtifactPreviewViewerProps = {
-  preview: PromptDiffPreviewTab;
-  mode: 'desktop' | 'mobile';
-  themeMode: 'dark' | 'light';
-  codeTheme: CodeThemeId;
-  codeFont: CodeFontId;
-  codeFontFamily: string;
-  codeFontSize: number;
-  codeLineHeight: number;
-  codeTabSize: number;
-  onClose: () => void;
-  onToggleFile: (path: string) => void;
-  scrollRef: React.RefObject<HTMLDivElement | null>;
-};
-
-const ChatPromptArtifactPreviewViewer = React.memo(function ChatPromptArtifactPreviewViewer({
-  preview,
-  mode,
-  themeMode,
-  codeTheme,
-  codeFont,
-  codeFontFamily,
-  codeFontSize,
-  codeLineHeight,
-  codeTabSize,
-  onClose,
-  onToggleFile,
-  scrollRef,
-}: ChatPromptArtifactPreviewViewerProps) {
-  const activeFilePath = resolvePromptDiffActiveFilePath(preview.files, preview.activeFilePath);
-  return (
-    <UnifiedDiffPreview
-      files={preview.files}
-      activeFilePath={activeFilePath}
-      loading={preview.loading}
-      error={preview.error}
-      overviewLabel={promptArtifactPreviewCountLabel(preview.files.length)}
-      onToggleFile={onToggleFile}
-      themeMode={themeMode}
-      codeTheme={codeTheme}
-      codeFont={codeFont}
-      codeFontFamily={codeFontFamily}
-      codeFontSize={codeFontSize}
-      codeLineHeight={codeLineHeight}
-      codeTabSize={codeTabSize}
-    />
-  );
-}, (prev, next) => (
-  prev.preview === next.preview &&
-  prev.mode === next.mode &&
-  prev.themeMode === next.themeMode &&
-  prev.codeTheme === next.codeTheme &&
-  prev.codeFont === next.codeFont &&
-  prev.codeFontFamily === next.codeFontFamily &&
-  prev.codeFontSize === next.codeFontSize &&
-  prev.codeLineHeight === next.codeLineHeight &&
-  prev.codeTabSize === next.codeTabSize
-));
 
 export function App() {
   const persistedGlobal = useMemo(() => workspaceStore.getGlobalState(), []);
@@ -3352,6 +2874,16 @@ export function App() {
   const [previewWorkbench, setPreviewWorkbench] = useState(() =>
     previewWorkbenchStateFromSnapshot(persistedGlobal.previewWorkbenchSnapshot),
   );
+  const [previewDetached, setPreviewDetached] = useState(false);
+  const previewWorkbenchChannel = useMemo<PreviewWorkbenchChannel | null>(() => {
+    const bridge = getDesktopWindowBridge();
+    return bridge?.openPreviewWindow ? createPreviewWorkbenchChannel() : null;
+  }, []);
+  const focusPreviewWindow = useCallback(() => {
+    const bridge = getDesktopWindowBridge();
+    if (!previewDetached || !bridge?.focusPreviewWindow) return;
+    Promise.resolve(bridge.focusPreviewWindow()).catch(() => undefined);
+  }, [previewDetached]);
   const [chatPreviewManualOpen, setChatPreviewManualOpen] = useState(false);
   // Default to collapsed so preview tabs restored from the snapshot do not
   // auto-open the pane on launch; in-session opens reset this to expand again.
@@ -3381,6 +2913,7 @@ export function App() {
   const [previewSearchOpen, setPreviewSearchOpen] = useState(false);
   const [previewSearchQuery, setPreviewSearchQuery] = useState('');
   const [previewSearchActiveIndex, setPreviewSearchActiveIndex] = useState(0);
+  const [previewSearchScrollTop, setPreviewSearchScrollTop] = useState(0);
   const previewSearchInputRef = useRef<HTMLInputElement | null>(null);
   const [previewFileTreeSearchQuery, setPreviewFileTreeSearchQuery] = useState('');
   const [previewFileTreeSearchResults, setPreviewFileTreeSearchResults] = useState<RegistryFileIndexSearchResult[]>([]);
@@ -3443,13 +2976,11 @@ export function App() {
       : '';
   const previewWorkbenchRef = useRef(previewWorkbench);
   const chatPreviewHasContent = previewWorkbenchHasTabs;
-  const chatPreviewOpen = chatPreviewManualOpen || (chatPreviewHasContent && !chatPreviewManualCollapsed);
+  const chatPreviewOpen = !previewDetached && (
+    chatPreviewManualOpen || (chatPreviewHasContent && !chatPreviewManualCollapsed)
+  );
   const portRelayWorkbenchOpen = !!activePortRelayPreview && chatPreviewOpen;
-  // Closing the drawer always clears its pin so a reopened drawer auto-dismisses again.
   const updatePreviewDrawerMode = useCallback((mode: PreviewWorkbenchDrawerMode) => {
-    if (mode === 'closed') {
-      setPreviewDrawerPinned(false);
-    }
     setPreviewWorkbench(current => ({...current, drawerMode: mode}));
   }, []);
 
@@ -8457,6 +7988,61 @@ export function App() {
         : 'empty';
   const isPreviewDirectoryExpanded = (path: string) =>
     chatFilePreviewExpandedDirs.includes(path);
+  const previewMirrorState = useMemo<PreviewWorkbenchMirrorState>(() => ({
+    workbench: previewWorkbench,
+    drawerPinned: previewDrawerPinned,
+    search: {
+      open: previewSearchOpen,
+      query: previewSearchQuery,
+      activeIndex: previewSearchActiveIndex,
+      scrollTop: previewSearchScrollTop,
+    },
+    fileTree: {
+      dirEntries: chatFilePreviewDirEntries,
+      loadingDirs: chatFilePreviewLoadingDirs,
+      expandedDirs: chatFilePreviewExpandedDirsByProject,
+      searchQuery: previewFileTreeSearchQuery,
+      rootState: chatFilePreviewRootState,
+      rootError: chatFilePreviewDirErrors['.'] || '',
+    },
+    gitSnapshot: previewWorkbench.activeProjectId ? previewGitSnapshot : null,
+    themeMode,
+    codeTheme,
+    codeFont,
+    codeFontFamily,
+    codeFontSize,
+    codeLineHeight,
+    codeTabSize,
+    wrapLines,
+    showLineNumbers,
+    htmlPreviewEndpoint: registryEndpoints.previewURL.toString(),
+    htmlPreviewCSRFToken: registryAuth.status?.csrfToken || '',
+  }), [
+    chatFilePreviewDirEntries,
+    chatFilePreviewDirErrors,
+    chatFilePreviewExpandedDirsByProject,
+    chatFilePreviewLoadingDirs,
+    chatFilePreviewRootState,
+    codeFont,
+    codeFontFamily,
+    codeFontSize,
+    codeLineHeight,
+    codeTabSize,
+    codeTheme,
+    previewDrawerPinned,
+    previewFileTreeSearchQuery,
+    previewGitSnapshot,
+    previewSearchActiveIndex,
+    previewSearchOpen,
+    previewSearchQuery,
+    previewSearchScrollTop,
+    previewWorkbench,
+    registryAuth.status?.csrfToken,
+    registryEndpoints.previewURL,
+    showLineNumbers,
+    themeMode,
+    wrapLines,
+  ]);
   const previewFileTreeSearchTree = useMemo(
     () => buildFileSearchResultTree(previewFileTreeSearchResults, {
       dirEntries: chatFilePreviewDirEntries,
@@ -8789,7 +8375,8 @@ export function App() {
           : tab,
       );
     });
-  }, []);
+    focusPreviewWindow();
+  }, [focusPreviewWindow]);
 
   const loadRestoredPreviewTab = useCallback(async (tab: PreviewWorkbenchTab) => {
     if (!connectedRef.current) {
@@ -9001,7 +8588,7 @@ export function App() {
       return;
     }
     if (tab.type === 'attachment') {
-      if (attachmentHTMLPreviewSource(tab)) {
+      if (sharedAttachmentHTMLPreviewSource(tab)) {
         return;
       }
       if (tab.loading || tab.src || tab.content !== undefined || tab.requestId > 0) {
@@ -9009,7 +8596,7 @@ export function App() {
       }
       const requestSeq = chatAttachmentReadSeqRef.current + 1;
       chatAttachmentReadSeqRef.current = requestSeq;
-      const payload = attachmentPreviewReadPayloadFromKey(tab);
+      const payload = sharedAttachmentPreviewReadPayloadFromKey(tab);
       if (!payload) {
         setPreviewWorkbench(current =>
           failPreviewTabLoad(
@@ -9313,7 +8900,8 @@ export function App() {
     readChatFilePeek(path, normalizedLine, targetProjectId).catch(() => undefined);
     chatPeekAnchorRef.current = normalizedLine;
     setChatPeekSelectedLines(normalizedLine != null ? new Set([normalizedLine]) : new Set());
-  }, [isWide, readChatFilePeek, setDrawerOpen]);
+    focusPreviewWindow();
+  }, [focusPreviewWindow, isWide, readChatFilePeek, setDrawerOpen]);
 
   const clearPreviewFileTreeSearchTimer = useCallback(() => {
     if (previewFileTreeSearchTimerRef.current !== null) {
@@ -18829,6 +18417,10 @@ export function App() {
   );
   const activeTerminal = activeTerminalKey ? terminalSync.terminals[activeTerminalKey] : undefined;
   const toggleChatPreviewFromTitle = useCallback(() => {
+    if (previewDetached) {
+      focusPreviewWindow();
+      return;
+    }
     if (!isWide) {
       setMobileUsageOpen(false);
       setTerminalOpen(false);
@@ -18841,8 +18433,13 @@ export function App() {
     }
     setChatPreviewManualCollapsed(false);
     setChatPreviewManualOpen(open => !open);
-  }, [chatPreviewOpen, isWide, setSidebarSettingsOpen]);
+  }, [chatPreviewOpen, focusPreviewWindow, isWide, previewDetached, setSidebarSettingsOpen]);
   const togglePreviewDrawerFromTitle = useCallback((mode: Exclude<PreviewWorkbenchDrawerMode, 'closed'>) => {
+    if (previewDetached) {
+      focusPreviewWindow();
+      updatePreviewDrawerMode(previewWorkbenchRef.current.drawerMode === mode ? 'closed' : mode);
+      return;
+    }
     if (!chatPreviewOpen) {
       setChatPreviewManualCollapsed(false);
       setChatPreviewManualOpen(true);
@@ -18850,7 +18447,7 @@ export function App() {
       return;
     }
     updatePreviewDrawerMode(previewWorkbenchRef.current.drawerMode === mode ? 'closed' : mode);
-  }, [chatPreviewOpen, updatePreviewDrawerMode]);
+  }, [chatPreviewOpen, focusPreviewWindow, previewDetached, updatePreviewDrawerMode]);
   const floatingNavRelayState = resolveFloatingNavRelayState({
     ready: portRelayReady,
     frameUrl: portRelayFrameUrl,
@@ -19144,14 +18741,14 @@ export function App() {
             </button>
             <button
               type="button"
-              className={`chat-preview-toggle${chatPreviewOpen ? ' active' : ''}`}
-              onClick={toggleChatPreviewFromTitle}
-              data-tooltip={chatPreviewOpen ? 'Hide preview' : 'Show preview'}
-              aria-label={chatPreviewOpen ? 'Hide preview' : 'Show preview'}
-              aria-pressed={chatPreviewOpen}
+              className={`chat-preview-toggle${chatPreviewOpen || previewDetached ? ' active' : ''}`}
+              onClick={previewDetached ? focusPreviewWindow : toggleChatPreviewFromTitle}
+              data-tooltip={previewDetached ? 'Bring Preview to front' : chatPreviewOpen ? 'Hide preview' : 'Show preview'}
+              aria-label={previewDetached ? 'Bring Preview to front' : chatPreviewOpen ? 'Hide preview' : 'Show preview'}
+              aria-pressed={chatPreviewOpen || previewDetached}
             >
               <SessionIcon name="appWindow" />
-              {!chatPreviewOpen && previewTabCount > 0 ? (
+              {!chatPreviewOpen && !previewDetached && previewTabCount > 0 ? (
                 <span className="chat-preview-badge" aria-label={`${previewTabCount} preview tabs`}>{previewTabCount}</span>
               ) : null}
             </button>
@@ -21632,7 +21229,7 @@ export function App() {
       ? canInvokeDesktopFileAction(desktopBridge, 'folder', desktopTarget)
       : false;
     const attachmentDownloadPayload = tab.type === 'attachment'
-      ? attachmentPreviewReadPayloadFromKey(tab)
+      ? sharedAttachmentPreviewReadPayloadFromKey(tab)
       : null;
     const downloadSource: RegistryFileDownloadSource | null = fileTarget
       ? fileDownloadSourceForLink(fileTarget)
@@ -21805,7 +21402,7 @@ export function App() {
       : chatPeekSelectedLines;
     if (tab.type === 'file') {
       return (
-        <ChatFilePeekViewer
+        <SharedChatFilePeekViewer
           peek={tab}
           mode={mode}
           tabs={EMPTY_PREVIEW_WORKBENCH_TABS}
@@ -21834,7 +21431,7 @@ export function App() {
     }
     if (tab.type === 'prompt-diff') {
       return (
-        <ChatPromptArtifactPreviewViewer
+        <SharedChatPromptArtifactPreviewViewer
           preview={tab}
           mode={mode}
           themeMode={themeMode}
@@ -21873,7 +21470,7 @@ export function App() {
     }
     if (tab.type === 'attachment') {
       return (
-        <ChatAttachmentPreviewViewer
+        <SharedChatAttachmentPreviewViewer
           preview={tab}
           mode={mode}
           onClose={closeChatFilePeekFromChrome}
@@ -22089,8 +21686,164 @@ export function App() {
       onToggleDrawerPin={() => setPreviewDrawerPinned(pinned => !pinned)}
     />
   ) : null;
+  const previewCompanionSupported = Boolean(
+    previewWorkbenchChannel && getDesktopWindowBridge()?.openPreviewWindow,
+  );
+  const floatPreviewWindow = useCallback(() => {
+    const bridge = getDesktopWindowBridge();
+    if (!previewWorkbenchChannel?.post || !bridge?.openPreviewWindow) return;
+    setPreviewDetached(true);
+    setChatPreviewManualOpen(false);
+    setChatPreviewManualCollapsed(true);
+    previewWorkbenchChannel.post({
+      kind: 'preview-host-status',
+      version: PREVIEW_WORKBENCH_CHANNEL_VERSION,
+      detached: true,
+    });
+    Promise.resolve(bridge.openPreviewWindow()).catch(error => {
+      setPreviewDetached(false);
+      setChatPreviewManualCollapsed(false);
+      setChatPreviewManualOpen(true);
+      previewWorkbenchChannel.post({
+        kind: 'preview-host-status',
+        version: PREVIEW_WORKBENCH_CHANNEL_VERSION,
+        detached: false,
+      });
+      const reason = error instanceof Error ? error.message : String(error);
+      setToastMessage(`Failed to open Preview window: ${reason}`);
+    });
+  }, [previewWorkbenchChannel]);
+  const dockPreviewWindow = useCallback(() => {
+    const bridge = getDesktopWindowBridge();
+    Promise.resolve(bridge?.dockPreviewWindow?.()).catch(() => undefined);
+    setPreviewDetached(false);
+    setChatPreviewManualCollapsed(false);
+    setChatPreviewManualOpen(true);
+    previewWorkbenchChannel?.post({
+      kind: 'preview-host-status',
+      version: PREVIEW_WORKBENCH_CHANNEL_VERSION,
+      detached: false,
+    });
+  }, [previewWorkbenchChannel]);
+  const handlePreviewWorkbenchIntent = useCallback((intent: PreviewWorkbenchIntent) => {
+    switch (intent.kind) {
+      case 'select-tab':
+        setPreviewWorkbench(current => selectPreviewTab(current, intent.projectId, intent.tabId));
+        return;
+      case 'close-tab':
+        closeWorkbenchTab(intent.projectId, intent.tabId);
+        return;
+      case 'drawer-mode':
+        updatePreviewDrawerMode(intent.mode);
+        return;
+      case 'toggle-drawer-pin':
+        setPreviewDrawerPinned(pinned => !pinned);
+        return;
+      case 'search':
+        setPreviewSearchOpen(intent.open);
+        setPreviewSearchQuery(intent.query);
+        setPreviewSearchActiveIndex(intent.activeIndex);
+        return;
+      case 'file-tree-search':
+        updatePreviewFileTreeSearchQuery(intent.query);
+        return;
+      case 'scroll':
+        setPreviewSearchScrollTop(intent.scrollTop);
+        return;
+      case 'toggle-directory':
+        void togglePreviewDirectory(intent.path);
+        return;
+      case 'open-file':
+        openChatFilePeek(intent.path, intent.targetLine, intent.projectId);
+        return;
+      case 'open-git':
+        openGitDiffPreview(intent.projectId, intent.source, intent.file);
+        return;
+      case 'git-selected-refs':
+        void gitBrowserStore.setSelectedRefs(intent.projectId, intent.refs);
+        return;
+      case 'git-toggle-commit':
+        void gitBrowserStore.toggleCommit(intent.projectId, intent.sha);
+        return;
+      case 'git-refresh':
+      case 'git-retry':
+        void gitBrowserStore.refresh(intent.projectId);
+        return;
+      case 'git-load-more':
+        void gitBrowserStore.loadMore(intent.projectId);
+        return;
+      case 'copy-commit-sha':
+        void writeTextToClipboard(intent.sha);
+        return;
+      case 'focus':
+        focusPreviewWindow();
+        return;
+      case 'dock':
+        dockPreviewWindow();
+        return;
+    }
+  }, [
+    closeWorkbenchTab,
+    dockPreviewWindow,
+    focusPreviewWindow,
+    openChatFilePeek,
+    openGitDiffPreview,
+    togglePreviewDirectory,
+    updatePreviewDrawerMode,
+    updatePreviewFileTreeSearchQuery,
+  ]);
+  const previewMirrorStateRef = useRef(previewMirrorState);
+  previewMirrorStateRef.current = previewMirrorState;
+  const handlePreviewWindowReady = useCallback(() => {
+    setPreviewDetached(true);
+    previewWorkbenchChannel?.post({
+      kind: 'preview-host-status',
+      version: PREVIEW_WORKBENCH_CHANNEL_VERSION,
+      detached: true,
+    });
+  }, [previewWorkbenchChannel]);
+  const handlePreviewWindowClosed = useCallback(() => {
+    setPreviewDetached(false);
+    setChatPreviewManualCollapsed(false);
+    setChatPreviewManualOpen(true);
+  }, []);
+  const previewWorkbenchHost = useMemo(() => {
+    if (!previewWorkbenchChannel) return null;
+    return createPreviewWorkbenchHost({
+      channel: previewWorkbenchChannel,
+      getState: () => previewMirrorStateRef.current,
+      onReady: handlePreviewWindowReady,
+      onIntent: handlePreviewWorkbenchIntent,
+      onClosed: handlePreviewWindowClosed,
+    });
+  }, [
+    handlePreviewWindowClosed,
+    handlePreviewWindowReady,
+    handlePreviewWorkbenchIntent,
+    previewWorkbenchChannel,
+  ]);
+  useEffect(() => {
+    if (!previewWorkbenchHost) return undefined;
+    return previewWorkbenchHost.close;
+  }, [previewWorkbenchHost]);
+  useEffect(() => () => {
+    previewWorkbenchChannel?.close();
+  }, [previewWorkbenchChannel]);
+  useEffect(() => {
+    previewWorkbenchHost?.publishState(previewMirrorState);
+  }, [previewMirrorState, previewWorkbenchHost]);
+  const handlePreviewScroll = useCallback((event: React.UIEvent<HTMLDivElement>) => {
+    setPreviewSearchScrollTop(event.currentTarget.scrollTop);
+  }, []);
+  useEffect(() => {
+    if (previewDetached || !chatPreviewOpen) return;
+    const container = chatFilePeekScrollRef.current;
+    if (container && container.scrollTop !== previewSearchScrollTop) {
+      container.scrollTop = previewSearchScrollTop;
+    }
+  }, [chatPreviewOpen, previewDetached, previewSearchScrollTop]);
   const renderPreviewWorkbenchSurface = (mode: 'desktop' | 'mobile') => (
-    <PreviewWorkbenchChrome
+    <PreviewWorkbenchView
       mode={mode}
       activeTab={previewWorkbenchActiveTab}
       tabs={previewWorkbenchTabs}
@@ -22118,17 +21871,20 @@ export function App() {
       onMobilePortRelayRefresh={refreshActivePortRelayPreview}
       mobileFullscreen={mode === 'mobile' && previewWorkbenchFullscreen}
       onMobileFullscreenChange={setPreviewWorkbenchFullscreen}
+      onFloat={mode === 'desktop' && previewCompanionSupported && !previewDetached ? floatPreviewWindow : undefined}
+      onDock={mode === 'desktop' && previewDetached ? dockPreviewWindow : undefined}
     >
       {previewSearchBar}
       <div
         ref={chatFilePeekScrollRef}
         className="chat-file-peek-scroll"
+        onScroll={handlePreviewScroll}
         onPointerDownCapture={capturePreviewSelectionContext}
         onContextMenu={handlePreviewSelectionContextMenu}
       >
         {renderPreviewWorkbenchBody(mode)}
       </div>
-    </PreviewWorkbenchChrome>
+    </PreviewWorkbenchView>
   );
   const chatPreviewDesktopPane = isWide && chatPreviewOpen ? (
     <>

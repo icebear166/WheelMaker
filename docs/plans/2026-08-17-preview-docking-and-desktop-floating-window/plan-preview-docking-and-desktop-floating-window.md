@@ -149,7 +149,7 @@ Expected: TypeScript 检查通过，mobile drawer 和既有 external portal 测�
 
 **Acceptance:** companion 路径只挂载 `PreviewWindowApp`、GlobalTooltip 和既有全局样式，不导入 `WorkspaceApp`，不创建第二套 RegistryWorkspaceService/WorkspaceController。Preview-only app 能用主窗口 snapshot 渲染 file、prompt diff、git diff、attachment、port relay 的当前 tab，并通过 channel 发出用户 intent。
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 在 `PreviewWindowApp.test.tsx` 使用 fake channel 和可序列化 fixture，断言：ready 后收到 state 会显示 tab title 与当前 file 内容；点击 tab 发送 `select-tab`；点击 Dock 发送 `dock`；drawer pin/send mode intent 使用同一通道。
 
@@ -164,31 +164,31 @@ test('preview-only app renders the received workbench and sends dock intent', ()
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `cd app && npm test -- --runTestsByPath web/preview/PreviewWindowApp.test.tsx`
 
 Expected: FAIL，因为 Preview-only entry 和共享 viewer 尚不存在。
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 将 `WorkspaceApp.tsx` 中的 `ChatFilePeekViewer`、attachment viewer、prompt artifact viewer 及其纯 helper 移到 `PreviewWorkbenchViewers.tsx`，保持现有 props 和渲染分支；WorkspaceApp 改为导入它们。`PreviewWindowApp` 使用 channel state、`PreviewWorkbenchView`、`FileExplorerTree`/`GitHistoryPanel` 的序列化快照适配器，所有点击只产生 Preview intent。Detached toolbar 显示明确的 `Dock preview`；不显示浏览器 popup 或移动端入口。
 
 `main.tsx` 通过专用 pathname（`/preview-window` 及 base path 下的该子路径）选择 Preview-only app；普通 pathname 继续等待 `workspaceAppReady` 后渲染 App。该路由不使用 query/hash。
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `cd app && npm test -- --runTestsByPath web/preview/PreviewWindowApp.test.tsx web/preview/PreviewWorkbenchChrome.test.tsx`
 
 Expected: PASS。
 
-- [ ] **Step 5: Run focused regression checks**
+- [x] **Step 5: Run focused regression checks**
 
 Run: `cd app && npm run tsc:web`
 
 Expected: WorkspaceApp viewer 渲染和 Preview-only entry 均通过类型检查。
 
-- [ ] **Step 6: Git checkpoint**
+- [x] **Step 6: Git checkpoint**
 
 只提交 viewer 抽取、PreviewWindowApp、main route 与对应测试。
 
@@ -204,7 +204,7 @@ Expected: WorkspaceApp viewer 渲染和 Preview-only entry 均通过类型检查
 
 **Acceptance:** Desktop Preview 可 Float；detach 后主窗口只显示 Chat，主入口变为 Bring Preview to front；main 继续作为 state/data authority，收到 companion ready 后发送完整 mirror state；所有主窗口 Preview 来源动作在 detached 时更新 snapshot 并 focus companion；companion dock/close 恢复 inline。
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `previewWorkbenchHost.test.ts` 覆盖：
 
@@ -212,17 +212,17 @@ Expected: WorkspaceApp viewer 渲染和 Preview-only entry 均通过类型检查
 - `preview-intent(select-tab/drawer/search/scroll)` 调用注入的主 controller；
 - `dock` 将 detached 变为 inline；
 - companion `closed` 事件也触发 dock；
-- `buildPreviewMirrorState` 保留当前 tab 内容、drawer pin、search query/index 和 scrollTop。
+- mirror state 保留当前 tab 内容、drawer pin、search query/index 和 scrollTop。
 
 WorkspaceApp 入口测试断言 detached 时按钮文案/aria-label 为 `Bring Preview to front`，inline 时为 `Float Preview`。
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `cd app && npm test -- --runTestsByPath web/preview/previewWorkbenchHost.test.ts`
 
 Expected: FAIL，因为 host controller、detach state 和 Desktop bridge 方法不存在。
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 在 `previewWorkbenchHost.ts` 实现主窗口 host：创建/关闭 channel、保存 `detached` runtime state（不写 WorkspacePersistence）、处理 ready/state/intent、向 Desktop bridge 请求 `openPreviewWindow`、`focusPreviewWindow`、`dockPreviewWindow`。WorkspaceApp 将 `chatPreviewOpen` 与 desktop pane 渲染条件排除 detached 状态，但保留 PreviewController/state 以供 sync 和 dock 恢复。
 
@@ -230,27 +230,27 @@ Expected: FAIL，因为 host controller、detach state 和 Desktop bridge 方法
 
 pin 只保留为 session-local state，不进入 `previewWorkbenchSnapshot`；应用重启沿用现有 `chatPreviewManualCollapsed = true`，不会恢复 detached。
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `cd app && npm test -- --runTestsByPath web/preview/previewWorkbenchHost.test.ts`
 
 Expected: PASS。
 
-- [ ] **Step 5: Run focused regression checks**
+- [x] **Step 5: Run focused regression checks**
 
 Run: `cd app && npm test -- --runTestsByPath web/preview/PreviewWorkbenchChrome.test.tsx web/preview/PreviewWindowApp.test.tsx`
 
 Expected: PASS，且没有重复的 Preview renderer 条件。
 
-- [ ] **Step 6: Git checkpoint**
+- [x] **Step 6: Git checkpoint**
 
 只提交 host controller、WorkspaceApp、desktopRuntime 类型和测试。
 
 ## Task 5: Windows WebView2 companion 生命周期、焦点与 bounds
 
 **Files:**
-- Create: `server/cmd/wheelmaker-desktop/desktop_preview_window_windows.go`
-- Create: `server/cmd/wheelmaker-desktop/desktop_preview_window_windows_test.go`
+- Create: `server/cmd/wheelmaker-desktop/preview_window_windows.go`
+- Create: `server/cmd/wheelmaker-desktop/preview_window_windows_test.go`
 - Modify: `server/cmd/wheelmaker-desktop/webview_windows.go`
 - Modify: `server/cmd/wheelmaker-desktop/desktop_bridge.go`
 - Modify: `server/cmd/wheelmaker-desktop/webview_policy.go`
@@ -260,7 +260,7 @@ Expected: PASS，且没有重复的 Preview renderer 条件。
 
 **Acceptance:** Desktop EXE 的 companion 是独立正常顶层 WebView2/任务栏窗口；首次打开优先第二显示器，后续复用 bounds，失效 bounds 回到可见 work area；系统 X 通知 main Web App dock；Go 不传递 Preview 业务状态。
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 逻辑层测试覆盖：
 
@@ -283,13 +283,13 @@ func TestPreviewWindowCloseNotifiesMainAndDockIsIdempotent(t *testing.T) {
 
 `webview_policy_test.go`/`webview_windows_test.go` 追加专用 `/preview-window` 路径允许、query/hash 仍拒绝、companion bridge 只授权已声明窗口动作的测试。config store 测试确认 geometry 可保存但不存在 detached restore flag。
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `cd server && go test ./cmd/wheelmaker-desktop/ -run 'PreviewWindow|DesktopConfig|PreviewPath' -v`
 
 Expected: 编译失败或断言失败，因为 bounds 选择器、manager 和 bridge 尚不存在。
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 实现 `desktopPreviewWindowManager`：
 
@@ -298,21 +298,21 @@ Expected: 编译失败或断言失败，因为 bounds 选择器、manager 和 br
 - companion system close、显式 Dock 和创建失败都通过 main WebView `Dispatch` 执行 `wheelmaker:preview-window-closed`/状态事件；重复 close/dock 幂等。
 - 使用普通顶层 WebView2 window 保证独立任务栏项；focus/restore/minimize 通过现有 Win32 helpers 和新增最小 user32 bindings 完成。
 - `desktopConfig` 新增可选 Preview bounds（left/top/width/height），仅保存几何，不保存 detached；用 virtual screen/monitor count 做首次 second-monitor placement，使用当前可见边界修正失效 bounds。
-- `desktopRuntimeInitScript` 的主 trusted bridge 增加 companion open/focus/dock；companion init script 只暴露 `enabled`, `previewWindow`, `dockPreviewWindow` 及必要的原生窗口动作。Policy 允许 `/preview-window` 子路径，仍拒绝 query/hash 和 bootstrap 页面。
+- `desktopRuntimeInitScript` 的主 trusted bridge 增加 companion open/focus/dock；companion init script 不注入主窗口 bridge，保持普通顶层窗口的原生标题栏，Dock 通过 Web channel intent 回到主窗口。Policy 允许 `/preview-window` 子路径，仍拒绝 query/hash 和 bootstrap 页面。
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `cd server && go test ./cmd/wheelmaker-desktop/ -run 'PreviewWindow|DesktopConfig|PreviewPath' -v`
 
 Expected: PASS。
 
-- [ ] **Step 5: Run focused regression checks**
+- [x] **Step 5: Run focused regression checks**
 
 Run: `cd server && go test ./cmd/wheelmaker-desktop/`
 
 Expected: Desktop 现有 bridge、policy、titlebar、notification 测试通过。
 
-- [ ] **Step 6: Git checkpoint**
+- [x] **Step 6: Git checkpoint**
 
 只提交 companion manager、bridge/policy/init script、config geometry 与对应 Go 测试。
 
@@ -325,11 +325,11 @@ Expected: Desktop 现有 bridge、policy、titlebar、notification 测试通过�
 
 **Acceptance:** Wiki 只记录已实施的稳定事实：PC drawer 两种布局、companion window 与 Web channel 的职责边界、geometry/restart 语义和移动端/浏览器边界；索引完整，新增页面第一行是摘要。
 
-- [ ] **Step 1: 调用 wiki skill 同步已确认目标**
+- [x] **Step 1: 调用 wiki skill 同步已确认目标**
 
 更新 Workbench Chrome 的 Preview drawer 段落，新增 architecture 页面并在目录索引登记；记录来源 scope 文档链接，不写执行 checklist 或未落地方案。
 
-- [ ] **Step 2: Run documentation checks**
+- [x] **Step 2: Run documentation checks**
 
 Run: `git diff --check`
 
