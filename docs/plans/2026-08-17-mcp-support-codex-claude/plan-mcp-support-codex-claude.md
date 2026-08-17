@@ -211,5 +211,6 @@
   - Result: `git diff --check` passes; only synthetic credential fixtures are present.
 - [x] **Step 4: Update durable wiki knowledge**
   - Update only the confirmed MCP menu/runtime behavior after implementation is stable; do not document unimplemented OAuth/SSE/tool policy.
-- [ ] **Step 5: Git finalize**
+- [x] **Step 5: Git finalize**
   - Run `git status -sb`, push the task branch, verify its remote SHA, and retain the worktree/branch because the original `main` worktree contains pre-existing user modifications and cannot be safely merged.
+  - Result: committed as `12ba3819`, pushed to `origin/spec/mcp-support-codex-claude`, and retained in the dedicated worktree.
