@@ -98,7 +98,10 @@ func (r *desktopRuntime) SaveBaseURL(ctx context.Context, raw string) desktopBoo
 	if err != nil {
 		return r.fail("Enter a valid HTTPS server address.")
 	}
-	candidate := desktopConfig{ConnectionMode: desktopConnectionGateway, BaseURL: normalized}
+	r.mu.RLock()
+	previewBounds := r.config.PreviewWindowBounds
+	r.mu.RUnlock()
+	candidate := desktopConfig{ConnectionMode: desktopConnectionGateway, BaseURL: normalized, PreviewWindowBounds: previewBounds}
 	r.mu.Lock()
 	r.config = candidate
 	r.state.BaseURL = normalized
@@ -143,7 +146,10 @@ func (r *desktopRuntime) SaveBaseURL(ctx context.Context, raw string) desktopBoo
 }
 
 func (r *desktopRuntime) SelectLocalhost(ctx context.Context) desktopBootstrapResult {
-	config := desktopConfig{ConnectionMode: desktopConnectionLocalhost}
+	r.mu.RLock()
+	previewBounds := r.config.PreviewWindowBounds
+	r.mu.RUnlock()
+	config := desktopConfig{ConnectionMode: desktopConnectionLocalhost, PreviewWindowBounds: previewBounds}
 	if err := r.store.Save(config); err != nil {
 		return r.fail("Unable to save the Localhost connection.")
 	}
@@ -230,6 +236,45 @@ func (r *desktopRuntime) TrustedLocalhostURL() string {
 		return ""
 	}
 	return r.localhostURL
+}
+
+func (r *desktopRuntime) TrustedPreviewURL() string {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	switch r.security.Mode() {
+	case desktopTrustedLocalhostPage:
+		return r.localhostURL
+	case desktopTrustedLocalDevPage:
+		return desktopLocalDevURL
+	case desktopTrustedRemotePage:
+		return r.config.BaseURL
+	default:
+		return ""
+	}
+}
+
+func (r *desktopRuntime) PreviewWindowBounds() *desktopPreviewWindowBounds {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	if r.config.PreviewWindowBounds == nil {
+		return nil
+	}
+	bounds := *r.config.PreviewWindowBounds
+	return &bounds
+}
+
+func (r *desktopRuntime) SavePreviewWindowBounds(bounds desktopPreviewWindowBounds) error {
+	r.mu.Lock()
+	config := r.config
+	config.PreviewWindowBounds = &bounds
+	r.mu.Unlock()
+	if err := r.store.Save(config); err != nil {
+		return err
+	}
+	r.mu.Lock()
+	r.config.PreviewWindowBounds = &bounds
+	r.mu.Unlock()
+	return nil
 }
 
 func (r *desktopRuntime) NavigationFailureMessage() string {

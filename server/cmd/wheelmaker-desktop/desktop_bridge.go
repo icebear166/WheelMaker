@@ -35,6 +35,9 @@ const (
 	desktopSaveLocalDevSourceBinding       = "__wheelMakerDesktopSaveLocalDevSource"
 	desktopRunLocalDevBinding              = "__wheelMakerDesktopRunLocalDev"
 	desktopShowNotificationBinding         = "__wheelMakerDesktopShowNotification"
+	desktopOpenPreviewWindowBinding        = "__wheelMakerDesktopOpenPreviewWindow"
+	desktopFocusPreviewWindowBinding       = "__wheelMakerDesktopFocusPreviewWindow"
+	desktopDockPreviewWindowBinding        = "__wheelMakerDesktopDockPreviewWindow"
 )
 
 func desktopRuntimeInitScript(localhostURLs ...string) string {
@@ -92,6 +95,9 @@ func desktopRuntimeInitScript(localhostURLs ...string) string {
 		cancelHtmlFileClipboard: invoke('` + desktopCancelHTMLFileClipboardBinding + `'),
 		getDesktopUpdateInfo: invoke('` + desktopGetUpdateInfoBinding + `'),
 		requestDesktopUpdate: invoke('` + desktopRequestUpdateBinding + `'),
+		openPreviewWindow: invoke('` + desktopOpenPreviewWindowBinding + `'),
+		focusPreviewWindow: invoke('` + desktopFocusPreviewWindowBinding + `'),
+		dockPreviewWindow: invoke('` + desktopDockPreviewWindowBinding + `'),
 		deepSeekLogin: invoke('` + desktopDeepSeekLoginBinding + `'),
 		showNotification: invoke('` + desktopShowNotificationBinding + `'),
     });
@@ -133,4 +139,8 @@ func desktopRuntimeInitScript(localhostURLs ...string) string {
 
 func desktopBootstrapReadySignalScript() string {
 	return `window.dispatchEvent(new Event(` + strconv.Quote(desktopBootstrapReadyEvent) + `));`
+}
+
+func desktopCompanionRuntimeInitScript() string {
+	return `(() => { if (window !== window.top) return; })();` + "\n" + desktopLaunchOverlayScript()
 }

@@ -45,6 +45,7 @@ func (webView2Launcher) Launch(target desktopLaunchTarget, opts desktopWindowOpt
 	}
 	defer adapter.Close()
 	hwnd := uintptr(w.Window())
+	var previewController *desktopPreviewWindowController
 	if hwnd != 0 {
 		if opts.CustomTitleBar {
 			cleanupWindowWorkAreaConstraint, err := installDesktopWindowWorkAreaConstraintWithOps(hwnd, win32DesktopWindowSubclassOps{})
@@ -68,8 +69,19 @@ func (webView2Launcher) Launch(target desktopLaunchTarget, opts desktopWindowOpt
 		}
 		notifications := newDesktopNotificationCenter(hwnd, func(script string) { w.Eval(script) })
 		defer notifications.close()
-		if err := bindDesktopWindowBridge(w, hwnd, opts.Runtime, notifications); err != nil {
+		previewController, err = newDesktopPreviewWindowController(w, hwnd, opts.Runtime)
+		if err != nil {
 			return err
+		}
+		defer previewController.Close()
+		var bindErr error
+		if previewController != nil {
+			bindErr = bindDesktopWindowBridgeWithPreviewController(w, hwnd, opts.Runtime, notifications, previewController)
+		} else {
+			bindErr = bindDesktopWindowBridge(w, hwnd, opts.Runtime, notifications)
+		}
+		if bindErr != nil {
+			return bindErr
 		}
 		w.Init(desktopRuntimeInitScript(opts.Runtime.TrustedLocalhostURL()))
 	}
@@ -84,6 +96,16 @@ func (webView2Launcher) Launch(target desktopLaunchTarget, opts desktopWindowOpt
 }
 
 func bindDesktopWindowBridge(w webview2.WebView, hwnd uintptr, desktopRuntime *desktopRuntime, notifications desktopNotificationSink) error {
+	return bindDesktopWindowBridgeWithPreviewController(w, hwnd, desktopRuntime, notifications, nil)
+}
+
+func bindDesktopWindowBridgeWithPreviewController(
+	w webview2.WebView,
+	hwnd uintptr,
+	desktopRuntime *desktopRuntime,
+	notifications desktopNotificationSink,
+	previewController *desktopPreviewWindowController,
+) error {
 	if desktopRuntime == nil {
 		return errors.New("desktop runtime is unavailable")
 	}
@@ -254,6 +276,33 @@ func bindDesktopWindowBridge(w webview2.WebView, hwnd uintptr, desktopRuntime *d
 				return "", err
 			}
 			return notifications.show(raw), nil
+		}},
+		{desktopOpenPreviewWindowBinding, func() error {
+			if err := authorize(desktopBridgeOpenPreviewWindow); err != nil {
+				return err
+			}
+			if previewController == nil {
+				return errors.New("Preview window is unavailable")
+			}
+			return previewController.Open()
+		}},
+		{desktopFocusPreviewWindowBinding, func() error {
+			if err := authorize(desktopBridgeFocusPreviewWindow); err != nil {
+				return err
+			}
+			if previewController == nil {
+				return errors.New("Preview window is unavailable")
+			}
+			return previewController.Focus()
+		}},
+		{desktopDockPreviewWindowBinding, func() error {
+			if err := authorize(desktopBridgeDockPreviewWindow); err != nil {
+				return err
+			}
+			if previewController == nil {
+				return errors.New("Preview window is unavailable")
+			}
+			return previewController.Dock()
 		}},
 		{desktopOpenProjectFileInVSCodeBinding, func(projectRoot, relativePath string) error {
 			if err := authorize(desktopBridgeOpenProjectFileInVSCode); err != nil {

@@ -49,6 +49,9 @@ const (
 	desktopBridgeGetUpdateInfo
 	desktopBridgeRequestUpdate
 	desktopBridgeShowNotification
+	desktopBridgeOpenPreviewWindow
+	desktopBridgeFocusPreviewWindow
+	desktopBridgeDockPreviewWindow
 )
 
 type desktopNavigationAction uint8
@@ -123,6 +126,10 @@ func (p *desktopWebViewPolicy) AllowsBridge(mode desktopPageMode, rawURL string,
 			return true
 		case desktopBridgeShowNotification:
 			return true
+		case desktopBridgeFocusPreviewWindow,
+			desktopBridgeDockPreviewWindow,
+			desktopBridgeOpenPreviewWindow:
+			return true
 		default:
 			return false
 		}
@@ -147,7 +154,10 @@ func (p *desktopWebViewPolicy) AllowsBridge(mode desktopPageMode, rawURL string,
 		desktopBridgeGetUpdateInfo,
 		desktopBridgeRequestUpdate,
 		desktopBridgeDeepSeekLogin,
-		desktopBridgeShowNotification:
+		desktopBridgeShowNotification,
+		desktopBridgeOpenPreviewWindow,
+		desktopBridgeFocusPreviewWindow,
+		desktopBridgeDockPreviewWindow:
 		return true
 	default:
 		return false

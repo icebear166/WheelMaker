@@ -65,6 +65,7 @@ var (
 	procGetWindowRect                 = user32.NewProc("GetWindowRect")
 	procMonitorFromWindow             = user32.NewProc("MonitorFromWindow")
 	procGetMonitorInfoW               = user32.NewProc("GetMonitorInfoW")
+	procEnumDisplayMonitors           = user32.NewProc("EnumDisplayMonitors")
 	procCallWindowProcW               = user32.NewProc("CallWindowProcW")
 	procDefWindowProcW                = user32.NewProc("DefWindowProcW")
 	procGetSystemMetrics              = user32.NewProc("GetSystemMetrics")
@@ -104,6 +105,11 @@ type win32MonitorInfo struct {
 	rcMonitor desktopWindowRect
 	rcWork    desktopWindowRect
 	dwFlags   uint32
+}
+
+type desktopMonitorWorkArea struct {
+	monitor  desktopWindowRect
+	workArea desktopWindowRect
 }
 
 type win32DesktopWindowSubclassOps struct{}
@@ -206,6 +212,10 @@ func showWindow(hwnd uintptr, command uintptr) {
 	procShowWindow.Call(hwnd, command)
 }
 
+func setForegroundWindow(hwnd uintptr) {
+	procSetForegroundWindow.Call(hwnd)
+}
+
 func isWindowMaximized(hwnd uintptr) bool {
 	result, _, _ := procIsZoomed.Call(hwnd)
 	return result != 0
@@ -218,6 +228,23 @@ func isWindow(hwnd uintptr) bool {
 
 func setWindowPosRect(hwnd uintptr, x, y, width, height int32, flags uintptr) {
 	procSetWindowPos.Call(hwnd, 0, uintptr(uint32(x)), uintptr(uint32(y)), uintptr(width), uintptr(height), flags)
+}
+
+func getDesktopMonitorWorkAreas() []desktopMonitorWorkArea {
+	areas := make([]desktopMonitorWorkArea, 0, 2)
+	callback := windows.NewCallback(func(monitor, _hdc, _clip, _data uintptr) uintptr {
+		if monitor == 0 {
+			return 1
+		}
+		info := win32MonitorInfo{cbSize: uint32(unsafe.Sizeof(win32MonitorInfo{}))}
+		result, _, _ := procGetMonitorInfoW.Call(monitor, uintptr(unsafe.Pointer(&info)))
+		if result != 0 {
+			areas = append(areas, desktopMonitorWorkArea{monitor: info.rcMonitor, workArea: info.rcWork})
+		}
+		return 1
+	})
+	procEnumDisplayMonitors.Call(0, 0, callback, 0)
+	return areas
 }
 
 func setDwmWindowAttribute(hwnd uintptr, attribute uint32, value unsafe.Pointer, size uint32) error {

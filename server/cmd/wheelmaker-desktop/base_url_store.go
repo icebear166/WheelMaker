@@ -17,9 +17,17 @@ const (
 	desktopConnectionLocalhost desktopConnectionMode = "localhost"
 )
 
+type desktopPreviewWindowBounds struct {
+	Left   int32 `json:"left"`
+	Top    int32 `json:"top"`
+	Width  int32 `json:"width"`
+	Height int32 `json:"height"`
+}
+
 type desktopConfig struct {
-	ConnectionMode desktopConnectionMode `json:"connectionMode,omitempty"`
-	BaseURL        string                `json:"baseUrl,omitempty"`
+	ConnectionMode      desktopConnectionMode       `json:"connectionMode,omitempty"`
+	BaseURL             string                      `json:"baseUrl,omitempty"`
+	PreviewWindowBounds *desktopPreviewWindowBounds `json:"previewWindowBounds,omitempty"`
 }
 
 func normalizeDesktopConfig(config desktopConfig) (desktopConfig, bool, error) {
@@ -32,7 +40,7 @@ func normalizeDesktopConfig(config desktopConfig) (desktopConfig, bool, error) {
 		if err != nil {
 			return desktopConfig{}, false, fmt.Errorf("invalid legacy Gateway base URL: %w", err)
 		}
-		return desktopConfig{ConnectionMode: desktopConnectionGateway, BaseURL: normalized}, true, nil
+		return desktopConfig{ConnectionMode: desktopConnectionGateway, BaseURL: normalized, PreviewWindowBounds: config.PreviewWindowBounds}, true, nil
 	case desktopConnectionGateway:
 		if config.BaseURL == "" {
 			return desktopConfig{}, false, errors.New("Gateway connection requires a base URL")
@@ -41,7 +49,7 @@ func normalizeDesktopConfig(config desktopConfig) (desktopConfig, bool, error) {
 		if err != nil {
 			return desktopConfig{}, false, fmt.Errorf("invalid Gateway base URL: %w", err)
 		}
-		result := desktopConfig{ConnectionMode: desktopConnectionGateway, BaseURL: normalized}
+		result := desktopConfig{ConnectionMode: desktopConnectionGateway, BaseURL: normalized, PreviewWindowBounds: config.PreviewWindowBounds}
 		return result, result != config, nil
 	case desktopConnectionLocalhost:
 		if config.BaseURL != "" {
