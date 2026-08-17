@@ -50,7 +50,9 @@ PNG 始终是一个不截断、不拆页的文件。renderer 在捕获前选择 
 16,000,000。即使 `1x` 仍超限时不调用图片捕获或平台交付，并提示改用 HTML
 或公开 URL。
 
-HTML 使用可编辑文件名确认并输出单个 standalone document。普通浏览器下载
+HTML 使用可编辑文件名确认并输出单个 standalone document，默认文件名采用已解析的
+Session title，不追加时间戳或响应类型后缀；用户仍可编辑名称，文件名校验和 `.html`
+后缀规则保持不变。普通浏览器下载
 PNG/HTML，Windows Desktop 将图片或 HTML 文件放入系统剪贴板，Android 调起
 系统分享面板；原生 bridge 继续只处理单图片或单 HTML 文件。
 
