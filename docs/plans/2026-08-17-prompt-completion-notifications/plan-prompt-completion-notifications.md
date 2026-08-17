@@ -1,6 +1,6 @@
 # Prompt Completion Notifications Unification Implementation Plan
 
-> **For agentic workers:** REQUIRED SKILL: Use do-scoped to execute this plan task-by-task. Respect the handed-off git_state: inherit prepared, otherwise prepare; use git-workflow for checkpoint/finalize. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SKILL: Use do-scoped to execute this plan task-by-task. Respect the handed-off git_state: inherit prepared, otherwise prepare; use git-workflow for checkpoint/finalize. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Unify prompt-completion notifications across PWA / APK / exe — IM-style content (session title + reply preview), per-session replace, and consistent click-to-session behavior — and fix each platform's defects.
 
@@ -27,7 +27,7 @@
 
 **Acceptance:** wiki 记录通知功能的稳定约定（内容模型、替换语义、点击行为、三端呈现差异），不含一次性任务步骤。
 
-- [ ] **Step 1: 调用 wiki skill 创建页面**
+- [x] **Step 1: 调用 wiki skill 创建页面**
 
 通过 `wiki` skill 新建 `docs/wiki/features/prompt-completion-notifications.md`，内容要点（均为 scope 已确认结论）：
 
@@ -38,7 +38,7 @@
 - 平台呈现：PWA=service worker 通知（PNG 图标、tag、renotify、正文符号前缀）；APK=NotificationCompat（`ic_notification` 单色小图标、渠道 `chat_prompt_completion`、setColor、深链 PendingIntent）；exe=Go 自绘 Win32 置顶小窗（topmost/toolwindow/noactivate，点击 Eval 回传），不走 WebView2 通知管道、不需要系统通知权限。
 - 兼容：`replyPreview` 为可选增量字段，旧客户端忽略。
 
-- [ ] **Step 2: Git checkpoint**
+- [x] **Step 2: Git checkpoint**
 
 调用 `git-workflow` checkpoint，提交本任务 wiki 文件。
 
@@ -54,7 +54,7 @@
 
 **Acceptance:** completed 的 `prompt_done` param 含清洗后的 `replyPreview`；failed 无回复文本时 `replyPreview` = error message；旧字段与行为不回归。
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 在 `client_test.go` 追加（参考现有 `TestPromptDoneIsPublishedAsFinishedRealTurn` 的驱动方式，约 client_test.go:5369）：
 
@@ -93,12 +93,12 @@ func TestBuildPromptReplyPreview(t *testing.T) {
 
 再追加事件级测试：prompt 流出两段 assistant chunk（含 markdown 与换行）后正常结束，断言发布的 `prompt_done` param 的 `replyPreview` 等于清洗后的拼接文本；失败路径（无 chunk，`recordPromptFailed("boom")`）断言 `replyPreview == "boom"`。驱动方式完全复用 `TestPromptDoneIsPublishedAsFinishedRealTurn` 的 fake agent harness。
 
-- [ ] **Step 2: 运行测试确认 RED**
+- [x] **Step 2: 运行测试确认 RED**
 
 Run: `cd server && go test ./internal/hub/client/ -run 'TestBuildPromptReplyPreview|TestPromptDoneIncludesReplyPreview' -v`
 Expected: 编译失败/断言失败（函数与字段尚不存在）。
 
-- [ ] **Step 3: 实现**
+- [x] **Step 3: 实现**
 
 `server/internal/protocol/session_turn.go` 的 `SessionTurnPromptResult` 增加：
 
@@ -155,17 +155,17 @@ func buildPromptReplyPreview(raw string) string {
 
 `session_recorder.go` 的 `parseSessionViewEvent`（现 1890 行）重组 struct 时透传：`ReplyPreview: promptResult.ReplyPreview`（构造时已清洗，不再二次清洗）。
 
-- [ ] **Step 4: 运行测试确认 GREEN**
+- [x] **Step 4: 运行测试确认 GREEN**
 
 Run: `cd server && go test ./internal/hub/client/ -run 'TestBuildPromptReplyPreview|TestPromptDoneIncludesReplyPreview' -v`
 Expected: PASS。
 
-- [ ] **Step 5: 回归**
+- [x] **Step 5: 回归**
 
 Run: `cd server && go build ./... && go test ./internal/protocol/ ./internal/hub/client/`
 Expected: PASS。
 
-- [ ] **Step 6: Git checkpoint**
+- [x] **Step 6: Git checkpoint**
 
 `git-workflow` checkpoint，只提交本任务三个源文件 + client_test.go。
 
@@ -180,7 +180,7 @@ Expected: PASS。
 
 **Acceptance:** payload 新增 `preview`、`tag`；`body` = 预览或状态短语（不含符号，符号由 PWA SW 按 status 加）；旧 Hub（无 replyPreview）failed 时 body = error message；完成键/替换键规则一致。
 
-- [ ] **Step 1: 改写测试（新契约）**
+- [x] **Step 1: 改写测试（新契约）**
 
 `web-prompt-completion-notifications.test.ts` 中替换 “privacy-preserving payload” 用例为新契约用例：
 
@@ -234,12 +234,12 @@ test('status phrase covers cancelled and interrupted', () => {
 
 并修正 “uses the same resolved session title...” 用例：`payload.title` 仍为解析后的会话标题，`payload.body` 为 `'Prompt completed'`（无 preview 回落），`payload.tag === 'proj-1:sess-1'`。
 
-- [ ] **Step 2: 运行确认 RED**
+- [x] **Step 2: 运行确认 RED**
 
 Run: `cd app && npm test -- --runTestsByPath __tests__/web-prompt-completion-notifications.test.ts`
 Expected: FAIL（preview/tag 字段与新函数不存在）。
 
-- [ ] **Step 3: 实现**
+- [x] **Step 3: 实现**
 
 `notificationPayload.ts`：
 
@@ -281,12 +281,12 @@ return {
 };
 ```
 
-- [ ] **Step 4: 运行确认 GREEN + 关联回归**
+- [x] **Step 4: 运行确认 GREEN + 关联回归**
 
 Run: `cd app && npm test -- --runTestsByPath __tests__/web-prompt-completion-notifications.test.ts __tests__/web-notification-provider.test.ts`
 Expected: prompt-completion PASS；provider 测试若因 payload 类型多了必填字段报错，则在该测试的 payload 字面量补 `preview: ''`、`tag: 'proj-1:sess-1'`（仅此机械修正）。
 
-- [ ] **Step 5: Git checkpoint**
+- [x] **Step 5: Git checkpoint**
 
 `git-workflow` checkpoint 本任务文件。
 
@@ -302,7 +302,7 @@ Expected: prompt-completion PASS；provider 测试若因 payload 类型多了必
 
 **Acceptance:** `WheelMakerDesktop` 且带 `showNotification` 时选中 desktop provider；权限恒 granted；show 序列化 JSON 调用 bridge 并解析 ok。
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 在 `web-notification-provider.test.ts` 追加：
 
@@ -352,12 +352,12 @@ test('ignores desktop bridge without showNotification and falls through to pwa',
 });
 ```
 
-- [ ] **Step 2: 运行确认 RED**
+- [x] **Step 2: 运行确认 RED**
 
 Run: `cd app && npm test -- --runTestsByPath __tests__/web-notification-provider.test.ts`
 Expected: FAIL（kind 无 desktop / 未选 desktop）。
 
-- [ ] **Step 3: 实现**
+- [x] **Step 3: 实现**
 
 `desktopRuntime.ts` 的 `DesktopWindowBridge` 增加：
 
@@ -402,12 +402,12 @@ if (desktopBridge?.enabled === true) {
 }
 ```
 
-- [ ] **Step 4: 运行确认 GREEN**
+- [x] **Step 4: 运行确认 GREEN**
 
 Run: `cd app && npm test -- --runTestsByPath __tests__/web-notification-provider.test.ts`
 Expected: PASS。
 
-- [ ] **Step 5: Git checkpoint**
+- [x] **Step 5: Git checkpoint**
 
 `git-workflow` checkpoint 本任务文件。
 
@@ -422,7 +422,7 @@ Expected: PASS。
 
 **Acceptance:** 运行中收到 `wheelmaker:desktop-notification-click` 或 SW `WM_NOTIFICATION_NAVIGATE` 时，复用 `applyPendingNotificationTarget` 链路跳转到对应会话；启动时 URL 深链行为不变。
 
-- [ ] **Step 1: 写失败测试（helper）**
+- [x] **Step 1: 写失败测试（helper）**
 
 `web-prompt-completion-notifications.test.ts` 追加：
 
@@ -435,12 +435,12 @@ test('parses chat session key from notification urls', () => {
 });
 ```
 
-- [ ] **Step 2: 运行确认 RED**
+- [x] **Step 2: 运行确认 RED**
 
 Run: `cd app && npm test -- --runTestsByPath __tests__/web-prompt-completion-notifications.test.ts`
 Expected: FAIL。
 
-- [ ] **Step 3: 实现**
+- [x] **Step 3: 实现**
 
 `promptCompletionNotification.ts` 新增（`ChatSessionKey`/`chatSessionKeyFromParts` 复用 WorkspaceApp 现有 import 来源 `../session/...`，按现有 import 路径）：
 
@@ -499,12 +499,12 @@ useEffect(() => {
 
 3. `readPromptCompletionNotificationTarget` 保持现状（启动深链路径不变）。
 
-- [ ] **Step 4: 运行确认 GREEN + 类型检查**
+- [x] **Step 4: 运行确认 GREEN + 类型检查**
 
 Run: `cd app && npm test -- --runTestsByPath __tests__/web-prompt-completion-notifications.test.ts && npx tsc --noEmit`
 Expected: PASS / 无类型错误。
 
-- [ ] **Step 5: Git checkpoint**
+- [x] **Step 5: Git checkpoint**
 
 `git-workflow` checkpoint 本任务文件。
 
@@ -520,7 +520,7 @@ Expected: PASS / 无类型错误。
 
 **Acceptance:** SW 使用 PNG icon/badge；同会话 `tag`+`renotify` 替换；notificationclick 同源聚焦 + postMessage，无客户端时 openWindow；缓存版本升级。
 
-- [ ] **Step 1: 写失败测试（源码断言）**
+- [x] **Step 1: 写失败测试（源码断言）**
 
 `web-notification-provider.test.ts` 追加：
 
@@ -539,12 +539,12 @@ test('service worker uses png icons, session tag replacement and origin-focus cl
 });
 ```
 
-- [ ] **Step 2: 运行确认 RED**
+- [x] **Step 2: 运行确认 RED**
 
 Run: `cd app && npm test -- --runTestsByPath __tests__/web-notification-provider.test.ts`
 Expected: FAIL。
 
-- [ ] **Step 3: 生成 PNG 资源**
+- [x] **Step 3: 生成 PNG 资源**
 
 ```powershell
 cd app
@@ -556,7 +556,7 @@ Remove-Item web/public/icons/.badge-tmp.svg
 
 渲染后 Read 两张 PNG 目检（icon-192 为完整图标；badge-96 为白色剪影、透明底）。
 
-- [ ] **Step 4: 改写 service-worker.js**
+- [x] **Step 4: 改写 service-worker.js**
 
 - `CACHE_NAME` → `'wheelmaker-web-pwa-v9'`；`ICON_ASSETS` 改为 `['/icons/icon.svg', '/icons/icon-192.png', '/icons/badge-96.png']`。
 - `showLocalNotification`：
@@ -607,12 +607,12 @@ self.addEventListener('notificationclick', event => {
 });
 ```
 
-- [ ] **Step 5: 运行确认 GREEN**
+- [x] **Step 5: 运行确认 GREEN**
 
 Run: `cd app && npm test -- --runTestsByPath __tests__/web-notification-provider.test.ts`
 Expected: PASS。
 
-- [ ] **Step 6: Git checkpoint**
+- [x] **Step 6: Git checkpoint**
 
 `git-workflow` checkpoint 本任务文件（含两张 PNG）。
 
@@ -628,18 +628,18 @@ Expected: PASS。
 
 **Acceptance:** 受信页面注入的 `WheelMakerDesktop` 含 `showNotification`；policy 在 trusted remote/localhost/localdev 三种模式授权 `desktopBridgeShowNotification`；bootstrap 页面不授权。
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 `webview_policy_test.go` 追加：三种 trusted 模式 `AllowsBridge(mode, 合法URL, true, desktopBridgeShowNotification)` 为 true；`desktopBootstrapPage` 与非受信 URL 为 false。
 
 init 脚本断言（找现有断言 `desktopRuntimeInitScript` 的测试文件，追加）：脚本包含 `showNotification: invoke('__wheelMakerDesktopShowNotification')`（trusted 与 localdev 两个对象字面量各一次，断言出现次数 ≥2）。
 
-- [ ] **Step 2: 运行确认 RED**
+- [x] **Step 2: 运行确认 RED**
 
 Run: `cd server && go test ./cmd/wheelmaker-desktop/ -run 'Notification|InitScript' -v`
 Expected: FAIL。
 
-- [ ] **Step 3: 实现**
+- [x] **Step 3: 实现**
 
 - `desktop_bridge.go`：const 增加 `desktopShowNotificationBinding = "__wheelMakerDesktopShowNotification"`；`desktopRuntimeInitScript` 的 trusted 对象与 localdev 对象各加一行 `showNotification: invoke('` + desktopShowNotificationBinding + `'),`。
 - `webview_policy.go`：`desktopBridgeAction` 枚举末尾加 `desktopBridgeShowNotification`；`AllowsBridge` 的 trusted switch 与 localdev switch 各加入该 action；bootstrap 白名单不加。
@@ -656,12 +656,12 @@ Expected: FAIL。
 
 `notifications` 为 Task 8 的 `*desktopNotificationCenter`，在 `Launch` 中创建、`defer notifications.close()`，作为新参数传入 `bindDesktopWindowBridge(w, hwnd, opts.Runtime, notifications)`。
 
-- [ ] **Step 4: 运行确认 GREEN + 包级回归**
+- [x] **Step 4: 运行确认 GREEN + 包级回归**
 
 Run: `cd server && go test ./cmd/wheelmaker-desktop/`
 Expected: PASS（Task 8 的 center 未落地前，可先用占位 `show` 返回 `{"ok":false,"error":"unavailable"}` 保证编译；Task 8 完成后占位被替换——若按 Task 7→8 顺序执行，此处允许该占位，Task 8 Step 中移除）。
 
-- [ ] **Step 5: Git checkpoint**
+- [x] **Step 5: Git checkpoint**
 
 `git-workflow` checkpoint 本任务文件。
 
@@ -676,7 +676,7 @@ Expected: PASS（Task 8 的 center 未落地前，可先用占位 `show` 返回 
 
 **Acceptance:** `show(rawJSON)` 校验并按会话键归并；小窗右下角堆叠、5 秒自动消失；点击聚焦主窗口（最小化则还原）并 Eval 派发 `wheelmaker:desktop-notification-click`；逻辑层（解析、归并、布局、动作计划）单测覆盖。
 
-- [ ] **Step 1: 写失败测试（逻辑层，fake ops）**
+- [x] **Step 1: 写失败测试（逻辑层，fake ops）**
 
 `desktop_notification_windows_test.go`：
 
@@ -749,12 +749,12 @@ func TestNotificationCenterCloseDestroysAll(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: 运行确认 RED**
+- [x] **Step 2: 运行确认 RED**
 
 Run: `cd server && go test ./cmd/wheelmaker-desktop/ -run 'NotificationCenter|ParseDesktopNotification' -v`
 Expected: 编译失败。
 
-- [ ] **Step 3: 实现 desktop_notification_windows.go**
+- [x] **Step 3: 实现 desktop_notification_windows.go**
 
 结构（逻辑/平台分离，ops 接口为测试缝）：
 
@@ -832,20 +832,20 @@ window.dispatchEvent(new CustomEvent('wheelmaker:desktop-notification-click', {d
 
 新增 user32/gdi32 procs 就近放在 `win32_window_windows.go`（RegisterClassExW/CreateWindowExW/DestroyWindow/SetTimer/KillTimer/BeginPaint/EndPaint/SetWindowRgn/IsIconic/SetForegroundWindow/GetForegroundWindow/AttachThreadInput/GetWindowThreadProcessId/SetActiveWindow）与 gdi32 新建 proc 块（CreateSolidBrush/FillRect 走 user32/DrawTextW/CreateFontW/Ellipse/CreateRoundRectRgn/SelectObject/DeleteObject/SetBkMode/SetTextColor/GetDpiForWindow 属 user32）。
 
-- [ ] **Step 4: 接入 Launch 并替换占位**
+- [x] **Step 4: 接入 Launch 并替换占位**
 
 `Launch`：`notifications := newDesktopNotificationCenter(hwnd, win32DesktopNotificationOps{...})`（hwnd 在 window 创建后），`defer notifications.close()`，传入 `bindDesktopWindowBridge`。移除 Task 7 占位。
 
-- [ ] **Step 5: 运行确认 GREEN + 回归**
+- [x] **Step 5: 运行确认 GREEN + 回归**
 
 Run: `cd server && go test ./cmd/wheelmaker-desktop/ && go build ./...`
 Expected: PASS。
 
-- [ ] **Step 6: 实机冒烟（人工证据）**
+- [ ] **Step 6: 实机冒烟（人工证据）**（延期为用户验收：逻辑层已单测覆盖，Win32 呈现与点击需在真实桌面运行中人工确认）
 
 `go run ./cmd/wheelmaker-desktop` 启动，开两个会话跑 prompt：窗口最小化时右下角弹小窗、同会话替换、点击聚焦并跳会话。截图/文字记录结果。
 
-- [ ] **Step 7: Git checkpoint**
+- [x] **Step 7: Git checkpoint**
 
 `git-workflow` checkpoint 本任务文件。
 
@@ -860,7 +860,7 @@ Expected: PASS。
 
 **Acceptance:** smallIcon 为透明底单色 vector；通知 ID 不含 turnIndex（同会话原地更新）；按 status setColor；深链与渠道不变。
 
-- [ ] **Step 1: 写失败测试（源码断言，沿用该测试文件现有风格）**
+- [x] **Step 1: 写失败测试（源码断言，沿用该测试文件现有风格）**
 
 ```kotlin
 @Test fun `uses monochrome notification icon and per-session notification id`() {
@@ -880,12 +880,12 @@ Expected: PASS。
 
 （`source(...)` 为该测试文件现有 helper；若现有断言引用了旧 ID 形态或 `ic_launcher`，同步更新。）
 
-- [ ] **Step 2: 运行确认 RED**
+- [x] **Step 2: 运行确认 RED**
 
 Run: `gradle -p mobile/android testDebugUnitTest --tests "com.wheelmaker.android.AndroidNotificationRuntimeTest"`
 Expected: FAIL。
 
-- [ ] **Step 3: 实现**
+- [x] **Step 3: 实现**
 
 `ic_notification.xml`：读取 `app/web/public/icons/icon-mark.svg` 的两个 chevron path，转为 vector drawable，group 用 `android:translateX="-160" android:translateY="-292"` 抵消 viewBox 偏移，填充 `#FFFFFF`：
 
@@ -915,17 +915,17 @@ val accent = when (input.optString("status")) {
 // NotificationCompat.Builder ... .setColor(accent)
 ```
 
-- [ ] **Step 4: 运行确认 GREEN**
+- [x] **Step 4: 运行确认 GREEN**
 
 Run: `gradle -p mobile/android testDebugUnitTest --tests "com.wheelmaker.android.AndroidNotificationRuntimeTest"`
 Expected: PASS。
 
-- [ ] **Step 5: 编译回归**
+- [x] **Step 5: 编译回归**
 
 Run: `gradle -p mobile/android assembleDebug`
 Expected: BUILD SUCCESSFUL（SDK 缺失等环境问题则记录证据并上报，不视为 RED）。
 
-- [ ] **Step 6: Git checkpoint**
+- [x] **Step 6: Git checkpoint**
 
 `git-workflow` checkpoint 本任务文件。
 
@@ -933,8 +933,8 @@ Expected: BUILD SUCCESSFUL（SDK 缺失等环境问题则记录证据并上报�
 
 ### Task 10: 全量验证与收尾
 
-- [ ] **Step 1: server 全量** — `cd server && go build ./... && go test ./...`，Expected: PASS。
-- [ ] **Step 2: app 全量** — `cd app && npm test`，Expected: PASS；`npm run build`（按 package.json 实际脚本名）确认 webpack 构建通过。
-- [ ] **Step 3: 验收逐项核对** — 对照 spec「验收」清单逐项记录结果与证据（实机项以 Task 8 Step 6 与人工确认记录为准）。
-- [ ] **Step 4: wiki 回顾** — 实施中产生的约定偏差补充进 `docs/wiki/features/prompt-completion-notifications.md`（仅限该已确认目标）。
-- [ ] **Step 5: finalize** — 调用 `git-workflow` finalize，按偏好 push 当前分支、main 干净则合入并 push main、cleanup worktree。
+- [x] **Step 1: server 全量** — `cd server && go build ./... && go test ./...`，Expected: PASS。
+- [x] **Step 2: app 全量** — `cd app && npm test`，Expected: PASS；`npm run build`（按 package.json 实际脚本名）确认 webpack 构建通过。
+- [x] **Step 3: 验收逐项核对** — 对照 spec「验收」清单逐项记录结果与证据（实机项以 Task 8 Step 6 与人工确认记录为准）。
+- [x] **Step 4: wiki 回顾** — 实施中产生的约定偏差补充进 `docs/wiki/features/prompt-completion-notifications.md`（仅限该已确认目标）。
+- [x] **Step 5: finalize** — 调用 `git-workflow` finalize，按偏好 push 当前分支、main 干净则合入并 push main、cleanup worktree。
