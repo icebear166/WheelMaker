@@ -24,6 +24,7 @@ export type DesktopWindowBridge = {
   cancelHtmlFileClipboard?: (transferId: string) => Promise<string> | string;
   getDesktopUpdateInfo?: () => Promise<DesktopUpdateInfo>;
   requestDesktopUpdate?: () => Promise<void>;
+  showNotification?: (rawJson: string) => Promise<string> | string;
 };
 
 export type DesktopLocalDevOperation = 'build' | 'start' | 'stop' | 'restart' | 'open-directory' | 'exit';

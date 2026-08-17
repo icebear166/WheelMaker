@@ -95,4 +95,56 @@ describe('notification provider selection', () => {
     expect(JSON.stringify(messages[0])).toContain('WM_PWA_NOTIFY');
     expect(JSON.stringify(messages[0])).toContain('wmSessionId');
   });
+
+  test('prefers desktop bridge over pwa when WheelMakerDesktop exposes showNotification', async () => {
+    const calls: string[] = [];
+    const provider = createNotificationProvider({
+      WheelMakerDesktop: {
+        enabled: true,
+        showNotification: (raw: string) => {
+          calls.push(raw);
+          return JSON.stringify({ok: true});
+        },
+      },
+      isSecureContext: true,
+      Notification: {permission: 'granted'},
+      navigator: {serviceWorker: {getRegistration: async () => null}},
+    } as any);
+
+    expect(provider.kind).toBe('desktop');
+    await expect(provider.getPermissionState()).resolves.toBe('granted');
+    await expect(provider.requestPermission()).resolves.toBe('granted');
+    await expect(provider.show(payload)).resolves.toBe(true);
+    expect(JSON.parse(calls[0])).toMatchObject({
+      type: 'chat.prompt.completed',
+      tag: 'proj-1:sess-1',
+    });
+  });
+
+  test('desktop show returns false on bridge failure and malformed results', async () => {
+    const failing = createNotificationProvider({
+      WheelMakerDesktop: {
+        enabled: true,
+        showNotification: () => {
+          throw new Error('gone');
+        },
+      },
+    } as any);
+    await expect(failing.show(payload)).resolves.toBe(false);
+
+    const malformed = createNotificationProvider({
+      WheelMakerDesktop: {enabled: true, showNotification: () => 'not-json'},
+    } as any);
+    await expect(malformed.show(payload)).resolves.toBe(false);
+  });
+
+  test('ignores desktop bridge without showNotification and falls through to pwa', () => {
+    const provider = createNotificationProvider({
+      WheelMakerDesktop: {enabled: true},
+      isSecureContext: true,
+      Notification: {permission: 'granted'},
+      navigator: {serviceWorker: {getRegistration: async () => null}},
+    } as any);
+    expect(provider.kind).toBe('pwa');
+  });
 });

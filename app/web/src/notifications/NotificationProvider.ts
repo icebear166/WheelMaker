@@ -8,6 +8,8 @@ import {
   getAndroidNativeRpcFacade,
   type AndroidNativeMessageTarget,
 } from '../platform/android/androidNativeMessageBridge';
+import { createDesktopNotificationProvider } from '../platform/desktop/desktopNotificationBridge';
+import type { DesktopWindowBridge } from '../platform/desktop/desktopRuntime';
 
 type NotificationLike = {
   permission?: NotificationPermission;
@@ -31,12 +33,13 @@ type NotificationProviderEnv = AndroidNotificationBridgeEnv & {
     };
   };
   WheelMakerAndroidNative?: AndroidNativeMessageTarget;
+  WheelMakerDesktop?: DesktopWindowBridge;
 };
 
 export type WheelMakerNotificationPermissionState = AndroidNotificationPermissionState;
 
 export type WheelMakerNotificationProvider = {
-  kind: 'android' | 'pwa' | 'unsupported';
+  kind: 'android' | 'desktop' | 'pwa' | 'unsupported';
   isSupported(): boolean;
   getPermissionState(): Promise<WheelMakerNotificationPermissionState>;
   requestPermission(): Promise<WheelMakerNotificationPermissionState>;
@@ -116,6 +119,13 @@ export function createNotificationProvider(
   const bridge = getAndroidNativeRpcFacade(env as unknown as Parameters<typeof getAndroidNativeRpcFacade>[0]);
   if (bridge) {
     return createAndroidNotificationProvider(bridge, env);
+  }
+  const desktopBridge = env.WheelMakerDesktop;
+  if (desktopBridge?.enabled === true) {
+    const desktopProvider = createDesktopNotificationProvider(desktopBridge);
+    if (desktopProvider.isSupported()) {
+      return desktopProvider;
+    }
   }
   const pwaProvider = createPwaProvider(env);
   return pwaProvider.isSupported() ? pwaProvider : unsupportedProvider;
