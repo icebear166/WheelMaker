@@ -347,6 +347,7 @@ import {
   createChatShareSnapshot,
   createHtmlShareSnapshot,
   createMarkdownShareSnapshot,
+  previewShareContent,
   shareKindForExternalPath,
   shareKindForPath,
   type ShareSnapshot,
@@ -21607,7 +21608,7 @@ export function App() {
         path: sharePath,
         kind,
         title: tab.title || sharePath.replaceAll('\\', '/').split('/').pop() || 'Document',
-        content: tab.content,
+        content: previewShareContent(kind, tab.content),
         ...(external ? {external: true} : {}),
       });
       return;

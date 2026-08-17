@@ -34,6 +34,11 @@ export function shareKindForExternalPath(path: string): ShareDocumentKind | unde
   return undefined;
 }
 
+// HTML preview tabs render through Registry and intentionally keep their local body empty.
+export function previewShareContent(kind: ShareDocumentKind, content: string): string | undefined {
+  return kind === 'html' && content === '' ? undefined : content;
+}
+
 export function createMarkdownShareSnapshot({
   title,
   html,

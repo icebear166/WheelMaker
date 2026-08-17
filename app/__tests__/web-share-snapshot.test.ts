@@ -3,6 +3,7 @@ import {
   createHtmlShareSnapshot,
   createMarkdownShareSnapshot,
   inspectShareHtmlDependencies,
+  previewShareContent,
   shareKindForExternalPath,
   shareKindForPath,
 } from '../web/src/shares/shareSnapshot';
@@ -24,6 +25,12 @@ describe('share snapshots', () => {
     expect(shareKindForExternalPath('/home/user/page.htm')).toBe('html');
     expect(shareKindForExternalPath('/home/user/../outside/notes.md')).toBe('markdown');
     expect(shareKindForExternalPath('/home/user/data.json')).toBeUndefined();
+  });
+
+  test('treats an empty HTML preview buffer as unavailable share content', () => {
+    expect(previewShareContent('html', '')).toBeUndefined();
+    expect(previewShareContent('markdown', '')).toBe('');
+    expect(previewShareContent('html', '<!doctype html>')).toBe('<!doctype html>');
   });
 
   test('keeps Markdown export output as the standalone HTML snapshot', () => {
