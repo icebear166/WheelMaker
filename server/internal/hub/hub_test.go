@@ -1628,6 +1628,164 @@ func TestReporterHubConfigAPIKeyUpdateAndSnapshot(t *testing.T) {
 	}
 }
 
+func TestReporterHubConfigMCPServerUpdatePersistsAndReloads(t *testing.T) {
+	var reloadCalls int
+	reporter := NewReporter(ReporterConfig{
+		HubID:    "hub-mcp-config",
+		StateDir: t.TempDir(),
+		ReloadAgentRuntime: func(context.Context, map[hubconfig.APIKeyName]string) error {
+			reloadCalls++
+			return nil
+		},
+	}, nil)
+	value, err := json.Marshal(hubconfig.MCPServerConfig{
+		Name:      "neo4j",
+		Enabled:   true,
+		Transport: hubconfig.MCPTransportStdio,
+		Command:   `C:\\Users\\test\\mcp-venvs\\neo4j\\Scripts\\python.exe`,
+		Args:      []string{"-m", "neo4j_mcp_server"},
+		Env: map[string]hubconfig.MCPValue{
+			"NEO4J_URI":      {Value: "bolt://127.0.0.1:7687"},
+			"NEO4J_PASSWORD": {Value: "secret", Secret: true},
+		},
+	})
+	if err != nil {
+		t.Fatalf("json.Marshal: %v", err)
+	}
+	if err := reporter.applyHubConfigUpdate(hubConfigUpdatePayload{
+		Section: "mcpServers",
+		Action:  "add",
+		Value:   string(value),
+	}); err != nil {
+		t.Fatalf("applyHubConfigUpdate: %v", err)
+	}
+	if reloadCalls != 1 {
+		t.Fatalf("reload calls = %d, want 1", reloadCalls)
+	}
+	snapshot, err := reporter.ensureHubConfigStore().Snapshot()
+	if err != nil {
+		t.Fatalf("Snapshot: %v", err)
+	}
+	if len(snapshot.MCPServers) != 1 || snapshot.MCPServers[0].Name != "neo4j" {
+		t.Fatalf("MCP snapshot = %#v", snapshot.MCPServers)
+	}
+	if got := snapshot.MCPServers[0].Env["NEO4J_PASSWORD"]; got.Value != "" || !got.Secret || !got.Configured {
+		t.Fatalf("password snapshot = %#v, want redacted configured secret", got)
+	}
+	serverID := snapshot.MCPServers[0].ID
+	updateValue, err := json.Marshal(hubconfig.MCPServerUpdate{
+		ID:        serverID,
+		Transport: hubconfig.MCPTransportStdio,
+		Command:   "python3",
+	})
+	if err != nil {
+		t.Fatalf("json.Marshal update: %v", err)
+	}
+	if err := reporter.applyHubConfigUpdate(hubConfigUpdatePayload{
+		Section: "mcpServers", Field: serverID, Action: "update", Value: string(updateValue),
+	}); err != nil {
+		t.Fatalf("update MCP server: %v", err)
+	}
+	if err := reporter.applyHubConfigUpdate(hubConfigUpdatePayload{
+		Section: "mcpServers", Field: serverID, Action: "disable",
+	}); err != nil {
+		t.Fatalf("disable MCP server: %v", err)
+	}
+	rawServers, err := reporter.ensureHubConfigStore().MCPServers()
+	if err != nil || len(rawServers) != 1 || rawServers[0].Enabled {
+		t.Fatalf("disabled MCP servers = %#v, %v", rawServers, err)
+	}
+	if err := reporter.applyHubConfigUpdate(hubConfigUpdatePayload{
+		Section: "mcpServers", Field: serverID, Action: "enable",
+	}); err != nil {
+		t.Fatalf("enable MCP server: %v", err)
+	}
+	if err := reporter.applyHubConfigUpdate(hubConfigUpdatePayload{
+		Section: "mcpServers", Field: serverID, Action: "delete",
+	}); err != nil {
+		t.Fatalf("delete MCP server: %v", err)
+	}
+	rawServers, err = reporter.ensureHubConfigStore().MCPServers()
+	if err != nil || len(rawServers) != 0 {
+		t.Fatalf("MCP servers after delete = %#v, %v", rawServers, err)
+	}
+	if reloadCalls != 5 {
+		t.Fatalf("reload calls = %d, want one per MCP mutation", reloadCalls)
+	}
+}
+
+func TestReporterHubConfigMCPImportAddsCodexEntriesWithoutOverwritingConflicts(t *testing.T) {
+	reporter := NewReporter(ReporterConfig{HubID: "hub-mcp-import", StateDir: t.TempDir()}, nil)
+	payload, err := json.Marshal(map[string]string{
+		"source": "codex",
+		"raw": `[mcp_servers.neo4j]
+command = "python"
+args = ["-m", "neo4j_mcp_server"]
+env = { NEO4J_URI = "bolt://127.0.0.1:7687" }
+`,
+	})
+	if err != nil {
+		t.Fatalf("json.Marshal: %v", err)
+	}
+	if err := reporter.applyHubConfigUpdate(hubConfigUpdatePayload{
+		Section: "mcpServers",
+		Action:  "import",
+		Value:   string(payload),
+	}); err != nil {
+		t.Fatalf("import: %v", err)
+	}
+	servers, err := reporter.ensureHubConfigStore().MCPServers()
+	if err != nil {
+		t.Fatalf("MCPServers: %v", err)
+	}
+	if len(servers) != 1 || servers[0].Name != "neo4j" || servers[0].ImportedFrom != "codex" {
+		t.Fatalf("imported servers = %#v", servers)
+	}
+
+	if err := reporter.applyHubConfigUpdate(hubConfigUpdatePayload{
+		Section: "mcpServers",
+		Action:  "import",
+		Value:   string(payload),
+	}); err == nil || !strings.Contains(strings.ToLower(err.Error()), "conflict") {
+		t.Fatalf("conflicting import error = %v, want explicit conflict", err)
+	}
+	servers, err = reporter.ensureHubConfigStore().MCPServers()
+	if err != nil || len(servers) != 1 {
+		t.Fatalf("servers after conflict = %#v, %v", servers, err)
+	}
+}
+
+func TestReporterHubConfigMCPImportPreviewIsSanitized(t *testing.T) {
+	reporter := NewReporter(ReporterConfig{HubID: "hub-mcp-preview", StateDir: t.TempDir()}, nil)
+	payload, err := json.Marshal(map[string]string{
+		"source": "codex",
+		"raw": `[mcp_servers.neo4j]
+command = "python"
+
+[mcp_servers.neo4j.env]
+NEO4J_PASSWORD = "preview-secret"
+
+[mcp_servers.legacy]
+type = "sse"
+url = "https://example.test/sse"
+`,
+	})
+	if err != nil {
+		t.Fatalf("json.Marshal: %v", err)
+	}
+	preview, err := reporter.previewMCPServers(string(payload))
+	if err != nil {
+		t.Fatalf("previewMCPServers: %v", err)
+	}
+	if len(preview.Servers) != 1 || len(preview.Issues) != 1 {
+		t.Fatalf("preview = %#v", preview)
+	}
+	password := preview.Servers[0].Env["NEO4J_PASSWORD"]
+	if password.Value != "" || !password.Secret || !password.Configured {
+		t.Fatalf("preview password = %#v", password)
+	}
+}
+
 func TestReporterHubConfigAPIKeyUpdateReloadsAgentsAndLimits(t *testing.T) {
 	var reloaded map[hubconfig.APIKeyName]string
 	reporter := NewReporter(ReporterConfig{

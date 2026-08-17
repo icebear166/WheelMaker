@@ -48,3 +48,99 @@ test('prepares a managed file download with project and csrf scope', async () =>
     timeoutMs: 20000,
   });
 });
+
+test('normalizes MCP config without returning secret values', async () => {
+  const request = jest.fn().mockResolvedValue({
+    payload: {
+      hubId: 'hub-mcp',
+      config: {
+        flickerBridge: {mode: 'v1', enabled: false},
+        apiKeys: {},
+        deepSeekPlatform: {configured: false},
+        mcpServers: [{
+          id: 'neo4j-id',
+          name: 'neo4j',
+          enabled: true,
+          transport: 'stdio',
+          command: 'python',
+          args: ['-m', 'neo4j_mcp_server'],
+          env: {
+            NEO4J_URI: {value: 'bolt://127.0.0.1:7687', secret: false, configured: true},
+            NEO4J_PASSWORD: {value: 'must-not-leak', secret: true, configured: true},
+          },
+        }],
+      },
+      mcpImportPreview: {
+        source: 'codex',
+        servers: [{
+          id: 'preview-id',
+          name: 'preview',
+          enabled: true,
+          transport: 'stdio',
+          command: 'python',
+        }],
+        issues: [{name: 'legacy', reason: 'SSE is unsupported'}],
+        conflicts: [{name: 'neo4j'}],
+      },
+    },
+  });
+  const repository = new RegistryRepository({request} as unknown as RegistryClient);
+
+  const result = await repository.getHubConfig('hub-mcp');
+  expect(result.config.mcpServers).toHaveLength(1);
+  expect(result.config.mcpServers[0].env?.NEO4J_URI.value).toBe('bolt://127.0.0.1:7687');
+  expect(result.config.mcpServers[0].env?.NEO4J_PASSWORD).toEqual({
+    value: undefined,
+    secret: true,
+    configured: true,
+    updatedAt: undefined,
+  });
+  expect(result.mcpImportPreview).toEqual({
+    source: 'codex',
+    servers: [{
+      id: 'preview-id',
+      name: 'preview',
+      enabled: true,
+      transport: 'stdio',
+      command: 'python',
+      args: undefined,
+      cwd: undefined,
+      env: undefined,
+      url: undefined,
+      headers: undefined,
+      createdAt: undefined,
+      updatedAt: undefined,
+      importedFrom: undefined,
+    }],
+    issues: [{name: 'legacy', reason: 'SSE is unsupported'}],
+    conflicts: ['neo4j'],
+  });
+});
+
+test('normalizes MCP HubState runtime status and keeps errors bounded to strings', () => {
+  const repository = new RegistryRepository({request: jest.fn()} as unknown as RegistryClient);
+  const state = repository.normalizeHubState({
+    hubId: 'hub-mcp',
+    instanceId: 'instance-1',
+    sections: {
+      mcp: {
+        availability: 'ready',
+        updateStatus: 'idle',
+        revision: 3,
+        data: {
+          servers: [
+            {serverId: 'neo4j-id', name: 'neo4j', state: 'failed', error: 'connection refused'},
+            {serverId: 'bad-id', name: 'bad', state: 'unexpected'},
+          ],
+        },
+      },
+    },
+  }, 'fallback');
+
+  expect(state.sections.mcp.data).toEqual({
+    servers: [
+      {serverId: 'neo4j-id', name: 'neo4j', state: 'failed', error: 'connection refused', updatedAt: undefined},
+      {serverId: 'bad-id', name: 'bad', state: 'not_started', error: undefined, updatedAt: undefined},
+    ],
+  });
+});

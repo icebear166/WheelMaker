@@ -54,6 +54,8 @@ type Client struct {
 	projectName string
 	cwd         string
 	stateDir    string
+	mcpServers  MCPServerSource
+	mcpStatus   MCPStatusObserver
 
 	registry *agent.ACPFactory
 
@@ -87,7 +89,19 @@ type Client struct {
 type RuntimeConfig struct {
 	AgentFactory *agent.ACPFactory
 	StateDir     string
+	MCPServers   MCPServerSource
+	MCPStatus    MCPStatusObserver
 }
+
+// MCPServerSource supplies the current Hub-scoped MCP configuration for a
+// newly created or newly connected agent runtime. It is evaluated on the
+// session/new or session/load path so changing the Hub setting does not
+// mutate an already active ACP session.
+type MCPServerSource func() ([]acp.MCPServer, error)
+
+// MCPStatusObserver receives provider/runtime lifecycle observations. It is
+// optional and never participates in the session success path.
+type MCPStatusObserver func([]acp.MCPServer, string, error)
 
 // New creates a Client for the given project.
 func New(store Store, projectName string, cwd string) *Client {
@@ -110,6 +124,8 @@ func NewWithRuntime(store Store, projectName string, cwd string, runtime Runtime
 		projectName:     projectName,
 		cwd:             cwd,
 		stateDir:        stateDir,
+		mcpServers:      runtime.MCPServers,
+		mcpStatus:       runtime.MCPStatus,
 		registry:        runtime.AgentFactory,
 		store:           store,
 		sessions:        make(map[string]*Session),
@@ -152,6 +168,73 @@ func NewWithRuntime(store Store, projectName string, cwd string, runtime Runtime
 	}
 	c.viewSink = c.sessionRecorder
 	return c
+}
+
+func cloneMCPServers(servers []acp.MCPServer) []acp.MCPServer {
+	if len(servers) == 0 {
+		return []acp.MCPServer{}
+	}
+	cloned := make([]acp.MCPServer, len(servers))
+	for index, server := range servers {
+		cloned[index] = server
+		cloned[index].Args = append([]string(nil), server.Args...)
+		cloned[index].Env = append([]acp.EnvVariable(nil), server.Env...)
+		cloned[index].Headers = append([]acp.HttpHeader(nil), server.Headers...)
+		cloned[index].Meta = append([]byte(nil), server.Meta...)
+	}
+	return cloned
+}
+
+func emptyMCPServers() []acp.MCPServer {
+	return []acp.MCPServer{}
+}
+
+func (c *Client) mcpServersForRuntime() ([]acp.MCPServer, error) {
+	if c == nil || c.mcpServers == nil {
+		return []acp.MCPServer{}, nil
+	}
+	servers, err := c.mcpServers()
+	if err != nil {
+		return nil, fmt.Errorf("read MCP server config: %w", err)
+	}
+	return cloneMCPServers(servers), nil
+}
+
+func splitMCPServersForCapabilities(servers []acp.MCPServer, capabilities acp.AgentCapabilities) (supported, unsupported []acp.MCPServer) {
+	supported = make([]acp.MCPServer, 0, len(servers))
+	unsupported = make([]acp.MCPServer, 0, len(servers))
+	for _, server := range servers {
+		switch strings.ToLower(strings.TrimSpace(server.Type)) {
+		case "", "stdio":
+			supported = append(supported, server)
+		case "http":
+			if capabilities.MCPCapabilities != nil && capabilities.MCPCapabilities.HTTP {
+				supported = append(supported, server)
+			} else {
+				unsupported = append(unsupported, server)
+			}
+		case "sse":
+			if capabilities.MCPCapabilities != nil && capabilities.MCPCapabilities.SSE {
+				supported = append(supported, server)
+			} else {
+				unsupported = append(unsupported, server)
+			}
+		default:
+			unsupported = append(unsupported, server)
+		}
+	}
+	return supported, unsupported
+}
+
+func mcpCapabilityError(servers []acp.MCPServer) error {
+	transport := "transport"
+	if len(servers) > 0 {
+		transport = strings.ToLower(strings.TrimSpace(servers[0].Type))
+		if transport == "" {
+			transport = "unknown"
+		}
+	}
+	return fmt.Errorf("agent does not support MCP %s transport", transport)
 }
 
 func defaultClientStateDir() string {
@@ -458,12 +541,43 @@ func (c *Client) createSessionState(ctx context.Context, agentType, title, creat
 
 	preference := loadProjectAgentPreferenceState(c.store, c.projectName, agentType)
 
+	mcpServers, err := c.mcpServersForRuntime()
+	if err != nil {
+		hubLogger(c.projectName).Warn("read MCP server config failed; continuing without MCP")
+		mcpServers = emptyMCPServers()
+	}
+	supportedMCPServers, unsupportedMCPServers := splitMCPServersForCapabilities(mcpServers, initResult.AgentCapabilities)
+	if len(unsupportedMCPServers) > 0 && c.mcpStatus != nil {
+		c.mcpStatus(unsupportedMCPServers, "failed", mcpCapabilityError(unsupportedMCPServers))
+	}
+	if c.mcpStatus != nil {
+		c.mcpStatus(supportedMCPServers, "starting", nil)
+	}
 	newResult, err := inst.SessionNew(ctx, acp.SessionNewParams{
 		CWD:        c.cwd,
-		MCPServers: emptyMCPServers(),
+		MCPServers: supportedMCPServers,
 	})
+	mcpFailed := false
 	if err != nil {
-		return nil, fmt.Errorf("create session new: %w", err)
+		// The only material difference in this request is MCPServers. Treat any
+		// failure from the MCP-enabled attempt as a provider/MCP compatibility
+		// failure and retry without MCP so MCP cannot block session creation.
+		if len(supportedMCPServers) > 0 && ctx.Err() == nil {
+			mcpFailed = true
+			if c.mcpStatus != nil {
+				c.mcpStatus(supportedMCPServers, "failed", err)
+			}
+			newResult, err = inst.SessionNew(ctx, acp.SessionNewParams{CWD: c.cwd, MCPServers: emptyMCPServers()})
+		}
+		if err != nil {
+			if c.mcpStatus != nil && !mcpFailed {
+				c.mcpStatus(supportedMCPServers, "failed", err)
+			}
+			return nil, fmt.Errorf("create session new: %w", err)
+		}
+	}
+	if c.mcpStatus != nil && !mcpFailed {
+		c.mcpStatus(supportedMCPServers, "connected", nil)
 	}
 	sessionID := strings.TrimSpace(newResult.SessionID)
 	if sessionID == "" {
@@ -1802,13 +1916,47 @@ func (c *Client) validateCurrentForkTarget(ctx context.Context, source *Session,
 	if !initResult.AgentCapabilities.LoadSession {
 		return nil, fmt.Errorf("agent %q does not support target session/load", agentType)
 	}
+	mcpServers, err := c.mcpServersForRuntime()
+	if err != nil {
+		hubLogger(c.projectName).Warn("read MCP server config for fork failed; continuing without MCP")
+		mcpServers = emptyMCPServers()
+	}
+	supportedMCPServers, unsupportedMCPServers := splitMCPServersForCapabilities(mcpServers, initResult.AgentCapabilities)
+	if len(unsupportedMCPServers) > 0 && c.mcpStatus != nil {
+		c.mcpStatus(unsupportedMCPServers, "failed", mcpCapabilityError(unsupportedMCPServers))
+	}
+	if c.mcpStatus != nil {
+		c.mcpStatus(supportedMCPServers, "starting", nil)
+	}
 	loaded, err := probe.SessionLoad(ctx, acp.SessionLoadParams{
 		SessionID:  targetSessionID,
 		CWD:        cwd,
-		MCPServers: emptyMCPServers(),
+		MCPServers: supportedMCPServers,
 	})
+	mcpFailed := false
 	if err != nil {
-		return nil, fmt.Errorf("session/load target %s: %w", targetSessionID, err)
+		// See createSessionState: a failed MCP-enabled load must not prevent the
+		// existing session from being restored without MCP.
+		if len(supportedMCPServers) > 0 && ctx.Err() == nil {
+			mcpFailed = true
+			if c.mcpStatus != nil {
+				c.mcpStatus(supportedMCPServers, "failed", err)
+			}
+			loaded, err = probe.SessionLoad(ctx, acp.SessionLoadParams{
+				SessionID:  targetSessionID,
+				CWD:        cwd,
+				MCPServers: emptyMCPServers(),
+			})
+		}
+		if err != nil && c.mcpStatus != nil && !mcpFailed {
+			c.mcpStatus(supportedMCPServers, "failed", err)
+		}
+		if err != nil {
+			return nil, fmt.Errorf("session/load target %s: %w", targetSessionID, err)
+		}
+	}
+	if c.mcpStatus != nil && !mcpFailed {
+		c.mcpStatus(supportedMCPServers, "connected", nil)
 	}
 	closeProbe = false
 	return &validatedCurrentForkTarget{instance: probe, initResult: initResult, loadResult: loaded}, nil
@@ -2126,6 +2274,8 @@ func (c *Client) wireSession(sess *Session) {
 	sess.registry = c.registry
 	sess.viewSink = c.viewSink
 	sess.store = c.store
+	sess.mcpServers = c.mcpServers
+	sess.mcpStatus = c.mcpStatus
 }
 
 // ListSessions returns a merged list of in-memory and persisted sessions,

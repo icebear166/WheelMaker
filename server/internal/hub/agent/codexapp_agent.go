@@ -15,6 +15,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/swm8023/wheelmaker/internal/hubconfig"
 	"github.com/swm8023/wheelmaker/internal/protocol"
 )
 
@@ -28,6 +29,7 @@ type codexAppProviderOptions struct {
 	CodexHome      string
 	SessionMapPath string
 	Environment    []string
+	MCPServers     []hubconfig.MCPServerConfig
 }
 
 type codexAppProvider struct {
@@ -51,10 +53,18 @@ func newCodexAppProvider(options codexAppProviderOptions) *codexAppProvider {
 }
 
 func NewCodexAppProvider() *codexAppProvider {
+	return NewCodexProviderWithMCP(nil)
+}
+
+// NewCodexProviderWithMCP creates the native Codex provider with a snapshot
+// of the enabled Hub MCP configuration. The snapshot is consumed when a new
+// Codex app-server process is launched.
+func NewCodexProviderWithMCP(servers []hubconfig.MCPServerConfig) *codexAppProvider {
 	return newCodexAppProvider(codexAppProviderOptions{
 		Provider:    protocol.ACPProviderCodex,
 		Title:       "Codex App Server",
 		AllowImages: true,
+		MCPServers:  cloneMCPServerConfigs(servers),
 	})
 }
 
@@ -112,6 +122,13 @@ func (p *codexAppProvider) Launch() (string, []string, []string, error) {
 		return "", nil, nil, err
 	}
 	args := []string{"app-server", "--listen", "stdio://"}
+	mcpArgs, mcpEnv, err := codexappMCPLaunchConfig(p.options.MCPServers, p.options.Environment)
+	if err != nil {
+		return "", nil, nil, fmt.Errorf("%s: prepare MCP configuration: %w", p.Name(), err)
+	}
+	args = append(args, mcpArgs...)
+	env := append([]string(nil), p.options.Environment...)
+	env = append(env, mcpEnv...)
 	if p.materializeCatalog != nil {
 		catalogPath, err := p.materializeCatalog(p.options.CodexHome)
 		if err != nil {
@@ -122,7 +139,7 @@ func (p *codexAppProvider) Launch() (string, []string, []string, error) {
 		}
 		args = append(args, p.configArgs(catalogPath)...)
 	}
-	return p.resolvedExecutable, args, append([]string(nil), p.options.Environment...), nil
+	return p.resolvedExecutable, args, env, nil
 }
 
 func codexappInstanceCreator(provider *codexAppProvider) InstanceCreator {
@@ -140,12 +157,12 @@ func codexappInstanceCreatorWithStarter(provider *codexAppProvider, starter code
 	}
 	pool := newCodexappRuntimePool(starter)
 	return func(ctx context.Context, cwd string) (Instance, error) {
-		exe, args, _, err := provider.Launch()
+		exe, args, env, err := provider.Launch()
 		if err != nil {
 			return nil, err
 		}
 		projectName := ProjectNameFromContext(ctx)
-		lease, err := pool.acquire(ctx, projectName, cwd, codexappLaunchFingerprint(exe, args))
+		lease, err := pool.acquire(ctx, projectName, cwd, codexappLaunchFingerprint(exe, args, env))
 		if err != nil {
 			return nil, err
 		}
@@ -171,6 +188,7 @@ func (p *codexAppProvider) connectionProfile() codexappConnProfile {
 		path := p.options.SessionMapPath
 		profile.SessionMapPath = func() (string, error) { return path, nil }
 	}
+	profile.MCPServerNames = enabledMCPServerNames(p.options.MCPServers)
 	return profile
 }
 
@@ -195,6 +213,7 @@ type codexappConnProfile struct {
 	Title          string
 	AllowImages    bool
 	SessionMapPath func() (string, error)
+	MCPServerNames []string
 }
 
 func nativeCodexappConnProfile() codexappConnProfile {
@@ -1130,7 +1149,8 @@ func (c *codexappConn) sendInitialize(ctx context.Context, params protocol.Initi
 		ProtocolVersion: json.Number("1"),
 		AgentInfo:       &protocol.AgentInfo{Name: string(c.profile.Provider), Title: c.profile.Title},
 		AgentCapabilities: protocol.AgentCapabilities{
-			LoadSession: true,
+			LoadSession:     true,
+			MCPCapabilities: &protocol.MCPCapabilities{HTTP: true},
 			PromptCapabilities: &protocol.PromptCapabilities{
 				Image:           c.profile.AllowImages,
 				Audio:           false,
@@ -1158,13 +1178,11 @@ func (c *codexappConn) sendInitialize(ctx context.Context, params protocol.Initi
 }
 
 func (c *codexappConn) sendSessionNew(ctx context.Context, p protocol.SessionNewParams, result any) error {
-	if len(p.MCPServers) > 0 {
-		return errors.New("codexapp phase 1 does not support MCP servers")
-	}
 	if err := c.refreshModels(ctx); err != nil {
 		return err
 	}
 	req := c.config.threadStartParams(firstNonEmptyString(p.CWD, c.cwd))
+	req.Config = codexappMCPThreadDisableConfig(c.profile.MCPServerNames, len(p.MCPServers) == 0)
 	var resp appServerThreadStartResponse
 	if err := c.runtime.request(ctx, "thread/start", req, &resp); err != nil {
 		return err
@@ -1192,9 +1210,6 @@ func (c *codexappConn) sendSessionNew(ctx context.Context, p protocol.SessionNew
 }
 
 func (c *codexappConn) sendSessionLoad(ctx context.Context, p protocol.SessionLoadParams, result any) error {
-	if len(p.MCPServers) > 0 {
-		return errors.New("codexapp phase 1 does not support MCP servers")
-	}
 	acpSessionID := strings.TrimSpace(p.SessionID)
 	if acpSessionID == "" {
 		return errors.New("codexapp session/load requires sessionId")
@@ -1210,6 +1225,7 @@ func (c *codexappConn) sendSessionLoad(ctx context.Context, p protocol.SessionLo
 	// dropped by the shared runtime dispatcher.
 	c.bindSessionIDs(acpSessionID, runtimeThreadID)
 	req := c.config.threadResumeParams(runtimeThreadID, cwd)
+	req.Config = codexappMCPThreadDisableConfig(c.profile.MCPServerNames, len(p.MCPServers) == 0)
 	var resp appServerThreadStartResponse
 	recreatedThread := false
 	if err := c.runtime.request(ctx, "thread/resume", req, &resp); err != nil {
@@ -1217,6 +1233,7 @@ func (c *codexappConn) sendSessionLoad(ctx context.Context, p protocol.SessionLo
 			return err
 		}
 		startReq := c.config.threadStartParams(cwd)
+		startReq.Config = codexappMCPThreadDisableConfig(c.profile.MCPServerNames, len(p.MCPServers) == 0)
 		if err := c.runtime.request(ctx, "thread/start", startReq, &resp); err != nil {
 			return err
 		}

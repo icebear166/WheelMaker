@@ -79,6 +79,8 @@ type Session struct {
 	registry    *agent.ACPFactory
 	store       Store
 	viewSink    SessionViewSink
+	mcpServers  MCPServerSource
+	mcpStatus   MCPStatusObserver
 
 	createdAt    time.Time
 	lastActiveAt time.Time
@@ -387,10 +389,15 @@ func (s *Session) closeRuntimeInstance() {
 	}
 }
 
-// emptyMCPServers returns an empty MCP server list for session/new and session/load calls.
-// Replace this helper when MCP config support is added.
-func emptyMCPServers() []acp.MCPServer {
-	return []acp.MCPServer{}
+func (s *Session) mcpServersForRuntime() ([]acp.MCPServer, error) {
+	if s == nil || s.mcpServers == nil {
+		return []acp.MCPServer{}, nil
+	}
+	servers, err := s.mcpServers()
+	if err != nil {
+		return nil, fmt.Errorf("read MCP server config: %w", err)
+	}
+	return cloneMCPServers(servers), nil
 }
 
 func (s *Session) ensureInitialized(ctx context.Context) (acp.InitializeResult, error) {
@@ -502,14 +509,49 @@ func (s *Session) ensureReady(ctx context.Context) error {
 		return fmt.Errorf("ensureReady: agent %q does not support session/load", agentName)
 	}
 
+	mcpServers, mcpErr := s.mcpServersForRuntime()
+	if mcpErr != nil {
+		hubLogger(s.projectName).Warn("read MCP server config for session load failed; continuing without MCP")
+		mcpServers = emptyMCPServers()
+	}
+	supportedMCPServers, unsupportedMCPServers := splitMCPServersForCapabilities(mcpServers, initResult.AgentCapabilities)
+	if len(unsupportedMCPServers) > 0 && s.mcpStatus != nil {
+		s.mcpStatus(unsupportedMCPServers, "failed", mcpCapabilityError(unsupportedMCPServers))
+	}
+	if s.mcpStatus != nil {
+		s.mcpStatus(supportedMCPServers, "starting", nil)
+	}
 	loadResult, loadErr := inst.SessionLoad(ctx, acp.SessionLoadParams{
 		SessionID:  savedSID,
 		CWD:        cwd,
-		MCPServers: emptyMCPServers(),
+		MCPServers: supportedMCPServers,
 	})
+	mcpFailed := false
 	if loadErr != nil {
-		finishLoad()
-		return fmt.Errorf("ensureReady: session/load: %w", loadErr)
+		// The only material difference in this request is MCPServers. Treat any
+		// failure from the MCP-enabled load as a provider/MCP compatibility
+		// failure and retry without MCP so MCP cannot block session restoration.
+		if len(supportedMCPServers) > 0 && ctx.Err() == nil {
+			mcpFailed = true
+			if s.mcpStatus != nil {
+				s.mcpStatus(supportedMCPServers, "failed", loadErr)
+			}
+			loadResult, loadErr = inst.SessionLoad(ctx, acp.SessionLoadParams{
+				SessionID:  savedSID,
+				CWD:        cwd,
+				MCPServers: emptyMCPServers(),
+			})
+		}
+		if loadErr != nil && s.mcpStatus != nil && !mcpFailed {
+			s.mcpStatus(supportedMCPServers, "failed", loadErr)
+		}
+		if loadErr != nil {
+			finishLoad()
+			return fmt.Errorf("ensureReady: session/load: %w", loadErr)
+		}
+	}
+	if s.mcpStatus != nil && !mcpFailed {
+		s.mcpStatus(supportedMCPServers, "connected", nil)
 	}
 
 	resolved := normalizeAgentConfigOptions(agentName, loadResult.ConfigOptions)

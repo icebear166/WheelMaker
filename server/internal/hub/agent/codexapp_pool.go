@@ -172,7 +172,7 @@ func (r *codexappRuntime) initialize(ctx context.Context, send func(context.Cont
 	return err
 }
 
-func codexappLaunchFingerprint(executable string, args []string) string {
+func codexappLaunchFingerprint(executable string, args, env []string) string {
 	hash := sha256.New()
 	write := func(value string) {
 		_, _ = fmt.Fprintf(hash, "%d:%s", len(value), value)
@@ -180,6 +180,9 @@ func codexappLaunchFingerprint(executable string, args []string) string {
 	write(executable)
 	for _, arg := range args {
 		write(arg)
+	}
+	for _, value := range env {
+		write(value)
 	}
 	return hex.EncodeToString(hash.Sum(nil))
 }

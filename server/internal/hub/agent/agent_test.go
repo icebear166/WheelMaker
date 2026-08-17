@@ -18,6 +18,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/swm8023/wheelmaker/internal/hubconfig"
 	"github.com/swm8023/wheelmaker/internal/protocol"
 	logger "github.com/swm8023/wheelmaker/internal/shared"
 )
@@ -1485,6 +1486,96 @@ func TestCodexAppProviderLaunchUsesAppServerStdio(t *testing.T) {
 	}
 }
 
+func TestCodexAppProviderLaunchMaterializesMCPWithoutSecretsInArgs(t *testing.T) {
+	provider := NewCodexProviderWithMCP([]hubconfig.MCPServerConfig{
+		{
+			Name:      "neo4j",
+			Enabled:   true,
+			Transport: hubconfig.MCPTransportStdio,
+			Command:   `C:\Users\test\mcp-venvs\neo4j\Scripts\python.exe`,
+			CWD:       `C:\Users\test\neo4j-project`,
+			Args:      []string{"-m", "neo4j_mcp_server"},
+			Env: map[string]hubconfig.MCPValue{
+				"NEO4J_URI":      {Value: "bolt://127.0.0.1:7687"},
+				"NEO4J_PASSWORD": {Value: "secret-password", Secret: true},
+			},
+		},
+		{
+			Name:      "remote",
+			Enabled:   true,
+			Transport: hubconfig.MCPTransportHTTP,
+			URL:       "https://mcp.example.test/mcp",
+			Headers: map[string]hubconfig.MCPValue{
+				"Authorization": {Value: "Bearer secret-token", Secret: true},
+				"X-Trace":       {Value: "wheelmaker"},
+			},
+		},
+	})
+	provider.lookPath = func(string) (string, error) { return `C:\bin\codex.exe`, nil }
+
+	exe, args, env, err := provider.Launch()
+	if err != nil {
+		t.Fatalf("Launch: %v", err)
+	}
+	if exe != `C:\bin\codex.exe` {
+		t.Fatalf("exe = %q", exe)
+	}
+	joinedArgs := strings.Join(args, "\n")
+	for _, want := range []string{
+		`mcp_servers.neo4j.command=`,
+		`mcp_servers.neo4j.args=["-m","neo4j_mcp_server"]`,
+		`mcp_servers.neo4j.cwd="C:\\Users\\test\\neo4j-project"`,
+		`mcp_servers.neo4j.env={ NEO4J_URI = "bolt://127.0.0.1:7687" }`,
+		`mcp_servers.neo4j.env_vars=["NEO4J_PASSWORD"]`,
+		`mcp_servers.remote.url="https://mcp.example.test/mcp"`,
+		`mcp_servers.remote.http_headers={ X-Trace = "wheelmaker" }`,
+		`mcp_servers.remote.env_http_headers={ Authorization = "`,
+	} {
+		if !strings.Contains(joinedArgs, want) {
+			t.Fatalf("args = %v, missing %q", args, want)
+		}
+	}
+	if strings.Contains(joinedArgs, "secret-password") || strings.Contains(joinedArgs, "secret-token") {
+		t.Fatalf("MCP secret leaked into launch arguments: %v", args)
+	}
+	if !slices.Contains(env, "NEO4J_PASSWORD=secret-password") {
+		t.Fatalf("env = %v, want Neo4j secret in process environment", env)
+	}
+	if !slices.ContainsFunc(env, func(value string) bool {
+		return strings.HasPrefix(value, "WHEELMAKER_MCP_HEADER_") && strings.HasSuffix(value, "=Bearer secret-token")
+	}) {
+		t.Fatalf("env = %v, want remote authorization secret in process environment", env)
+	}
+}
+
+func TestCodexAppProviderRejectsConflictingSecretMCPEnvironmentNames(t *testing.T) {
+	provider := NewCodexProviderWithMCP([]hubconfig.MCPServerConfig{
+		{
+			Name: "first", Enabled: true, Transport: hubconfig.MCPTransportStdio, Command: "first",
+			Env: map[string]hubconfig.MCPValue{"API_KEY": {Value: "first-secret", Secret: true}},
+		},
+		{
+			Name: "second", Enabled: true, Transport: hubconfig.MCPTransportStdio, Command: "second",
+			Env: map[string]hubconfig.MCPValue{"API_KEY": {Value: "second-secret", Secret: true}},
+		},
+	})
+	provider.lookPath = func(string) (string, error) { return `C:\\bin\\codex.exe`, nil }
+	if _, _, _, err := provider.Launch(); err == nil || !strings.Contains(strings.ToLower(err.Error()), "api_key") {
+		t.Fatalf("Launch error = %v, want secret environment collision", err)
+	}
+}
+
+func TestCodexAppLaunchFingerprintChangesWithMCPConfigWithoutExposingSecrets(t *testing.T) {
+	first := codexappLaunchFingerprint("codex", []string{"app-server"}, []string{"NEO4J_PASSWORD=first"})
+	second := codexappLaunchFingerprint("codex", []string{"app-server"}, []string{"NEO4J_PASSWORD=second"})
+	if first == second {
+		t.Fatalf("fingerprint did not change with MCP environment: %q", first)
+	}
+	if strings.Contains(first, "first") || strings.Contains(second, "second") {
+		t.Fatalf("fingerprint exposed MCP secret: %q %q", first, second)
+	}
+}
+
 func TestCXDeepSeekProviderLaunchUsesResponsesOverridesAndProcessOnlyKey(t *testing.T) {
 	stateDir := t.TempDir()
 	homeDir := filepath.Join(stateDir, ".data", "cx-deepseek")
@@ -1687,6 +1778,42 @@ func TestCodexAppInitializeAdvertisesOfficialAppServerCapabilities(t *testing.T)
 	}
 	if err := <-done; err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestCodexInitializeDeclaresHTTPMCPOnly(t *testing.T) {
+	transport := newFakeCodexappTransport()
+	runtime := newCodexappRuntimeWithTransport(transport)
+	t.Cleanup(func() { _ = runtime.close() })
+	conn := newCodexappConnWithRuntime(runtime, t.TempDir())
+	t.Cleanup(func() { _ = conn.Close() })
+
+	type outcome struct {
+		result protocol.InitializeResult
+		err    error
+	}
+	done := make(chan outcome, 1)
+	go func() {
+		var result protocol.InitializeResult
+		err := conn.Send(context.Background(), protocol.MethodInitialize, protocol.InitializeParams{}, &result)
+		done <- outcome{result: result, err: err}
+	}()
+	request := transport.nextSent(t)
+	if err := transport.emit(map[string]any{"id": request["id"], "result": map[string]any{}}); err != nil {
+		t.Fatal(err)
+	}
+	if notification := transport.nextSent(t); notification["method"] != "initialized" {
+		t.Fatalf("initialized notification = %#v", notification)
+	}
+	result := (<-done)
+	if result.err != nil {
+		t.Fatal(result.err)
+	}
+	if result.result.AgentCapabilities.MCPCapabilities == nil {
+		t.Fatal("MCP capabilities are missing")
+	}
+	if !result.result.AgentCapabilities.MCPCapabilities.HTTP || result.result.AgentCapabilities.MCPCapabilities.SSE {
+		t.Fatalf("MCP capabilities = %#v, want HTTP=true SSE=false", result.result.AgentCapabilities.MCPCapabilities)
 	}
 }
 
@@ -6386,7 +6513,12 @@ func TestCodexAppInstanceBasicChatAndConfigOptions(t *testing.T) {
 		t.Fatalf("prompt capabilities=%#v", initRes.AgentCapabilities.PromptCapabilities)
 	}
 
-	newRes, err := inst.SessionNew(context.Background(), protocol.SessionNewParams{CWD: t.TempDir()})
+	newRes, err := inst.SessionNew(context.Background(), protocol.SessionNewParams{
+		CWD: t.TempDir(),
+		MCPServers: []protocol.MCPServer{{
+			Type: "stdio", Name: "neo4j", Command: "python", Args: []string{"-m", "neo4j_mcp_server"},
+		}},
+	})
 	if err != nil {
 		t.Fatalf("SessionNew: %v", err)
 	}
@@ -6431,18 +6563,38 @@ func TestCodexAppInstanceBasicChatAndConfigOptions(t *testing.T) {
 	}
 }
 
-func TestCodexAppRejectsUnsupportedInputs(t *testing.T) {
+func TestCodexAppAcceptsMCPAndRejectsUnsupportedInputs(t *testing.T) {
 	tr := newFakeCodexappTransport()
 	rt := newCodexappRuntimeWithTransport(tr)
 	t.Cleanup(func() { _ = rt.close() })
 	conn := newCodexappConnWithRuntime(rt, t.TempDir())
+	tr.onSend = func(msg map[string]any) {
+		method, _ := msg["method"].(string)
+		id := msg["id"]
+		switch method {
+		case "model/list":
+			_ = tr.emit(map[string]any{"id": id, "result": map[string]any{
+				"data": []map[string]any{{"id": "gpt-5", "supportedReasoningEfforts": []map[string]any{{"reasoningEffort": "medium"}}, "defaultReasoningEffort": "medium"}},
+			}})
+		case "thread/start":
+			_ = tr.emit(map[string]any{"id": id, "result": map[string]any{
+				"thread": map[string]any{"id": "thread-mcp"},
+			}})
+		default:
+			t.Errorf("unexpected app-server method %q", method)
+		}
+	}
 
 	var newRes protocol.SessionNewResult
 	if err := conn.Send(context.Background(), protocol.MethodSessionNew, protocol.SessionNewParams{
 		CWD:        t.TempDir(),
-		MCPServers: []protocol.MCPServer{{Name: "fs", Command: "mcp"}},
+		MCPServers: []protocol.MCPServer{{Type: "stdio", Name: "fs", Command: "mcp"}},
 	}, &newRes); err == nil {
-		t.Fatal("SessionNew accepted non-empty MCP servers")
+		if newRes.SessionID != "thread-mcp" {
+			t.Fatalf("SessionNew sessionId = %q, want thread-mcp", newRes.SessionID)
+		}
+	} else {
+		t.Fatalf("SessionNew rejected effective MCP servers: %v", err)
 	}
 
 	var promptRes protocol.SessionPromptResult
@@ -6451,6 +6603,46 @@ func TestCodexAppRejectsUnsupportedInputs(t *testing.T) {
 		Prompt:    []protocol.ContentBlock{{Type: protocol.ContentBlockTypeAudio, Data: "abc"}},
 	}, &promptRes); err == nil {
 		t.Fatal("SessionPrompt accepted audio input")
+	}
+}
+
+func TestCodexAppEmptyMCPRetryDisablesLaunchOverlayPerThread(t *testing.T) {
+	tr := newFakeCodexappTransport()
+	rt := newCodexappRuntimeWithTransport(tr)
+	t.Cleanup(func() { _ = rt.close() })
+	conn := newCodexappConnWithRuntimeAndProfile(rt, t.TempDir(), "proj", codexappConnProfile{
+		Provider:       protocol.ACPProviderCodex,
+		MCPServerNames: []string{"neo4j", "remote"},
+	})
+	tr.onSend = func(msg map[string]any) {
+		switch msg["method"] {
+		case "model/list":
+			_ = tr.emit(map[string]any{"id": msg["id"], "result": map[string]any{
+				"data": []map[string]any{{"id": "gpt-5", "supportedReasoningEfforts": []map[string]any{{"reasoningEffort": "medium"}}, "defaultReasoningEffort": "medium"}},
+			}})
+		case "thread/start":
+			params, _ := msg["params"].(map[string]any)
+			config, _ := params["config"].(map[string]any)
+			if config["mcp_servers.neo4j.enabled"] != false || config["mcp_servers.remote.enabled"] != false {
+				t.Errorf("thread/start fallback config = %#v, want Hub MCP entries disabled", config)
+			}
+			_ = tr.emit(map[string]any{"id": msg["id"], "result": map[string]any{
+				"thread": map[string]any{"id": "thread-without-mcp"},
+			}})
+		default:
+			t.Errorf("unexpected app-server method %q", msg["method"])
+		}
+	}
+
+	var result protocol.SessionNewResult
+	if err := conn.Send(context.Background(), protocol.MethodSessionNew, protocol.SessionNewParams{
+		CWD:        t.TempDir(),
+		MCPServers: []protocol.MCPServer{},
+	}, &result); err != nil {
+		t.Fatalf("SessionNew fallback: %v", err)
+	}
+	if result.SessionID != "thread-without-mcp" {
+		t.Fatalf("session id = %q", result.SessionID)
 	}
 }
 

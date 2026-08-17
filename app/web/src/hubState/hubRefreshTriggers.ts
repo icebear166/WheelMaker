@@ -39,7 +39,7 @@ export class HubRefreshTriggers {
       this.expanded.add(hubId);
       requests.push(this.refresh(
         hubId,
-        ['flickerBridge', 'agentPackages', 'skills', 'fileIndex'],
+        ['flickerBridge', 'agentPackages', 'skills', 'fileIndex', 'mcp'],
         false,
       ));
     }
@@ -54,7 +54,7 @@ export class HubRefreshTriggers {
     try {
       await this.refresh(
         hubId,
-        ['flickerBridge', 'agentPackages', 'skills', 'fileIndex'],
+        ['flickerBridge', 'agentPackages', 'skills', 'fileIndex', 'mcp'],
         false,
       );
     } catch {

@@ -785,6 +785,8 @@ import type {
   RegistryFlickerBridgeStatus,
   RegistryHubConfig,
   RegistryHubConfigUpdatePayload,
+  RegistryHubMCPImportPreview,
+  RegistryHubMCPRuntimeStatusData,
   RegistryTerminal,
   RegistryTerminalChangedEvent,
   RegistryTerminalOutputEvent,
@@ -915,6 +917,7 @@ function deriveHubOperationalViews(snapshot: HubStoreSnapshot): {
   indexes: Record<string, RegistryFileIndexStatusResponse>;
   skills: Record<string, SkillHubView>;
   flicker: Record<string, RegistryFlickerBridgeStatus>;
+  mcp: Record<string, RegistryHubMCPRuntimeStatusData>;
 } {
   const wheelmaker: Record<string, WheelMakerUpdateHubView> = {};
   const gateway: Record<string, GatewayUpdateHubView> = {};
@@ -922,6 +925,7 @@ function deriveHubOperationalViews(snapshot: HubStoreSnapshot): {
   const indexes: Record<string, RegistryFileIndexStatusResponse> = {};
   const skills: Record<string, SkillHubView> = {};
   const flicker: Record<string, RegistryFlickerBridgeStatus> = {};
+  const mcp: Record<string, RegistryHubMCPRuntimeStatusData> = {};
   for (const [hubId, hub] of Object.entries(snapshot.hubs)) {
     const wheelSection = hub.sections.wheelmakerUpdate;
     if (wheelSection?.data) {
@@ -999,8 +1003,12 @@ function deriveHubOperationalViews(snapshot: HubStoreSnapshot): {
     if (flickerSection?.data) {
       flicker[hubId] = normalizeFlickerBridgeStatus(flickerSection.data);
     }
+    const mcpSection = hub.sections.mcp;
+    if (mcpSection?.data) {
+      mcp[hubId] = mcpSection.data as RegistryHubMCPRuntimeStatusData;
+    }
   }
-  return {wheelmaker, gateway, packages, indexes, skills, flicker};
+  return {wheelmaker, gateway, packages, indexes, skills, flicker, mcp};
 }
 type SkillDetailCacheEntry = {
   loading: boolean;
@@ -3161,6 +3169,7 @@ export function App() {
   const projectIndexByHubId = hubOperationalViews.indexes;
   const skillHubs = hubOperationalViews.skills;
   const chatHubFlickerBridgeStatuses = hubOperationalViews.flicker;
+  const chatHubMCPStatuses = hubOperationalViews.mcp;
   useEffect(() => {
     setProjectIndexScanPendingByProjectId(current => {
       let changed = false;
@@ -3506,6 +3515,7 @@ export function App() {
     loading: boolean;
     error: string;
     data: RegistryHubConfig | null;
+    mcpImportPreview?: RegistryHubMCPImportPreview;
     busyField: string;
   }>>({});
   const [chatTitleProjectMenuOpen, setChatTitleProjectMenuOpen, chatTitleProjectMenuExiting] = useMenuExitFlag();
@@ -3550,6 +3560,7 @@ export function App() {
         loading: true,
         error: '',
         data: current[hubId]?.data ?? null,
+        mcpImportPreview: undefined,
         busyField: current[hubId]?.busyField ?? '',
       },
     }));
@@ -3557,7 +3568,13 @@ export function App() {
       const result = await service.getHubConfig(hubId);
       setChatHubConfigByHubId(current => ({
         ...current,
-        [hubId]: {loading: false, error: '', data: result.config, busyField: current[hubId]?.busyField ?? ''},
+        [hubId]: {
+          loading: false,
+          error: '',
+          data: result.config,
+          mcpImportPreview: result.mcpImportPreview,
+          busyField: current[hubId]?.busyField ?? '',
+        },
       }));
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -3582,6 +3599,7 @@ export function App() {
         loading: false,
         error: '',
         data: current[hubId]?.data ?? null,
+        mcpImportPreview: undefined,
         busyField,
       },
     }));
@@ -3589,7 +3607,13 @@ export function App() {
       const result = await service.updateHubConfig(hubId, update);
       setChatHubConfigByHubId(current => ({
         ...current,
-        [hubId]: {loading: false, error: '', data: result.config, busyField: ''},
+        [hubId]: {
+          loading: false,
+          error: '',
+          data: result.config,
+          mcpImportPreview: result.mcpImportPreview,
+          busyField: '',
+        },
       }));
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -6772,6 +6796,7 @@ export function App() {
         colorMenuExiting={chatHubColorMenuExiting}
         onToggleColorMenu={hubId => setChatHubColorMenu(hubId ? {hubId} : null)}
         flickerStatuses={chatHubFlickerBridgeStatuses}
+        mcpStatuses={chatHubMCPStatuses}
         flickerActionHubId={chatHubFlickerBridgeActionHubId}
         onFlickerSwitchMode={(hubId, mode) => void runChatHubFlickerBridgeAction(hubId, 'switchMode', {mode})}
         hubConfigByHubId={chatHubConfigByHubId}

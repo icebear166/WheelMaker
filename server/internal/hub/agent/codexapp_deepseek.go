@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/swm8023/wheelmaker/internal/hub/agent/cxdeepseek"
+	"github.com/swm8023/wheelmaker/internal/hubconfig"
 	"github.com/swm8023/wheelmaker/internal/protocol"
 )
 
@@ -69,6 +70,10 @@ func codexVersionOutput(executable string) ([]byte, error) {
 }
 
 func NewCXDeepSeekProvider(stateDir, apiKey string) *codexAppProvider {
+	return NewCXDeepSeekProviderWithMCP(stateDir, apiKey, nil)
+}
+
+func NewCXDeepSeekProviderWithMCP(stateDir, apiKey string, servers []hubconfig.MCPServerConfig) *codexAppProvider {
 	homeDir, homeErr := cxDeepSeekHomeDir(stateDir)
 	provider := newCodexAppProvider(codexAppProviderOptions{
 		Provider:       protocol.ACPProviderCXDeepSeek,
@@ -80,6 +85,7 @@ func NewCXDeepSeekProvider(stateDir, apiKey string) *codexAppProvider {
 			"CODEX_HOME=" + homeDir,
 			cxDeepSeekAPIKeyEnv + "=" + apiKey,
 		},
+		MCPServers: cloneMCPServerConfigs(servers),
 	})
 	provider.configurationErr = homeErr
 	provider.minimumVersion = cxdeepseek.MinimumCodexVersion

@@ -46,7 +46,18 @@ func (r *Reporter) hubStateSectionHandlers() map[string]hubStateSectionHandler {
 			Refresh: r.refreshHubStateFlickerBridge,
 			Action:  r.actionHubStateFlickerBridge,
 		},
+		hubStateSectionMCP: {
+			Refresh: r.refreshHubStateMCP,
+		},
 	}
+}
+
+func (r *Reporter) refreshHubStateMCP(_ context.Context, _ hubStateRefreshInput) (any, error) {
+	configs, err := r.ensureHubConfigStore().MCPServers()
+	if err != nil {
+		return nil, err
+	}
+	return r.ensureMCPStatusStore().Sync(configs), nil
 }
 
 func (r *Reporter) refreshHubStateFlickerBridge(ctx context.Context, _ hubStateRefreshInput) (any, error) {

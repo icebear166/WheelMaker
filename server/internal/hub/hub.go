@@ -37,6 +37,7 @@ type Hub struct {
 	terminalManager     *terminalpkg.Manager
 	flickerBridge       *flickerBridgeManager
 	hubConfig           *hubconfig.Store
+	mcpStatus           *mcpStatusStore
 	flickerModels       *agent.FlickerModelStore
 	clientsByName       map[string]*client.Client
 }
@@ -56,6 +57,11 @@ func New(cfg *logger.AppConfig, dbPath string) *Hub {
 	stateDir := filepath.Dir(filepath.Dir(dbPath))
 	hubConfig := hubconfig.New(filepath.Join(stateDir, "db", "hub-config.json"))
 	apiKeys := readHubConfigAPIKeys(hubConfig)
+	mcpServerConfigs, err := hubMCPServerConfigs(hubConfig)
+	if err != nil {
+		hubLogger("").Warn("read hub config MCP servers failed: %v", err)
+		mcpServerConfigs = []hubconfig.MCPServerConfig{}
+	}
 	flickerAPIKey := apiKeys[hubconfig.APIKeyFlicker]
 	if flickerAPIKey == "" {
 		flickerAPIKey = defaultFlickerBridgeAPIKey
@@ -69,10 +75,12 @@ func New(cfg *logger.AppConfig, dbPath string) *Hub {
 		QwenAPIKey:        apiKeys[hubconfig.APIKeyQwen],
 		ZAIAPIKey:         apiKeys[hubconfig.APIKeyZAI],
 		FlickerModelStore: flickerModels,
+		MCPServers:        mcpServerConfigs,
 	}))
 	h.agentFactoryBuilder = agent.NewConfiguredACPFactory
 	h.flickerBridge = flickerBridge
 	h.hubConfig = hubConfig
+	h.mcpStatus = newMCPStatusStore()
 	h.flickerModels = flickerModels
 	return h
 }
@@ -100,6 +108,33 @@ func newHubWithFactory(cfg *logger.AppConfig, dbPath string, factory *agent.ACPF
 		agentFactory:        factory,
 		agentFactoryBuilder: agent.NewConfiguredACPFactory,
 		clientsByName:       map[string]*client.Client{},
+		mcpStatus:           newMCPStatusStore(),
+	}
+}
+
+func (h *Hub) observeMCPRuntime(servers []rp.MCPServer, state string, err error) {
+	if h == nil {
+		return
+	}
+	status := h.mcpStatus
+	if status == nil {
+		return
+	}
+	configs := []hubconfig.MCPServerConfig{}
+	if h.hubConfig != nil {
+		if loaded, loadErr := h.hubConfig.MCPServers(); loadErr == nil {
+			configs = loaded
+		}
+	}
+	names := make([]string, 0, len(servers))
+	for _, server := range servers {
+		names = append(names, server.Name)
+	}
+	status.Observe(configs, names, mcpRuntimeState(strings.TrimSpace(state)), err)
+	if h.regSync != nil {
+		// Runtime status is observational. Do not let registry publication
+		// latency participate in session/new or session/load success.
+		go h.regSync.publishMCPStatus()
 	}
 }
 
@@ -124,6 +159,10 @@ func (h *Hub) reloadAgentRuntime(ctx context.Context, apiKeys map[hubconfig.APIK
 	if builder == nil {
 		builder = agent.NewConfiguredACPFactory
 	}
+	mcpServerConfigs, err := hubMCPServerConfigs(h.hubConfig)
+	if err != nil {
+		return err
+	}
 	replacement := builder(agent.ACPFactoryOptions{
 		StateDir:          h.stateDir,
 		DeepSeekAPIKey:    apiKeys[hubconfig.APIKeyDeepSeek],
@@ -132,6 +171,7 @@ func (h *Hub) reloadAgentRuntime(ctx context.Context, apiKeys map[hubconfig.APIK
 		ZAIAPIKey:         apiKeys[hubconfig.APIKeyZAI],
 		FlickerAPIKey:     flickerAPIKey,
 		FlickerModelStore: h.flickerModels,
+		MCPServers:        mcpServerConfigs,
 	})
 	h.acpFactory().ReplaceFrom(replacement)
 	hubLogger("").Info("agent runtime reloaded agents=%v", h.acpFactory().Names())
@@ -253,6 +293,10 @@ func (h *Hub) buildProjectClient(ctx context.Context, pc logger.ProjectConfig, c
 	c := client.NewWithRuntime(store, pc.Name, cwd, client.RuntimeConfig{
 		AgentFactory: h.acpFactory(),
 		StateDir:     h.stateDir,
+		MCPServers: func() ([]rp.MCPServer, error) {
+			return hubMCPServers(h.hubConfig)
+		},
+		MCPStatus: h.observeMCPRuntime,
 	})
 	c.SetSessionHistoryRoot(filepath.Join(filepath.Dir(h.dbPath), "session"))
 	c.SetSessionViewSink(c)
@@ -354,6 +398,7 @@ func (h *Hub) setupRegistrySync() {
 		ReconnectInterval:  2 * time.Second,
 		StateDir:           filepath.Dir(filepath.Dir(h.dbPath)),
 		HubConfig:          h.hubConfig,
+		MCPStatus:          h.mcpStatus,
 		FlickerBridge:      h.flickerBridge,
 		ReloadAgentRuntime: h.reloadAgentRuntime,
 		RestartRuntime:     h.restartRuntime,

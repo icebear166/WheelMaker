@@ -22,6 +22,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -39,10 +40,13 @@ type testInjectedInstance struct {
 	initializeFn   func()
 	initResult     acp.InitializeResult
 	loadResult     acp.SessionLoadResult
+	loadParams     []acp.SessionLoadParams
 	loadUpdates    []acp.SessionUpdateParams
 	loadErr        error
 	loadFn         func(context.Context, acp.SessionLoadParams) (acp.SessionLoadResult, error)
 	newResult      *acp.SessionNewResult
+	newFn          func(context.Context, acp.SessionNewParams) (acp.SessionNewResult, error)
+	newParams      []acp.SessionNewParams
 	listResult     acp.SessionListResult
 	listErr        error
 	setConfigFn    func(context.Context, acp.SessionSetConfigOptionParams) ([]acp.ConfigOption, error)
@@ -209,7 +213,11 @@ func (i *testInjectedInstance) Initialize(context.Context, acp.InitializeParams)
 		AgentInfo: &acp.AgentInfo{Name: "test-injected-agent"},
 	}, nil
 }
-func (i *testInjectedInstance) SessionNew(context.Context, acp.SessionNewParams) (acp.SessionNewResult, error) {
+func (i *testInjectedInstance) SessionNew(ctx context.Context, params acp.SessionNewParams) (acp.SessionNewResult, error) {
+	i.newParams = append(i.newParams, params)
+	if i.newFn != nil {
+		return i.newFn(ctx, params)
+	}
 	if i.newResult != nil {
 		return *i.newResult, nil
 	}
@@ -221,6 +229,7 @@ func (i *testInjectedInstance) SessionNew(context.Context, acp.SessionNewParams)
 }
 func (i *testInjectedInstance) SessionLoad(ctx context.Context, params acp.SessionLoadParams) (acp.SessionLoadResult, error) {
 	i.loadCalls++
+	i.loadParams = append(i.loadParams, params)
 	if i.loadFn != nil {
 		return i.loadFn(ctx, params)
 	}
@@ -1325,6 +1334,233 @@ func TestCreateSessionWithAgent_UsesACPResultAsUnifiedSessionID(t *testing.T) {
 	}
 	if loaded == nil || loaded.AgentType != "claude" {
 		t.Fatalf("LoadSession = %+v, want agentType claude", loaded)
+	}
+}
+
+func TestClientPassesHubMCPServersToNewAndLoad(t *testing.T) {
+	store, err := NewStore(filepath.Join(t.TempDir(), "client.sqlite3"))
+	if err != nil {
+		t.Fatalf("NewStore: %v", err)
+	}
+	defer store.Close()
+
+	wantMCP := []acp.MCPServer{
+		{
+			Type:    "stdio",
+			Name:    "neo4j",
+			Command: "python",
+			Args:    []string{"-m", "neo4j_mcp_server"},
+			Env:     []acp.EnvVariable{{Name: "NEO4J_URI", Value: "bolt://127.0.0.1:7687"}},
+		},
+	}
+	mcpSource := func() ([]acp.MCPServer, error) {
+		return append([]acp.MCPServer(nil), wantMCP...), nil
+	}
+
+	newInstance := &testInjectedInstance{
+		name:       "claude",
+		initResult: acp.InitializeResult{ProtocolVersion: "0.1", AgentCapabilities: acp.AgentCapabilities{}},
+		newResult:  &acp.SessionNewResult{SessionID: "sess-new-mcp"},
+	}
+	loadInstance := &testInjectedInstance{
+		name:       "claude",
+		sessionID:  "sess-load-mcp",
+		initResult: acp.InitializeResult{ProtocolVersion: "0.1", AgentCapabilities: acp.AgentCapabilities{LoadSession: true}},
+		loadResult: acp.SessionLoadResult{},
+	}
+
+	c := NewWithRuntime(store, "proj1", t.TempDir(), RuntimeConfig{
+		AgentFactory: agent.NewACPFactory(),
+		MCPServers:   mcpSource,
+	})
+	defer c.Close()
+	c.registry.Register(acp.ACPProviderClaude, func(context.Context, string) (agent.Instance, error) {
+		return newInstance, nil
+	})
+	if _, err := c.CreateSession(context.Background(), "claude", "new"); err != nil {
+		t.Fatalf("CreateSession: %v", err)
+	}
+	if len(newInstance.newParams) != 1 || !reflect.DeepEqual(newInstance.newParams[0].MCPServers, wantMCP) {
+		t.Fatalf("SessionNew MCP servers = %#v, want %#v", newInstance.newParams, wantMCP)
+	}
+
+	if err := store.SaveSession(context.Background(), &SessionRecord{
+		ID:          "sess-load-mcp",
+		ProjectName: "proj1",
+		Status:      SessionPersisted,
+		AgentType:   "claude",
+		AgentJSON:   `{}`,
+	}); err != nil {
+		t.Fatalf("SaveSession: %v", err)
+	}
+	c.registry.Register(acp.ACPProviderClaude, func(context.Context, string) (agent.Instance, error) {
+		return loadInstance, nil
+	})
+	sess, err := c.SessionByID(context.Background(), "sess-load-mcp")
+	if err != nil {
+		t.Fatalf("SessionByID: %v", err)
+	}
+	if err := sess.ensureInstance(context.Background()); err != nil {
+		t.Fatalf("ensureInstance: %v", err)
+	}
+	if err := sess.ensureReady(context.Background()); err != nil {
+		t.Fatalf("ensureReady: %v", err)
+	}
+	if len(loadInstance.loadParams) != 1 || !reflect.DeepEqual(loadInstance.loadParams[0].MCPServers, wantMCP) {
+		t.Fatalf("SessionLoad MCP servers = %#v, want %#v", loadInstance.loadParams, wantMCP)
+	}
+}
+
+func TestClientFiltersHTTPMCPForAgentsWithoutHTTPCapability(t *testing.T) {
+	store, err := NewStore(filepath.Join(t.TempDir(), "client.sqlite3"))
+	if err != nil {
+		t.Fatalf("NewStore: %v", err)
+	}
+	defer store.Close()
+
+	newInstance := &testInjectedInstance{
+		name:       "claude",
+		initResult: acp.InitializeResult{ProtocolVersion: "0.1", AgentCapabilities: acp.AgentCapabilities{}},
+		newResult:  &acp.SessionNewResult{SessionID: "sess-filtered-mcp"},
+	}
+	var statusCalls []struct {
+		servers []acp.MCPServer
+		state   string
+		err     error
+	}
+	c := NewWithRuntime(store, "proj1", t.TempDir(), RuntimeConfig{
+		AgentFactory: agent.NewACPFactory(),
+		MCPServers: func() ([]acp.MCPServer, error) {
+			return []acp.MCPServer{
+				{Type: "stdio", Name: "local", Command: "local-mcp"},
+				{Type: "http", Name: "remote", URL: "https://example.test/mcp"},
+			}, nil
+		},
+		MCPStatus: func(servers []acp.MCPServer, state string, statusErr error) {
+			statusCalls = append(statusCalls, struct {
+				servers []acp.MCPServer
+				state   string
+				err     error
+			}{servers: servers, state: state, err: statusErr})
+		},
+	})
+	defer c.Close()
+	c.registry.Register(acp.ACPProviderClaude, func(context.Context, string) (agent.Instance, error) {
+		return newInstance, nil
+	})
+	if _, err := c.CreateSession(context.Background(), "claude", "new"); err != nil {
+		t.Fatalf("CreateSession: %v", err)
+	}
+	if len(newInstance.newParams) != 1 || len(newInstance.newParams[0].MCPServers) != 1 || newInstance.newParams[0].MCPServers[0].Name != "local" {
+		t.Fatalf("SessionNew MCP servers = %#v, want only stdio", newInstance.newParams)
+	}
+	if len(statusCalls) < 2 || statusCalls[0].state != "failed" || len(statusCalls[0].servers) != 1 || statusCalls[0].servers[0].Name != "remote" {
+		t.Fatalf("status calls = %#v, want unsupported HTTP failure", statusCalls)
+	}
+}
+
+func TestClientSendsEmptyMCPArrayWhenAllTransportsAreUnsupported(t *testing.T) {
+	store, err := NewStore(filepath.Join(t.TempDir(), "client.sqlite3"))
+	if err != nil {
+		t.Fatalf("NewStore: %v", err)
+	}
+	defer store.Close()
+
+	newInstance := &testInjectedInstance{
+		name:       "claude",
+		initResult: acp.InitializeResult{ProtocolVersion: "0.1", AgentCapabilities: acp.AgentCapabilities{}},
+		newResult:  &acp.SessionNewResult{SessionID: "sess-empty-mcp"},
+	}
+	c := NewWithRuntime(store, "proj1", t.TempDir(), RuntimeConfig{
+		AgentFactory: agent.NewACPFactory(),
+		MCPServers: func() ([]acp.MCPServer, error) {
+			return []acp.MCPServer{{Type: "http", Name: "remote", URL: "https://example.test/mcp"}}, nil
+		},
+	})
+	defer c.Close()
+	c.registry.Register(acp.ACPProviderClaude, func(context.Context, string) (agent.Instance, error) {
+		return newInstance, nil
+	})
+
+	if _, err := c.CreateSession(context.Background(), "claude", "new"); err != nil {
+		t.Fatalf("CreateSession: %v", err)
+	}
+	if len(newInstance.newParams) != 1 || newInstance.newParams[0].MCPServers == nil || len(newInstance.newParams[0].MCPServers) != 0 {
+		t.Fatalf("SessionNew MCP servers = %#v, want non-nil empty array", newInstance.newParams)
+	}
+}
+
+func TestClientMCPFailureDoesNotBlockSessionCreation(t *testing.T) {
+	store, err := NewStore(filepath.Join(t.TempDir(), "client.sqlite3"))
+	if err != nil {
+		t.Fatalf("NewStore: %v", err)
+	}
+	defer store.Close()
+
+	newInstance := &testInjectedInstance{
+		name:       "claude",
+		initResult: acp.InitializeResult{ProtocolVersion: "0.1", AgentCapabilities: acp.AgentCapabilities{}},
+		newFn: func(_ context.Context, params acp.SessionNewParams) (acp.SessionNewResult, error) {
+			if len(params.MCPServers) > 0 {
+				return acp.SessionNewResult{}, errors.New("invalid params")
+			}
+			return acp.SessionNewResult{SessionID: "sess-mcp-fallback"}, nil
+		},
+	}
+	var statusStates []string
+	c := NewWithRuntime(store, "proj1", t.TempDir(), RuntimeConfig{
+		AgentFactory: agent.NewACPFactory(),
+		MCPServers: func() ([]acp.MCPServer, error) {
+			return []acp.MCPServer{{Type: "stdio", Name: "neo4j", Command: "neo4j-mcp"}}, nil
+		},
+		MCPStatus: func(_ []acp.MCPServer, state string, _ error) {
+			statusStates = append(statusStates, state)
+		},
+	})
+	defer c.Close()
+	c.registry.Register(acp.ACPProviderClaude, func(context.Context, string) (agent.Instance, error) {
+		return newInstance, nil
+	})
+
+	if _, err := c.CreateSession(context.Background(), "claude", "new"); err != nil {
+		t.Fatalf("CreateSession: %v", err)
+	}
+	if len(newInstance.newParams) != 2 || len(newInstance.newParams[0].MCPServers) != 1 || newInstance.newParams[1].MCPServers == nil || len(newInstance.newParams[1].MCPServers) != 0 {
+		t.Fatalf("SessionNew params = %#v, want MCP attempt followed by empty fallback", newInstance.newParams)
+	}
+	if !slices.Contains(statusStates, "failed") {
+		t.Fatalf("status states = %#v, want MCP failure observation", statusStates)
+	}
+}
+
+func TestClientMCPConfigReadFailureDoesNotBlockSessionCreation(t *testing.T) {
+	store, err := NewStore(filepath.Join(t.TempDir(), "client.sqlite3"))
+	if err != nil {
+		t.Fatalf("NewStore: %v", err)
+	}
+	defer store.Close()
+
+	newInstance := &testInjectedInstance{
+		name:       "claude",
+		initResult: acp.InitializeResult{ProtocolVersion: "0.1", AgentCapabilities: acp.AgentCapabilities{}},
+		newResult:  &acp.SessionNewResult{SessionID: "sess-config-read-fallback"},
+	}
+	c := NewWithRuntime(store, "proj1", t.TempDir(), RuntimeConfig{
+		AgentFactory: agent.NewACPFactory(),
+		MCPServers: func() ([]acp.MCPServer, error) {
+			return nil, errors.New("corrupt MCP config")
+		},
+	})
+	defer c.Close()
+	c.registry.Register(acp.ACPProviderClaude, func(context.Context, string) (agent.Instance, error) {
+		return newInstance, nil
+	})
+
+	if _, err := c.CreateSession(context.Background(), "claude", "new"); err != nil {
+		t.Fatalf("CreateSession: %v", err)
+	}
+	if len(newInstance.newParams) != 1 || newInstance.newParams[0].MCPServers == nil || len(newInstance.newParams[0].MCPServers) != 0 {
+		t.Fatalf("SessionNew MCP servers = %#v, want non-nil empty array", newInstance.newParams)
 	}
 }
 

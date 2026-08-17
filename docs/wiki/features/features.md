@@ -13,3 +13,4 @@
 - [`prompt-completion-notifications.md`](prompt-completion-notifications.md)：Prompt 完成通知的统一内容模型、同会话替换语义、点击跳转行为和三端呈现约定。
 - [`public-sharing.md`](public-sharing.md)：项目文档、聊天回答与完整会话公共分享的来源、快照、管理、存储、到期和匿名 Gateway 访问边界。
 - [`skills-management.md`](skills-management.md)：以 Git source 为一级对象的 Skills 目录、刷新、安装状态合成和安全操作边界。
+- [`mcp-management.md`](mcp-management.md)：Hub 全局 MCP 配置、Codex/Claude 适配、原生配置导入预览和运行态边界。

@@ -133,21 +133,23 @@ func (m *appServerModel) UnmarshalJSON(data []byte) error {
 }
 
 type appServerThreadStartParams struct {
-	CWD            string `json:"cwd,omitempty"`
-	Model          string `json:"model,omitempty"`
-	Personality    string `json:"personality,omitempty"`
-	ApprovalPolicy string `json:"approvalPolicy,omitempty"`
-	Sandbox        string `json:"sandbox,omitempty"`
-	ServiceName    string `json:"serviceName,omitempty"`
+	CWD            string         `json:"cwd,omitempty"`
+	Model          string         `json:"model,omitempty"`
+	Personality    string         `json:"personality,omitempty"`
+	ApprovalPolicy string         `json:"approvalPolicy,omitempty"`
+	Sandbox        string         `json:"sandbox,omitempty"`
+	ServiceName    string         `json:"serviceName,omitempty"`
+	Config         map[string]any `json:"config,omitempty"`
 }
 
 type appServerThreadResumeParams struct {
-	ThreadID       string `json:"threadId"`
-	CWD            string `json:"cwd,omitempty"`
-	Model          string `json:"model,omitempty"`
-	Personality    string `json:"personality,omitempty"`
-	ApprovalPolicy string `json:"approvalPolicy,omitempty"`
-	Sandbox        string `json:"sandbox,omitempty"`
+	ThreadID       string         `json:"threadId"`
+	CWD            string         `json:"cwd,omitempty"`
+	Model          string         `json:"model,omitempty"`
+	Personality    string         `json:"personality,omitempty"`
+	ApprovalPolicy string         `json:"approvalPolicy,omitempty"`
+	Sandbox        string         `json:"sandbox,omitempty"`
+	Config         map[string]any `json:"config,omitempty"`
 }
 
 type appServerThreadStartResponse struct {

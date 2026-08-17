@@ -41,3 +41,9 @@ Codex 原生 Goal status 直接映射为 WheelMaker 通用 status。`thread/goal
 模型元数据来自随 WheelMaker 版本发布、经过校验的 DeepSeek 官方 Codex catalog 资产。catalog 同时暴露 `deepseek-v4-flash` 与 `deepseek-v4-pro`，其中 Flash 保持默认模型，Pro 通过现有模型选择器按需启用；WheelMaker 不根据通用 `/models` 推导 Codex catalog，也不运行远程安装脚本。两个条目保留官方文本输入、function tools、freeform `apply_patch`、text `web_search`、`low` / `high` / `max` 推理档位、1M 上下文窗口和模型指令；图片与文件输入不在能力声明内。Codex CLI 最低版本为 `0.144.0`。
 
 来源：[`../../scope/2026-07-31-cx-deepseek-codex-mode.md`](../../scope/2026-07-31-cx-deepseek-codex-mode.md)、[DeepSeek Responses API](https://api-docs.deepseek.com/guides/responses_api/)、[DeepSeek Codex 集成](https://api-docs.deepseek.com/quick_start/agent_integrations/codex/)。
+
+## Hub MCP
+
+Codex 的 WheelMaker 托管 MCP 配置由 HubConfig 持有。新建 Codex app-server runtime 时，Hub 将启用的 STDIO 与 Streamable HTTP 条目 materialize 为 `-c mcp_servers.*` 分层覆盖；普通值进入配置覆盖，secret env/header 值只通过子进程环境注入，并以 `env_vars` / `env_http_headers` 引用。用户原生 `config.toml` 不会被清空或回写，未被 Hub materialize 的原生条目仍由 Codex 保持，同名字段遵循 Codex 原生的合并/覆盖规则。MCP 变化通过 launch fingerprint 区分 runtime，现有 Session 继续使用原 runtime。
+
+Codex ACP capability 当前声明 HTTP MCP，未声明 SSE；MCP server 的单项连接失败由 HubState `mcp` 作为非阻塞状态展示，能力不匹配的 transport 会在 ACP session 参数中被过滤；带 MCP 的 session 尝试失败时会自动用空 MCP 列表重试普通会话。Hub 菜单支持一次性导入 Codex 原生 TOML，当前 Neo4j 形态（python executable、`-m neo4j_mcp_server`、`NEO4J_*` 环境变量）可以映射到该配置模型。完整的 Hub 配置、Claude 适配、导入与安全边界见 [`../features/mcp-management.md`](../features/mcp-management.md)。
