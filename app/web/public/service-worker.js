@@ -1,15 +1,25 @@
 /* eslint-env serviceworker */
 
-const CACHE_NAME = 'wheelmaker-web-pwa-v8';
-const ICON_ASSETS = ['/icons/icon.svg'];
+const CACHE_NAME = 'wheelmaker-web-pwa-v9';
+const ICON_ASSETS = ['/icons/icon.svg', '/icons/icon-192.png', '/icons/badge-96.png'];
+const STATUS_SYMBOL = {
+  completed: '✓',
+  failed: '✗',
+  cancelled: '■',
+  interrupted: '■',
+};
 function showLocalNotification(payload = {}) {
   const title = payload.title || 'WheelMaker';
-  const body = payload.body || 'You have new updates';
+  const rawBody = payload.body || 'You have new updates';
+  const symbol = STATUS_SYMBOL[payload.status] || '';
+  const body = symbol ? `${symbol} ${rawBody}` : rawBody;
   const url = payload.url || '/';
   return self.registration.showNotification(title, {
     body,
-    icon: payload.icon || '/icons/icon.svg',
-    badge: payload.badge || '/icons/icon.svg',
+    icon: payload.icon || '/icons/icon-192.png',
+    badge: payload.badge || '/icons/badge-96.png',
+    tag: payload.tag || undefined,
+    renotify: Boolean(payload.tag),
     data: { url },
   });
 }
@@ -101,7 +111,8 @@ self.addEventListener('notificationclick', event => {
       .matchAll({ type: 'window', includeUncontrolled: true })
       .then(windowClients => {
         for (const client of windowClients) {
-          if (client.url === targetUrl && 'focus' in client) {
+          if (new URL(client.url).origin === self.location.origin && 'focus' in client) {
+            client.postMessage({ type: 'WM_NOTIFICATION_NAVIGATE', url: targetUrl });
             return client.focus();
           }
         }

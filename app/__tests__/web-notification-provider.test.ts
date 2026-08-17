@@ -147,4 +147,17 @@ describe('notification provider selection', () => {
     } as any);
     expect(provider.kind).toBe('pwa');
   });
+
+  test('service worker uses png icons, session tag replacement and origin-focus click', () => {
+    const root = path.resolve(__dirname, '..');
+    const sw = fs.readFileSync(path.join(root, 'web/public/service-worker.js'), 'utf8');
+    expect(sw).toContain("'/icons/icon-192.png'");
+    expect(sw).toContain("'/icons/badge-96.png'");
+    expect(sw).toContain('renotify');
+    expect(sw).toContain('payload.tag');
+    expect(sw).toContain('WM_NOTIFICATION_NAVIGATE');
+    expect(sw).not.toContain('client.url === targetUrl');
+    expect(fs.existsSync(path.join(root, 'web/public/icons/icon-192.png'))).toBe(true);
+    expect(fs.existsSync(path.join(root, 'web/public/icons/badge-96.png'))).toBe(true);
+  });
 });
