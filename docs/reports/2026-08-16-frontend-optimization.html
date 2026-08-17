@@ -1,35 +1,86 @@
 <!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>前端代码优化审计报告 · 2026-08-16</title><style>
-:root{color-scheme:light}
+:root{
+  color-scheme:light;
+  --paper:#f3f6f8;
+  --surface:#ffffff;
+  --surface-soft:#edf3f6;
+  --surface-warm:#fff8eb;
+  --ink:#15242d;
+  --muted:#5c6b74;
+  --quiet:#7f8d94;
+  --line:#d7e1e6;
+  --line-strong:#c0d0d8;
+  --accent:#176fa3;
+  --accent-deep:#0c4d72;
+  --warning:#a86716;
+  --shadow:0 16px 40px rgb(28 55 70 / 8%);
+  --shadow-small:0 4px 14px rgb(28 55 70 / 6%);
+}
 *{box-sizing:border-box}
-body{margin:0;background:#f9f9f7;color:#0b0b0b;font:14px/1.65 system-ui,-apple-system,"Segoe UI","Microsoft YaHei",sans-serif}
-.wrap{max-width:980px;margin:0 auto;padding:32px 28px 80px}
-header.hero{border-bottom:1px solid #e1e0d9;padding-bottom:20px;margin-bottom:28px}
-h1{font-size:26px;margin:0 0 6px}h2{font-size:20px;margin:44px 0 12px;padding-top:10px;border-top:1px solid #e1e0d9}
-h3{font-size:16px;margin:26px 0 8px}h4{font-size:14px;margin:18px 0 6px}
-.meta{color:#52514e;font-size:13px}
-.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:18px 0}
-.tile{background:#fcfcfb;border:1px solid #e1e0d9;border-radius:8px;padding:10px 14px}
-.tile .v{font-size:22px;font-weight:600}.tile .k{font-size:12px;color:#52514e}
-.tile.warn .v{color:#b3540d}
-table{border-collapse:collapse;width:100%;margin:10px 0 18px;font-size:13px;background:#fcfcfb}
-th{font-size:12px;color:#52514e;text-align:left;font-weight:600;border-bottom:2px solid #e1e0d9;padding:6px 8px;background:#f4f3ef;position:sticky;top:0}
-td{border-bottom:1px solid #e1e0d9;padding:5px 8px;vertical-align:top}
-td.c-id,td.c-n,th.c-n{text-align:right;white-space:nowrap}td.c-ty{white-space:nowrap}
-td.c-ev{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:11.5px;color:#52514e}
-td.c-note{font-size:12px;color:#52514e}
-tfoot td{font-weight:600;border-bottom:none;border-top:2px solid #e1e0d9;background:#f4f3ef}
-code{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:12px;background:#f0efec;padding:0 4px;border-radius:3px}
-.chart{background:#fcfcfb;border:1px solid #e1e0d9;border-radius:8px;padding:14px;margin:12px 0 20px}
+body{margin:0;background:var(--paper);color:var(--ink);font:14px/1.7 system-ui,-apple-system,"Segoe UI","Microsoft YaHei UI","Microsoft YaHei",sans-serif}
+::selection{background:#b9d9e9;color:var(--ink)}
+.wrap{max-width:1240px;margin:0 auto;padding:44px clamp(18px,4vw,52px) 96px}
+header.hero{position:relative;margin-bottom:24px;padding:30px 32px 28px;border:1px solid var(--line);border-radius:18px;background:var(--surface);box-shadow:var(--shadow);overflow:hidden}
+header.hero::before{content:"SYSTEM REVIEW / 2026.08";display:block;margin-bottom:18px;color:var(--accent);font:700 10px/1.2 ui-monospace,SFMono-Regular,Consolas,monospace;letter-spacing:.16em}
+header.hero::after{content:"";position:absolute;top:0;left:32px;width:84px;height:4px;border-radius:0 0 4px 4px;background:var(--accent)}
+h1{max-width:15ch;margin:0 0 12px;color:var(--ink);font-size:clamp(32px,5vw,56px);font-weight:760;letter-spacing:-.055em;line-height:1.05;text-wrap:balance}
+h2{scroll-margin-top:20px;margin:56px 0 16px;padding-top:16px;border-top:1px solid var(--line-strong);color:var(--ink);font-size:clamp(20px,2.5vw,28px);font-weight:730;letter-spacing:-.035em;line-height:1.2;text-wrap:balance}
+h3{margin:32px 0 10px;color:var(--ink);font-size:18px;font-weight:720;letter-spacing:-.02em;line-height:1.3;text-wrap:balance}
+h4{margin:22px 0 8px;color:var(--accent-deep);font-size:13px;font-weight:750;letter-spacing:.04em;line-height:1.3;text-transform:uppercase}
+.meta{max-width:88ch;color:var(--muted);font-size:13px;line-height:1.75;text-wrap:pretty}
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin:20px 0 26px}
+.tile{position:relative;min-height:104px;display:flex;flex-direction:column;justify-content:space-between;padding:16px 17px 14px;border:1px solid var(--line);border-radius:12px;background:var(--surface);box-shadow:var(--shadow-small);overflow:hidden}
+.tile::before{content:"";position:absolute;inset:0 0 auto;height:3px;background:var(--accent)}
+.tile .v{font:760 26px/1.1 ui-monospace,SFMono-Regular,Consolas,monospace;letter-spacing:-.06em;font-variant-numeric:tabular-nums}.tile .k{margin-top:14px;color:var(--muted);font-size:12px;line-height:1.4;text-wrap:pretty}
+.tile.warn::before{background:var(--warning)}.tile.warn .v{color:var(--warning)}
+table{border-collapse:separate;border-spacing:0;width:100%;margin:12px 0 22px;border:1px solid var(--line);border-radius:12px;background:var(--surface);box-shadow:var(--shadow-small);font-size:13px;overflow:hidden}
+th{position:sticky;top:10px;z-index:1;padding:9px 10px;border-bottom:1px solid var(--line-strong);background:var(--surface-soft);color:var(--accent-deep);font-size:11px;letter-spacing:.055em;text-align:left;font-weight:760;text-transform:uppercase}
+td{padding:8px 10px;border-bottom:1px solid #e5ecef;vertical-align:top}
+tbody tr:nth-child(even) td{background:#fbfdfe}tbody tr:hover td{background:#eef7fb}
+tbody tr:last-child td{border-bottom:0}
+td.c-id,td.c-n,th.c-n{text-align:right;white-space:nowrap}td.c-ty{white-space:nowrap;color:var(--accent-deep);font-weight:650}
+td.c-ev{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:11.5px;color:var(--muted);overflow-wrap:anywhere}
+td.c-note{font-size:12px;color:var(--muted)}
+tfoot td{border-top:2px solid var(--line-strong);border-bottom:0;background:var(--surface-soft);color:var(--ink);font-weight:700}
+code{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:12px;background:#e8f1f5;color:var(--accent-deep);padding:2px 5px;border:1px solid #d4e4eb;border-radius:5px;overflow-wrap:anywhere}
+a{color:var(--accent);text-underline-offset:3px}a:hover{color:var(--accent-deep)}a:focus-visible{outline:2px solid var(--accent);outline-offset:3px;border-radius:3px}
+.chart{margin:14px 0 22px;padding:16px;border:1px solid var(--line);border-radius:14px;background:var(--surface);box-shadow:var(--shadow-small)}
 .chart svg{width:100%;height:auto;display:block}
-.note{background:#f4f3ef;border-left:3px solid #2a78d6;padding:10px 14px;border-radius:0 6px 6px 0;margin:12px 0;font-size:13px}
-.gap{background:#fdf6ee;border-left:3px solid #eda100}
-ul{margin:6px 0 12px;padding-left:22px}li{margin:3px 0}
-.toc{background:#fcfcfb;border:1px solid #e1e0d9;border-radius:8px;padding:12px 18px;font-size:13px}
-.toc a{color:#2a78d6;text-decoration:none}
-.appr{white-space:nowrap;font-size:12px;color:#52514e}
-.small{font-size:12px;color:#52514e}
-.fig-cap{font-size:12px;color:#898781;margin:-12px 0 18px}
+.note{margin:14px 0;padding:13px 16px;border:1px solid #c9e0ec;border-left:4px solid var(--accent);border-radius:0 10px 10px 0;background:#eef7fb;color:#29434f;font-size:13px}
+.gap{border-color:#ecd9ae;border-left-color:var(--warning);background:var(--surface-warm);color:#5b421e}
+ul{margin:8px 0 16px;padding-left:24px}li{margin:5px 0}li::marker{color:var(--accent)}
+.toc{position:sticky;top:12px;z-index:4;display:flex;flex-wrap:wrap;gap:6px 13px;margin-bottom:30px;padding:11px 14px;border:1px solid var(--line);border-radius:10px;background:rgb(255 255 255 / 92%);box-shadow:var(--shadow-small);backdrop-filter:blur(10px);font-size:12px;line-height:1.5}
+.toc b{color:var(--ink);font:750 11px/1.5 ui-monospace,SFMono-Regular,Consolas,monospace;letter-spacing:.12em;text-transform:uppercase}.toc a{color:var(--accent);text-decoration:none}
+.appr{white-space:nowrap;font-size:12px;color:var(--muted)}
+.small{color:var(--muted);font-size:12px;line-height:1.55;text-wrap:pretty}
+.fig-cap{margin:-10px 0 22px;color:var(--quiet);font-size:12px;line-height:1.5;text-wrap:pretty}
+pre{margin:14px 0 22px;padding:18px;overflow:auto;border:1px solid var(--line);border-radius:12px;background:#182932;color:#d7e9ef;font:12px/1.65 ui-monospace,SFMono-Regular,Consolas,monospace;tab-size:2}
+@media (max-width:760px){
+  .wrap{padding:20px 14px 64px}
+  header.hero{padding:24px 20px 22px;border-radius:14px}
+  header.hero::after{left:20px}
+  h1{max-width:none;font-size:clamp(30px,11vw,44px)}
+  h2{margin-top:42px;font-size:22px}
+  .toc{position:relative;top:auto;margin-bottom:24px;padding:10px 12px}
+  .tiles{grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}
+  .tile{min-height:94px;padding:13px 12px 12px}
+  .tile .v{font-size:20px}
+  table{display:block;max-width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch;white-space:normal}
+  th,td{min-width:96px}
+  td.c-id,td.c-n,th.c-n{min-width:54px}
+  td.c-ev{min-width:190px}
+  .chart{padding:10px;border-radius:10px}
+}
+@media print{
+  body{background:#fff}
+  .wrap{max-width:none;padding:0}
+  header.hero,.tile,.chart,table,.toc{box-shadow:none}
+  .toc{position:static;background:#fff}
+  h2{break-before:page}
+  table{font-size:10px}
+  th{position:static}
+}
 </style></head><body><div class="wrap">
 <header class="hero"><h1>前端代码优化审计报告</h1>
 <div class="meta">范围 <code>app/web/src</code> 非测试 TS/TSX（27 个顶层条目 · 273 个文件 · 73,361 行）· 审计日期 2026-08-16 · 功能等效基准 <code>docs/wiki/frontend-interaction/</code> 全部页面 · 多 agent 只读全量精读 + 主会话交叉去重</div></header>
