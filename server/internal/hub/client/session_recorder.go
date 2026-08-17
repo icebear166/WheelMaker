@@ -1122,10 +1122,10 @@ func (r *SessionRecorder) handlePromptFinishedLocked(ctx context.Context, parsed
 	if err != nil {
 		return err
 	}
-	return r.finishPromptStateLocked(ctx, event.SessionID, state, stopReason, strings.TrimSpace(result.Message), parsedEvent.artifacts, parsedEvent.forkPoint, event.UpdatedAt, true)
+	return r.finishPromptStateLocked(ctx, event.SessionID, state, stopReason, strings.TrimSpace(result.Message), result.ReplyPreview, parsedEvent.artifacts, parsedEvent.forkPoint, event.UpdatedAt, true)
 }
 
-func (r *SessionRecorder) finishPromptStateLocked(ctx context.Context, sessionID string, state *sessionPromptState, stopReason string, message string, artifacts []acp.SessionPromptArtifactPayload, forkPoint *acp.SessionForkPoint, updatedAt time.Time, publishDone bool) error {
+func (r *SessionRecorder) finishPromptStateLocked(ctx context.Context, sessionID string, state *sessionPromptState, stopReason string, message string, replyPreview string, artifacts []acp.SessionPromptArtifactPayload, forkPoint *acp.SessionForkPoint, updatedAt time.Time, publishDone bool) error {
 	if state == nil {
 		return nil
 	}
@@ -1148,11 +1148,12 @@ func (r *SessionRecorder) finishPromptStateLocked(ctx context.Context, sessionID
 			sessionID: sessionID,
 			method:    acp.SessionTurnMethodPromptDone,
 			payload: acp.SessionTurnPromptResult{
-				StopReason:  stopReason,
-				CompletedAt: updatedAt.UTC().Format(time.RFC3339Nano),
-				Message:     message,
-				Artifacts:   artifactMetadata,
-				ForkPoint:   cloneSessionForkPoint(forkPoint),
+				StopReason:   stopReason,
+				CompletedAt:  updatedAt.UTC().Format(time.RFC3339Nano),
+				Message:      message,
+				ReplyPreview: replyPreview,
+				Artifacts:    artifactMetadata,
+				ForkPoint:    cloneSessionForkPoint(forkPoint),
 			},
 			turnIndex: state.nextTurnIndex,
 			finished:  true,
@@ -1721,7 +1722,7 @@ func (r *SessionRecorder) nextPromptStateLocked(ctx context.Context, sessionID s
 		return &created, nil
 	}
 	if len(state.turns) > 0 && !sessionPromptStateTerminal(state) {
-		if err := r.finishPromptStateLocked(ctx, sessionID, state, "interrupted", "", nil, nil, updatedAt, true); err != nil {
+		if err := r.finishPromptStateLocked(ctx, sessionID, state, "interrupted", "", "", nil, nil, updatedAt, true); err != nil {
 			return nil, err
 		}
 	}
@@ -1888,9 +1889,10 @@ func parseSessionViewEvent(event SessionViewEvent) (parsedSessionViewEvent, erro
 			ok := jsonDecodeAt(contentRaw, "result", &promptResult)
 			if ok {
 				parsed.setJSONMessage(acp.SessionTurnMethodPromptDone, acp.SessionTurnPromptResult{
-					StopReason: strings.TrimSpace(promptResult.StopReason),
-					Message:    strings.TrimSpace(promptResult.Message),
-					ForkPoint:  cloneSessionForkPoint(event.ForkPoint),
+					StopReason:   strings.TrimSpace(promptResult.StopReason),
+					Message:      strings.TrimSpace(promptResult.Message),
+					ReplyPreview: promptResult.ReplyPreview,
+					ForkPoint:    cloneSessionForkPoint(event.ForkPoint),
 				}, "")
 				return parsed, nil
 			}

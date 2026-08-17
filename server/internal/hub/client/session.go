@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -1233,22 +1234,59 @@ func (s *Session) cancelPrompt() error {
 	return err
 }
 
-func (s *Session) recordPromptDone(stopReason string, message string) {
+func (s *Session) recordPromptDone(stopReason string, message string, replyPreview string) {
 	s.cancelAllPendingPermissions()
 	s.recordSessionViewEvent(SessionViewEvent{
 		Type:      SessionViewEventTypeACP,
 		SessionID: s.acpSessionID,
 		Content: acp.BuildACPContentJSON(acp.MethodSessionPrompt, map[string]any{
 			"result": acp.SessionTurnPromptResult{
-				StopReason: strings.TrimSpace(stopReason),
-				Message:    strings.TrimSpace(message),
+				StopReason:   strings.TrimSpace(stopReason),
+				Message:      strings.TrimSpace(message),
+				ReplyPreview: firstNonEmpty(replyPreview, strings.TrimSpace(message)),
 			},
 		}),
 	})
 }
 
-func (s *Session) recordPromptFailed(message string) {
-	s.recordPromptDone(acp.SessionTurnStopReasonFailed, message)
+func (s *Session) recordPromptFailed(message string, replyPreview string) {
+	s.recordPromptDone(acp.SessionTurnStopReasonFailed, message, replyPreview)
+}
+
+const promptReplyPreviewMaxRunes = 160
+
+var (
+	promptPreviewLinkPattern    = regexp.MustCompile(`\[([^\]]*)\]\([^)]*\)`)
+	promptPreviewMarkerPattern  = regexp.MustCompile("[*_~`]+")
+	promptPreviewLinePrefix     = regexp.MustCompile(`^\s*(?:#{1,6}\s+|>\s?|[-*+]\s+|\d+\.\s+)`)
+	promptPreviewFenceLine      = regexp.MustCompile("(?m)^\\s*```.*$")
+	promptPreviewWhitespaceRuns = regexp.MustCompile(`\s+`)
+)
+
+// buildPromptReplyPreview collapses agent-sourced reply text into a single-line
+// notification preview, keeping the tail so the final summary survives.
+func buildPromptReplyPreview(raw string) string {
+	withoutFences := promptPreviewFenceLine.ReplaceAllString(raw, "")
+	lines := strings.Split(withoutFences, "\n")
+	for i, line := range lines {
+		lines[i] = promptPreviewLinePrefix.ReplaceAllString(line, "")
+	}
+	joined := strings.Join(lines, " ")
+	linked := promptPreviewLinkPattern.ReplaceAllString(joined, "$1")
+	plain := promptPreviewMarkerPattern.ReplaceAllString(linked, "")
+	cleaned := strings.TrimSpace(promptPreviewWhitespaceRuns.ReplaceAllString(plain, " "))
+	if cleaned == "" {
+		return ""
+	}
+	runes := []rune(cleaned)
+	if len(runes) <= promptReplyPreviewMaxRunes {
+		return cleaned
+	}
+	tail := string(runes[len(runes)-promptReplyPreviewMaxRunes:])
+	if idx := strings.IndexByte(tail, ' '); idx >= 0 && idx+1 < len(tail) {
+		tail = tail[idx+1:]
+	}
+	return "…" + tail
 }
 
 func (s *Session) toRecord() (*SessionRecord, error) {
@@ -1606,42 +1644,42 @@ func (s *Session) runPromptBlocks(
 	})
 	if err := s.ensureInstance(ctx); err != nil {
 		if errors.Is(err, context.Canceled) || errors.Is(ctx.Err(), context.Canceled) {
-			s.recordPromptDone(acp.StopReasonCancelled, "")
+			s.recordPromptDone(acp.StopReasonCancelled, "", "")
 			return sessionExecutionOutcome{status: sessionExecutionCancelled}
 		}
-		s.recordPromptFailed(fmt.Sprintf("No active session: %v. %s", err, s.connectHint()))
+		s.recordPromptFailed(fmt.Sprintf("No active session: %v. %s", err, s.connectHint()), "")
 		return sessionExecutionOutcome{status: sessionExecutionFailed, err: err}
 	}
 
 	if err := s.ensureReadyAndNotify(ctx); err != nil {
 		if errors.Is(err, context.Canceled) || errors.Is(ctx.Err(), context.Canceled) {
-			s.recordPromptDone(acp.StopReasonCancelled, "")
+			s.recordPromptDone(acp.StopReasonCancelled, "", "")
 			return sessionExecutionOutcome{status: sessionExecutionCancelled}
 		}
-		s.recordPromptFailed(fmt.Sprintf("No active session: %v. %s", err, s.connectHint()))
+		s.recordPromptFailed(fmt.Sprintf("No active session: %v. %s", err, s.connectHint()), "")
 		return sessionExecutionOutcome{status: sessionExecutionFailed, err: err}
 	}
 
 	promptBlocks, err := s.promptBlocksForAgent(blocks)
 	if err != nil {
-		s.recordPromptFailed(fmt.Sprintf("Prompt error: %v", err))
+		s.recordPromptFailed(fmt.Sprintf("Prompt error: %v", err), "")
 		return sessionExecutionOutcome{status: sessionExecutionFailed, err: err}
 	}
 	if err := ctx.Err(); err != nil {
-		s.recordPromptDone(acp.StopReasonCancelled, "")
+		s.recordPromptDone(acp.StopReasonCancelled, "", "")
 		return sessionExecutionOutcome{status: sessionExecutionCancelled}
 	}
 
 	updates, err := s.promptStream(ctx, promptBlocks)
 	if err != nil {
 		if errors.Is(err, context.Canceled) || errors.Is(ctx.Err(), context.Canceled) {
-			s.recordPromptDone(acp.StopReasonCancelled, "")
+			s.recordPromptDone(acp.StopReasonCancelled, "", "")
 			return sessionExecutionOutcome{status: sessionExecutionCancelled}
 		}
 		if isAgentExitError(err) && !s.agentProcessAlive() {
 			_ = s.resetDeadConnection(err)
 		}
-		s.recordPromptFailed(fmt.Sprintf("Prompt error: %v", err))
+		s.recordPromptFailed(fmt.Sprintf("Prompt error: %v", err), "")
 		return sessionExecutionOutcome{status: sessionExecutionFailed, err: err}
 	}
 
@@ -1659,7 +1697,7 @@ func (s *Session) runPromptBlocks(
 		}
 		if ev.err != nil {
 			if errors.Is(ev.err, context.Canceled) {
-				s.recordPromptDone(acp.StopReasonCancelled, "")
+				s.recordPromptDone(acp.StopReasonCancelled, "", buildPromptReplyPreview(buf.String()))
 				s.mu.Lock()
 				s.prompt.currentCh = nil
 				s.mu.Unlock()
@@ -1673,9 +1711,9 @@ func (s *Session) runPromptBlocks(
 				}
 			}
 			if recovered {
-				s.recordPromptFailed("Agent process exited and was reconnected. Please resend if this reply was interrupted.")
+				s.recordPromptFailed("Agent process exited and was reconnected. Please resend if this reply was interrupted.", buildPromptReplyPreview(buf.String()))
 			} else {
-				s.recordPromptFailed(fmt.Sprintf("Agent error: %v", ev.err))
+				s.recordPromptFailed(fmt.Sprintf("Agent error: %v", ev.err), buildPromptReplyPreview(buf.String()))
 			}
 			s.mu.Lock()
 			s.prompt.currentCh = nil
@@ -1716,8 +1754,9 @@ func (s *Session) runPromptBlocks(
 					SessionID: s.acpSessionID,
 					Content: acp.BuildACPContentJSON(acp.MethodSessionPrompt, map[string]any{
 						"result": acp.SessionTurnPromptResult{
-							StopReason: ev.result.StopReason,
-							Message:    firstNonEmpty(strings.TrimSpace(ev.result.Message), acp.WMPromptResultMetaMessage(ev.result.Meta)),
+							StopReason:   ev.result.StopReason,
+							Message:      firstNonEmpty(strings.TrimSpace(ev.result.Message), acp.WMPromptResultMetaMessage(ev.result.Meta)),
+							ReplyPreview: buildPromptReplyPreview(buf.String()),
 						},
 					}),
 					Artifacts: cloneSessionPromptArtifactPayloads(ev.result.Artifacts),

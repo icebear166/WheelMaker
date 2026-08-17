@@ -106,7 +106,7 @@ func (s *Session) CreateGoalFromCommand(
 
 	controller, sessionID, err := s.goalController(ctx)
 	if err != nil {
-		s.recordPromptFailed(fmt.Sprintf("Goal error: %v", err))
+		s.recordPromptFailed(fmt.Sprintf("Goal error: %v", err), "")
 		return acp.SessionGoal{}, err
 	}
 	active := acp.SessionGoalStatusActive
@@ -117,7 +117,7 @@ func (s *Session) CreateGoalFromCommand(
 		TokenBudget: tokenBudget,
 	})
 	if err != nil {
-		s.recordPromptFailed(fmt.Sprintf("Goal error: %v", err))
+		s.recordPromptFailed(fmt.Sprintf("Goal error: %v", err), "")
 		return acp.SessionGoal{}, err
 	}
 	release = false
@@ -448,7 +448,7 @@ func (s *Session) finishGoalExecution() {
 	s.goal.turnID = ""
 	s.goal.releaseAfterTurn = false
 	s.mu.Unlock()
-	s.recordPromptDone(acp.StopReasonEndTurn, "")
+	s.recordPromptDone(acp.StopReasonEndTurn, "", "")
 	s.endExecution()
 	s.publishGoalSummary()
 }

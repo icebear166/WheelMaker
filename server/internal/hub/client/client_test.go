@@ -12027,6 +12027,104 @@ func TestPromptToSessionRecordsFailedPromptDoneOnAgentError(t *testing.T) {
 	}
 }
 
+func TestBuildPromptReplyPreview(t *testing.T) {
+	cases := []struct {
+		name string
+		raw  string
+		want string
+	}{
+		{"collapses whitespace", "line one\n\n  line\t two", "line one line two"},
+		{"strips markdown", "## Title\n- **bold** and `code`\n[link](https://x.y)", "Title bold and code link"},
+		{"drops fenced code markers", "```go\nfmt.Println()\n```", "fmt.Println()"},
+		{"plain short text unchanged", "Done, fixed the bug.", "Done, fixed the bug."},
+		{"empty for whitespace only", " \n\t ", ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := buildPromptReplyPreview(tc.raw); got != tc.want {
+				t.Fatalf("buildPromptReplyPreview(%q) = %q, want %q", tc.raw, got, tc.want)
+			}
+		})
+	}
+	t.Run("keeps the tail of long replies", func(t *testing.T) {
+		got := buildPromptReplyPreview(strings.Repeat("word ", 60))
+		if !strings.HasPrefix(got, "…") || !strings.HasSuffix(got, "word") {
+			t.Fatalf("tail preview = %q, want ellipsis prefix and tail content", got)
+		}
+		if n := len([]rune(got)); n > promptReplyPreviewMaxRunes+len([]rune("…")) {
+			t.Fatalf("preview too long: %d runes", n)
+		}
+	})
+}
+
+func TestPromptDoneIncludesReplyPreview(t *testing.T) {
+	mock := &mockSession{
+		agentName: "codex",
+		sessionID: "sess-reply-preview",
+		promptFn: func(string) (<-chan acp.SessionUpdateParams, acp.PromptOutcome, error) {
+			ch := make(chan acp.SessionUpdateParams, 2)
+			ch <- acp.SessionUpdateParams{Update: acp.SessionUpdate{
+				SessionUpdate: acp.SessionUpdateAgentMessageChunk,
+				Content:       mustJSON(acp.ContentBlock{Type: acp.ContentBlockTypeText, Text: "## Result\n- **Fixed** the login bug"}),
+			}}
+			ch <- acp.SessionUpdateParams{Update: acp.SessionUpdate{
+				SessionUpdate: acp.SessionUpdateAgentMessageChunk,
+				Content:       mustJSON(acp.ContentBlock{Type: acp.ContentBlockTypeText, Text: "\nand added tests."}),
+			}}
+			close(ch)
+			return ch, acp.PromptOutcome{StopReason: acp.StopReasonEndTurn}, nil
+		},
+	}
+	c := newTestClient(t, mock)
+	ctx := context.Background()
+	if err := c.RecordEvent(ctx, sessionViewCreatedEvent("sess-reply-preview", "Reply Preview")); err != nil {
+		t.Fatalf("RecordEvent session created: %v", err)
+	}
+
+	if err := c.PromptToSession(ctx, "sess-reply-preview", []acp.ContentBlock{{Type: acp.ContentBlockTypeText, Text: "fix it"}}); err != nil {
+		t.Fatalf("PromptToSession: %v", err)
+	}
+	_, turns, err := c.sessionRecorder.ReadSessionTurns(ctx, "sess-reply-preview", 0)
+	if err != nil {
+		t.Fatalf("ReadSessionTurns: %v", err)
+	}
+	last := turns[len(turns)-1]
+	if stopReason := decodePromptDoneStopReason(t, last.Content); stopReason != acp.StopReasonEndTurn {
+		t.Fatalf("prompt_done stopReason = %q, want end_turn", stopReason)
+	}
+	param := decodeTurnParamMap(t, last.Content)
+	if got := fmt.Sprint(param["replyPreview"]); got != "Result Fixed the login bug and added tests." {
+		t.Fatalf("replyPreview = %q, want cleaned assistant text", got)
+	}
+}
+
+func TestPromptDoneReplyPreviewFallsBackToErrorMessage(t *testing.T) {
+	mock := &mockSession{
+		agentName: "codex",
+		sessionID: "sess-preview-fallback",
+		promptFn: func(string) (<-chan acp.SessionUpdateParams, acp.PromptOutcome, error) {
+			return nil, acp.PromptOutcome{}, errors.New("agent crashed")
+		},
+	}
+	c := newTestClient(t, mock)
+	ctx := context.Background()
+	if err := c.RecordEvent(ctx, sessionViewCreatedEvent("sess-preview-fallback", "Preview Fallback")); err != nil {
+		t.Fatalf("RecordEvent session created: %v", err)
+	}
+
+	if err := c.PromptToSession(ctx, "sess-preview-fallback", []acp.ContentBlock{{Type: acp.ContentBlockTypeText, Text: "hello"}}); err == nil {
+		t.Fatal("PromptToSession expected agent error")
+	}
+	_, turns, err := c.sessionRecorder.ReadSessionTurns(ctx, "sess-preview-fallback", 0)
+	if err != nil {
+		t.Fatalf("ReadSessionTurns: %v", err)
+	}
+	param := decodeTurnParamMap(t, turns[len(turns)-1].Content)
+	if got := fmt.Sprint(param["replyPreview"]); !strings.Contains(got, "agent crashed") {
+		t.Fatalf("replyPreview = %q, want fallback to error message", got)
+	}
+}
+
 func TestHandleSessionQueueCancelFinishesPromptAsCancelled(t *testing.T) {
 	mock := &mockSession{agentName: "codex", sessionID: "sess-cancel-running"}
 	c := newTestClient(t, mock)
