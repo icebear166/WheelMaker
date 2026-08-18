@@ -12,7 +12,6 @@ import (
 	"time"
 
 	rp "github.com/swm8023/wheelmaker/internal/protocol"
-	"github.com/swm8023/wheelmaker/internal/shared"
 )
 
 func normalizeNativeSkillSource(raw string) (string, string, *skillsCommandError) {
@@ -45,11 +44,6 @@ func (c *SkillsCommand) withNativeScopeLock(target skillsCommandTarget, fn func(
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return fmt.Errorf("create skill source lock directory: %w", err)
 	}
-	release, err := shared.AcquireFileLock(path + ".lock")
-	if err != nil {
-		return fmt.Errorf("lock skill scope: %w", err)
-	}
-	defer release()
 	return fn()
 }
 

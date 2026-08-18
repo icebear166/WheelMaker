@@ -129,6 +129,27 @@ func TestNativeSkillSourceStoreRefreshFetchesWithoutChangingCheckout(t *testing.
 	}
 }
 
+func TestSkillSourceLockOperationsDoNotCreateSidecarLock(t *testing.T) {
+	home := t.TempDir()
+	command := newSkillsCommandWithRunner(newFakeSkillsRunner(), skillsCommandConfig{HubID: "hub-a", HomeDir: home})
+	target := skillsCommandTarget{scope: "hub"}
+	path := command.sourceLockFile(target)
+
+	if err := withSkillSourceLockFile(path, func() error { return nil }); err != nil {
+		t.Fatalf("withSkillSourceLockFile() error=%v", err)
+	}
+	if _, err := os.Stat(path + ".lock"); !os.IsNotExist(err) {
+		t.Fatalf("source lock sidecar exists after read lock: %v", err)
+	}
+
+	if err := command.withNativeScopeLock(target, func() error { return nil }); err != nil {
+		t.Fatalf("withNativeScopeLock() error=%v", err)
+	}
+	if _, err := os.Stat(path + ".lock"); !os.IsNotExist(err) {
+		t.Fatalf("source lock sidecar exists after native scope lock: %v", err)
+	}
+}
+
 func TestNativeSkillSourceStoreUsesReadableSourceKeyPaths(t *testing.T) {
 	home := t.TempDir()
 	store := newSkillSourceStore(home)

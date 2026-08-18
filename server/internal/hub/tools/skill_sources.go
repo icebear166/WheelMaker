@@ -18,8 +18,6 @@ import (
 	"sort"
 	"strings"
 	"time"
-
-	"github.com/swm8023/wheelmaker/internal/shared"
 )
 
 const (
@@ -171,11 +169,6 @@ func withSkillSourceLockFile(path string, fn func() error) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
 	}
-	release, err := shared.AcquireFileLock(path + ".lock")
-	if err != nil {
-		return err
-	}
-	defer release()
 	return fn()
 }
 
