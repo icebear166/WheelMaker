@@ -1,0 +1,32 @@
+name: Publish Personal Wiki candidate
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Deploy prepared release
+        env:
+          WIKI_DEPLOY_KEY: ${{ secrets.WIKI_DEPLOY_KEY }}
+          WIKI_SSH_KNOWN_HOSTS: ${{ secrets.WIKI_SSH_KNOWN_HOSTS }}
+          WIKI_DEPLOY_HOST: ${{ secrets.WIKI_DEPLOY_HOST }}
+        run: |
+          set -euo pipefail
+          archive="$(find dist -maxdepth 1 -type f -name 'personal-wiki-release-*.tar.gz' -print -quit)"
+          test -n "$archive"
+          release_id="${GITHUB_SHA}"
+          digest="$(sha256sum "$archive" | awk '{print $1}')"
+          install -d -m 0700 "$RUNNER_TEMP/wiki-ssh"
+          printf '%s\n' "$WIKI_DEPLOY_KEY" > "$RUNNER_TEMP/wiki-ssh/id"
+          printf '%s\n' "$WIKI_SSH_KNOWN_HOSTS" > "$RUNNER_TEMP/wiki-ssh/known_hosts"
+          chmod 0600 "$RUNNER_TEMP/wiki-ssh/id" "$RUNNER_TEMP/wiki-ssh/known_hosts"
+          ssh_options=(-i "$RUNNER_TEMP/wiki-ssh/id" -p {{SSH_PORT}} -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$RUNNER_TEMP/wiki-ssh/known_hosts")
+          remote_archive="{{INSTALL_ROOT}}/incoming/$(basename "$archive")"
+          scp -P {{SSH_PORT}} -i "$RUNNER_TEMP/wiki-ssh/id" -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$RUNNER_TEMP/wiki-ssh/known_hosts" "$archive" "{{SSH_USER}}@$WIKI_DEPLOY_HOST:$remote_archive"
+          ssh "${ssh_options[@]}" "{{SSH_USER}}@$WIKI_DEPLOY_HOST" "sudo {{INSTALL_ROOT}}/activate-release.sh '$remote_archive' '$digest' '$release_id'"

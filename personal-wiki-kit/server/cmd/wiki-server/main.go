@@ -60,8 +60,8 @@ func serve(arguments []string) error {
 	if err := wiki.ValidateListenAddress(*listen); err != nil {
 		return err
 	}
-	if *mode != "local" && *mode != "online" {
-		return errors.New("mode must be local or online")
+	if err := validateServeMode(*mode, *secureCookie); err != nil {
+		return err
 	}
 	var hash string
 	if *mode == "online" {
@@ -113,6 +113,16 @@ func serve(arguments []string) error {
 		defer cancel()
 		return httpServer.Shutdown(shutdownContext)
 	}
+}
+
+func validateServeMode(mode string, secureCookie bool) error {
+	if mode != "local" && mode != "online" {
+		return errors.New("mode must be local or online")
+	}
+	if mode == "online" && !secureCookie {
+		return errors.New("online mode requires secure session cookies")
+	}
+	return nil
 }
 
 func hashPassword() error {

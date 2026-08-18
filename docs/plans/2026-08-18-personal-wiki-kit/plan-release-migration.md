@@ -68,21 +68,21 @@ Checkpoint release packager, archive helpers, package scripts, and tests; do not
 
 **Acceptance:** Deployment templates contain no personal defaults, listen only on loopback, keep plaintext passwords/private keys out of repository output, use strict known-host SSH, verify candidate manifests, atomically activate, health-check, and roll back on failure.
 
-- [ ] **Step 1: Write failing template/config contract tests**
+- [x] **Step 1: Write failing template/config contract tests**
 
 Tests assert canonical domain/port/user input, rejection of secrets in committed config, loopback service listener, restrictive systemd settings, exact remote archive pattern, server-side lock, manifest verification before symlink switch, rollback after failed health, and absence of real domains/IPs/paths.
 
-- [ ] **Step 2: Run tests to verify RED**
+- [x] **Step 2: Run tests to verify RED**
 
 Run: `node --test tests/deployment-config.test.mjs tests/deployment-contract.test.mjs`
 
 Expected: FAIL because parameterized assets are absent.
 
-- [ ] **Step 3: Implement minimal deployment renderer and templates**
+- [x] **Step 3: Implement minimal deployment renderer and templates**
 
 Selectively extract verified security behavior, replace all site-specific literals with validated render inputs, and keep credentials as GitHub Secret/server-file instructions rather than rendered repository values.
 
-- [ ] **Step 4: Verify GREEN and Go server security**
+- [x] **Step 4: Verify GREEN and Go server security**
 
 Run: `node --test tests/deployment-config.test.mjs tests/deployment-contract.test.mjs`
 
@@ -94,7 +94,7 @@ Workdir: `personal-wiki-kit/server`
 
 Expected: PASS.
 
-- [ ] **Step 5: Git checkpoint**
+- [x] **Step 5: Git checkpoint**
 
 Checkpoint deployment templates, renderer, server adjustment, and tests.
 

@@ -1,0 +1,33 @@
+[Unit]
+Description=Authenticated Personal Wiki
+After=network-online.target
+Wants=network-online.target
+ConditionPathIsSymbolicLink={{INSTALL_ROOT}}/current
+
+[Service]
+Type=simple
+User={{SERVICE_USER}}
+Group={{SERVICE_USER}}
+WorkingDirectory={{INSTALL_ROOT}}
+LoadCredential=wiki-password:{{INSTALL_ROOT}}/shared/password.argon2id
+ExecStart={{INSTALL_ROOT}}/current/kit/bin/wiki-server serve --mode online --listen 127.0.0.1:{{LISTEN_PORT}} --root {{INSTALL_ROOT}}/current/site --password-hash-file %d/wiki-password
+Restart=on-failure
+RestartSec=3s
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+RestrictNamespaces=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+CapabilityBoundingSet=
+AmbientCapabilities=
+SystemCallArchitectures=native
+
+[Install]
+WantedBy=multi-user.target
