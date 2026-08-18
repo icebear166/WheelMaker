@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 import { createHash } from 'node:crypto';
+import { execFile } from 'node:child_process';
 import {
+  access,
   mkdtemp,
   readFile,
   rm,
@@ -10,16 +12,19 @@ import path from 'node:path';
 import process from 'node:process';
 import { createInterface } from 'node:readline/promises';
 import { fileURLToPath } from 'node:url';
+import { promisify } from 'node:util';
 import YAML from 'yaml';
 
 import { compileKnowledge } from './content.mjs';
 import { migrateLegacyConfig } from './migrate-config.mjs';
+import { openLocalWiki } from './open-local.mjs';
 import { loadProjectRouting, resolveProjectIds } from './project-routing.mjs';
 import { queryKnowledge } from './query-knowledge.mjs';
 import { setupWiki } from './setup.mjs';
 import { loadUserConfig, resolveUserConfigPaths } from './user-config.mjs';
 
 const kitRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const execFileAsync = promisify(execFile);
 
 function parseArguments(values) {
   if (values.length === 0) {
@@ -120,6 +125,52 @@ async function routeCommand(options) {
   });
 }
 
+async function sourceCommit(repository) {
+  try {
+    const { stdout } = await execFileAsync(
+      'git',
+      ['-c', `safe.directory=${repository}`, '-C', repository, 'rev-parse', '--verify', 'HEAD'],
+      { encoding: 'utf8', windowsHide: true },
+    );
+    return stdout.trim();
+  } catch {
+    return 'uncommitted';
+  }
+}
+
+async function openCommand(options) {
+  const repository = await resolveRepository(options);
+  const kitManifest = JSON.parse(await readFile(path.join(kitRoot, 'kit.json'), 'utf8'));
+  const executableName = process.platform === 'win32' ? 'wiki-server.exe' : 'wiki-server';
+  const packagedServer = path.join(kitRoot, 'bin', executableName);
+  const developmentServer = path.join(kitRoot, 'server', executableName);
+  let serverExecutable = options.server ? path.resolve(options.server) : undefined;
+  if (!serverExecutable) {
+    for (const candidate of [packagedServer, developmentServer]) {
+      try {
+        await access(candidate);
+        serverExecutable = candidate;
+        break;
+      } catch {}
+    }
+  }
+  if (!serverExecutable) {
+    throw new Error('找不到 wiki-server，请先构建或安装完整 Kit');
+  }
+  const session = await openLocalWiki({
+    repository,
+    reader: path.resolve(options.reader || path.join(kitRoot, 'reader-dist')),
+    serverExecutable,
+    kitVersion: kitManifest.version,
+    sourceCommit: await sourceCommit(repository),
+    generatedAt: new Date().toISOString(),
+  });
+  const stop = () => { void session.stop(); };
+  process.once('SIGINT', stop);
+  process.once('SIGTERM', stop);
+  return session;
+}
+
 async function setupCommand(options, prompt) {
   const repositoryPath = path.resolve(
     options.repository || await prompt.text('私人 Wiki 仓库目录：'),
@@ -184,9 +235,11 @@ export async function runCLI(values = process.argv.slice(2), {
     else if (command === 'query') result = await queryCommand(options);
     else if (command === 'route') result = await routeCommand(options);
     else if (command === 'setup') result = await setupCommand(options, prompt);
+    else if (command === 'open') result = await openCommand(options);
     else if (command === 'migrate-config') result = await migrateCommand(options, prompt);
     else throw new Error(`未知命令：${command}`);
-    stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+    const printable = command === 'open' ? { url: result.url } : result;
+    stdout.write(`${JSON.stringify(printable, null, 2)}\n`);
     return result;
   } finally {
     prompt.close?.();

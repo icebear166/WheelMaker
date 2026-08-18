@@ -300,9 +300,9 @@ Run: `node --test tests/setup.test.mjs tests/migrate-config.test.mjs tests/insta
 
 Expected: PASS; generated repository validates without network or host Node assumptions beyond the development runner.
 
-- [ ] **Step 5: Git checkpoint**
+- [x] **Step 5: Git checkpoint**
 
-Checkpoint setup/migration modules, templates, wrappers, and tests.
+Checkpoint: `13b99c2e feat(wiki-kit): initialize private wiki repositories`.
 
 ### Task 7: Provide loopback-only local opening
 
@@ -317,15 +317,16 @@ Checkpoint setup/migration modules, templates, wrappers, and tests.
 - Create: `personal-wiki-kit/server/internal/wiki/manifest.go`
 - Create: `personal-wiki-kit/server/internal/wiki/manifest_test.go`
 - Create: `personal-wiki-kit/src/open-local.mjs`
+- Modify: `personal-wiki-kit/src/cli.mjs`
 - Create: `personal-wiki-kit/tests/open-local.test.mjs`
 
 **Acceptance:** Local open builds with the pinned Reader, chooses an available loopback port, starts a no-auth local-only server, opens the browser, and cannot bind a non-loopback address; online mode still requires Argon2id authentication.
 
-- [ ] **Step 1: Write failing Go and Node tests**
+- [x] **Step 1: Write failing Go and Node tests**
 
 Go tests assert non-loopback rejection, local no-auth serving only when explicitly enabled, authenticated online routes, secure headers, session behavior, rate limiting, manifest verification, and health response without content leakage. Node tests assert port selection, child arguments, browser opener injection, and cleanup.
 
-- [ ] **Step 2: Run tests to verify RED**
+- [x] **Step 2: Run tests to verify RED**
 
 Run: `go test ./...`
 
@@ -337,7 +338,7 @@ Workdir: `personal-wiki-kit`
 
 Expected: FAIL because server/open modules are absent.
 
-- [ ] **Step 3: Implement minimal local/online server modes and orchestrator**
+- [x] **Step 3: Implement minimal local/online server modes and orchestrator**
 
 Selectively extract the verified server implementation, replace private module names/default roots, and make no-auth legal only for an explicit loopback-local command. The CLI owns child lifecycle and temporary site cleanup.
 
@@ -385,7 +386,7 @@ Expected: FAIL because modules are absent.
 
 Extend the Task 6 command dispatcher with `build`, `query`, `open`, `publish`, and `update`. It reports whether the result is local-only, pushed with deployment unknown, or deployed; it never reports online success without evidence.
 
-- [ ] **Step 4: Verify GREEN and full Kit regression**
+- [x] **Step 4: Verify GREEN and full Kit regression**
 
 Run: `npm test && npm run typecheck && npm run build:reader && npm run check:public`
 
