@@ -13,9 +13,21 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 
-import { setupWiki } from '../src/setup.mjs';
+import {renameDirectoryWithRetry, setupWiki} from '../src/setup.mjs';
 
 const kitRoot = join(dirname(fileURLToPath(import.meta.url)), '..');
+
+test('directory activation retries transient Windows rename locks', async () => {
+  let attempts = 0;
+  await renameDirectoryWithRetry('candidate', 'repository', {
+    move: async () => {
+      attempts += 1;
+      if (attempts < 3) throw Object.assign(new Error('locked'), {code: 'EBUSY'});
+    },
+    delay: async () => {},
+  });
+  assert.equal(attempts, 3);
+});
 
 async function createPaths(t) {
   const root = await mkdtemp(join(tmpdir(), 'personal-wiki-setup-'));

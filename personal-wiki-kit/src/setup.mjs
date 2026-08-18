@@ -74,6 +74,22 @@ function defaultTimestamp() {
   return `${Date.now()}-${process.pid}`;
 }
 
+export async function renameDirectoryWithRetry(source, destination, {
+  move = rename,
+  delay = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds)),
+  attempts = 20,
+} = {}) {
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      await move(source, destination);
+      return;
+    } catch (error) {
+      if (!['EACCES', 'EBUSY', 'EPERM'].includes(error.code) || attempt >= attempts) throw error;
+      await delay(100);
+    }
+  }
+}
+
 async function assertNewTarget(target) {
   if (!await pathExists(target)) return;
   const info = await lstat(target);
@@ -159,7 +175,7 @@ export async function setupWiki(options = {}, {
     if (validated.deployment) initialPaths.push('.github');
     await runCommand('git', ['add', '--', ...initialPaths], { cwd: candidate });
     await runCommand('git', ['commit', '-m', 'knowledge: initialize personal wiki'], { cwd: candidate });
-    await rename(candidate, repositoryPath);
+    await renameDirectoryWithRetry(candidate, repositoryPath);
     repositoryReady = true;
   } catch (error) {
     if (!repositoryReady && await pathExists(candidate)) {

@@ -117,6 +117,7 @@ function extractUrlHosts(source) {
   const hosts = [];
   const urlPattern = /https?:\/\/[^\s<>'"`)]+/giu;
   for (const match of source.matchAll(urlPattern)) {
+    if (match[0].includes('${')) continue;
     try {
       hosts.push(new URL(match[0]).hostname.toLowerCase());
     } catch {

@@ -61,6 +61,7 @@ test('public boundary accepts generic examples and ignores generated roots', () 
       ].join('\n'),
       'node_modules/package/private.txt': ignoredPrivateDomain,
       'reader-dist/private.txt': ignoredUserPath,
+      'src/dynamic-url.mjs': 'const url = `https://${deployment.domain}`;\n',
     },
     (fixtureRoot) => assert.deepEqual(scanPublicTree(fixtureRoot), []),
   );

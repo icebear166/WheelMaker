@@ -4,8 +4,10 @@ import { execFile } from 'node:child_process';
 import {
   access,
   mkdtemp,
+  mkdir,
   readFile,
   rm,
+  writeFile,
 } from 'node:fs/promises';
 import { homedir, tmpdir } from 'node:os';
 import path from 'node:path';
@@ -20,6 +22,7 @@ import { parseKitManifest } from './kit-manifest.mjs';
 import { loadKitLock } from './kit-lock.mjs';
 import { publishKnowledge } from './local-publish.mjs';
 import { migrateLegacyConfig } from './migrate-config.mjs';
+import {migrateRepository} from './migrate-repository.mjs';
 import { openLocalWiki } from './open-local.mjs';
 import { loadProjectRouting, resolveProjectIds } from './project-routing.mjs';
 import { queryKnowledge } from './query-knowledge.mjs';
@@ -38,7 +41,7 @@ function parseArguments(values) {
   if (values[0] === '--help' || values[0] === '-h') return {command: 'help', options: {}};
   const command = values[0];
   const options = { projects: [], sources: [] };
-  const booleans = new Set(['--help', '--non-interactive', '--working-tree', '--yes']);
+  const booleans = new Set(['--help', '--non-interactive', '--working-tree', '--yes', '--dry-run', '--apply']);
   const repeatable = new Map([
     ['--project', 'projects'],
     ['--source', 'sources'],
@@ -352,6 +355,35 @@ async function migrateCommand(options, prompt) {
   });
 }
 
+async function migrateRepositoryCommand(options) {
+  const repository = await resolveRepository(options);
+  const manifestSource = await readFile(path.join(kitRoot, 'kit.json'));
+  const manifest = parseKitManifest(manifestSource.toString('utf8'));
+  const deployment = options.deploymentConfig
+    ? JSON.parse(await readFile(path.resolve(options.deploymentConfig), 'utf8'))
+    : undefined;
+  const report = await migrateRepository({
+    repository,
+    kitRoot,
+    kitLock: {
+      schema: 1,
+      version: manifest.version,
+      source: options.kitSource || 'local-kit',
+      sha256: options.kitSha256 || createHash('sha256').update(manifestSource).digest('hex'),
+    },
+    deployment,
+    title: options.title,
+    dryRun: options.dryrun === true,
+    apply: options.apply === true,
+  });
+  if (options.report) {
+    const reportPath = path.resolve(options.report);
+    await mkdir(path.dirname(reportPath), {recursive: true});
+    await writeFile(reportPath, `${JSON.stringify(report, null, 2)}\n`, 'utf8');
+  }
+  return report;
+}
+
 function defaultPrompt() {
   const terminal = createInterface({ input: process.stdin, output: process.stdout });
   return {
@@ -371,7 +403,7 @@ export async function runCLI(values = process.argv.slice(2), {
     const { command, options } = parseArguments(values);
     let result;
     if (command === 'help' || options.help) {
-      stdout.write('Personal Wiki Kit\n\nUsage: personal-wiki <setup|check|query|route|build|open|publish|update|migrate-config> [options]\n');
+      stdout.write('Personal Wiki Kit\n\nUsage: personal-wiki <setup|check|query|route|build|open|publish|update|migrate-config|migrate-repository> [options]\n');
       return { help: true };
     }
     if (command === 'check') result = await checkCommand(options);
@@ -383,6 +415,7 @@ export async function runCLI(values = process.argv.slice(2), {
     else if (command === 'publish') result = await publishCommand(options);
     else if (command === 'update') result = await updateCommand(options);
     else if (command === 'migrate-config') result = await migrateCommand(options, prompt);
+    else if (command === 'migrate-repository') result = await migrateRepositoryCommand(options);
     else throw new Error(`未知命令：${command}`);
     const printable = command === 'open' ? { url: result.url } : result;
     stdout.write(`${JSON.stringify(printable, null, 2)}\n`);

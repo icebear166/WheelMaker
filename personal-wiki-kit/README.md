@@ -20,6 +20,24 @@ Personal Wiki Kit 是 WheelMaker 仓库内独立版本化的公共工具包。�
 
 在线仓库需要配置 `WIKI_DEPLOY_KEY`、`WIKI_SSH_KNOWN_HOSTS`、`WIKI_DEPLOY_HOST`，可选配置 `WIKI_DEPLOY_PORT`。这些值只放在 GitHub Secrets；任何密码、私钥或主机指纹都不得写进仓库。
 
+## 迁移已有 Wiki
+
+迁移器只把已有仓库的“程序层”换成精简的 Kit 接入文件。`content/` 与 `attachments/` 会原样保留，`.gitattributes` 也不会改写；旧的 `app/`、`server/`、`scripts/`、`skills/`、`ops/` 和 npm/Go 构建文件会在候选版本校验成功后才移除。任何不在白名单内的已跟踪文件都会阻止迁移。
+
+先准备一个只含非秘密字段的部署配置 JSON，再做只读预演：
+
+```powershell
+node src/cli.mjs migrate-repository `
+  --repository D:\path\to\private-wiki `
+  --kit-source https://github.com/owner/repo/releases/download/personal-wiki-kit-v0.1.0/personal-wiki-kit-v0.1.0-linux-x64.tar.gz `
+  --kit-sha256 <64位小写SHA-256> `
+  --deployment-config D:\path\to\deployment.json `
+  --dry-run `
+  --report D:\path\to\migration-report.json
+```
+
+确认报告中 `unknown` 为空且 `identity.equivalent` 为 `true` 后，把 `--dry-run` 改为 `--apply`。应用要求 Git 工作树完全干净；它会生成仓库内迁移报告和指向迁移前提交的恢复标签。文件安装或恢复标签创建失败时，迁移器会还原原有文件和 Git 状态。服务器地址、SSH 密钥、密码与主机指纹都不应写进部署配置。
+
 ## 开发检查
 
 ```powershell

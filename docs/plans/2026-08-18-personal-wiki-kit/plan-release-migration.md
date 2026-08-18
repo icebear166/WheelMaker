@@ -184,21 +184,21 @@ Checkpoint setup/deployment integration, workflow template, locks, and tests.
 
 **Acceptance:** Migration dry-run classifies retained data, generated thin files, and legacy program paths; apply requires a clean recoverable Git state, proves old/new catalog and article identity equivalence, and does not remove legacy program files until a validated candidate workflow exists.
 
-- [ ] **Step 1: Write failing repository-migration tests**
+- [x] **Step 1: Write failing repository-migration tests**
 
 Build a legacy fixture matching current shape. Assert content/registries/attachments retained byte-for-byte, stable article IDs/URLs and search entries equivalent, program files classified for removal, lock/launchers generated, unknown files block, dirty trees block, repeated dry-run is stable, and apply failure leaves the repository unchanged.
 
-- [ ] **Step 2: Run tests to verify RED**
+- [x] **Step 2: Run tests to verify RED**
 
 Run: `node --test tests/migrate-repository.test.mjs tests/manifest-equivalence.test.mjs`
 
 Expected: FAIL because migration modules are absent.
 
-- [ ] **Step 3: Implement minimal transactional migration**
+- [x] **Step 3: Implement minimal transactional migration**
 
 Operate through a candidate worktree/directory and explicit Git path list. The live repository is changed only after equivalence checks pass; retain a migration report and recoverable pre-migration commit/tag in the private repository.
 
-- [ ] **Step 4: Verify GREEN**
+- [x] **Step 4: Verify GREEN**
 
 Run: `node --test tests/migrate-repository.test.mjs tests/manifest-equivalence.test.mjs && npm test`
 
@@ -206,7 +206,7 @@ Workdir: `personal-wiki-kit`
 
 Expected: PASS.
 
-- [ ] **Step 5: Git checkpoint**
+- [x] **Step 5: Git checkpoint**
 
 Checkpoint repository migrator, equivalence tests, CLI integration, and documentation.
 
