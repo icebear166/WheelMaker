@@ -9,12 +9,13 @@ export type PreviewDirectoryResult = {
 export async function fetchPreviewDirectoryEntries(options: {
   cachedEntries?: RegistryFsEntry[];
   knownHash?: string;
+  forceRefresh?: boolean;
   request: (knownHash?: string) => Promise<PreviewDirectoryResult>;
 }): Promise<{entries: RegistryFsEntry[]; hash: string}> {
-  const cachedEntries = Array.isArray(options.cachedEntries)
+  const cachedEntries = !options.forceRefresh && Array.isArray(options.cachedEntries)
     ? options.cachedEntries
     : undefined;
-  const validatedHash = cachedEntries && options.knownHash
+  const validatedHash = !options.forceRefresh && cachedEntries && options.knownHash
     ? options.knownHash
     : undefined;
   let result = await options.request(validatedHash);

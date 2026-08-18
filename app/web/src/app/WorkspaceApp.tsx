@@ -8174,14 +8174,18 @@ export function App() {
     chatFilePreviewDirErrorsByProject[activePreviewProjectId] ?? {};
   const chatFilePreviewExpandedDirs =
     chatFilePreviewExpandedDirsByProject[activePreviewProjectId] ?? ['.'];
+  const chatFilePreviewRootLoading = !!chatFilePreviewLoadingDirs['.'];
+  const chatFilePreviewRootError = chatFilePreviewDirErrors['.'] || '';
   const chatFilePreviewRootState: 'ready' | 'loading' | 'error' | 'empty' =
-    !chatFilePreviewRootLoaded
-      ? chatFilePreviewDirErrors['.']
+    chatFilePreviewRootLoading
+      ? 'loading'
+      : chatFilePreviewRootError
         ? 'error'
-        : 'loading'
-      : chatFilePreviewDirEntries['.'].length > 0
-        ? 'ready'
-        : 'empty';
+        : !chatFilePreviewRootLoaded
+          ? 'loading'
+          : chatFilePreviewDirEntries['.'].length > 0
+            ? 'ready'
+            : 'empty';
   const isPreviewDirectoryExpanded = (path: string) =>
     chatFilePreviewExpandedDirs.includes(path);
   const previewMirrorState = useMemo<PreviewWorkbenchMirrorState>(() => ({
@@ -8331,7 +8335,11 @@ export function App() {
   ]);
 
 
-  const loadPreviewDirectory = async (projectId: string, path: string) => {
+  const loadPreviewDirectory = async (
+    projectId: string,
+    path: string,
+    options?: {forceRefresh?: boolean},
+  ) => {
     const targetProjectId = projectId;
     if (!targetProjectId) return;
     const loadKey = fileMemoryCacheKey(targetProjectId, path);
@@ -8346,7 +8354,9 @@ export function App() {
       [targetProjectId]: {...(prev[targetProjectId] ?? {}), [path]: true},
     }));
     try {
-      const persistedCache = workspaceStore.getCachedDirectory(targetProjectId, path);
+      const persistedCache = options?.forceRefresh
+        ? undefined
+        : workspaceStore.getCachedDirectory(targetProjectId, path);
       const cachedEntries = persistedCache?.entries;
       const knownHash = cachedEntries
         ? dirHashRef.current[loadKey] || persistedCache?.hash || ''
@@ -8354,6 +8364,7 @@ export function App() {
       const result = await fetchPreviewDirectoryEntries({
         cachedEntries,
         knownHash,
+        forceRefresh: options?.forceRefresh,
         request: requestHash => service.listProjectDirectory(
           targetProjectId,
           path,
@@ -8422,18 +8433,17 @@ export function App() {
     if (previewWorkbench.drawerMode !== 'files') return;
     const targetProjectId = previewWorkbench.activeProjectId;
     if (!targetProjectId) return;
-    if (chatFilePreviewDirEntriesByProject[targetProjectId]?.['.']) return;
-    loadPreviewDirectory(targetProjectId, '.').catch(() => undefined);
+    loadPreviewDirectory(targetProjectId, '.', {forceRefresh: true}).catch(() => undefined);
   }, [
     previewWorkbench.activeProjectId,
     previewWorkbench.drawerMode,
-    chatFilePreviewDirEntriesByProject,
+    previewDetached,
   ]);
 
   const retryPreviewRootDirectory = () => {
     const targetProjectId = previewWorkbench.activeProjectId;
     if (!targetProjectId) return;
-    loadPreviewDirectory(targetProjectId, '.').catch(() => undefined);
+    loadPreviewDirectory(targetProjectId, '.', {forceRefresh: true}).catch(() => undefined);
   };
 
 

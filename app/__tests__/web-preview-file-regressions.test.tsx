@@ -9,6 +9,7 @@ type PreviewDirectoryLoaderModule = {
   fetchPreviewDirectoryEntries?: (options: {
     cachedEntries?: Array<{name: string; path: string; kind: 'file' | 'dir'}>;
     knownHash?: string;
+    forceRefresh?: boolean;
     request: (knownHash?: string) => Promise<{
       entries: Array<{name: string; path: string; kind: 'file' | 'dir'}>;
       hash?: string;
@@ -141,6 +142,33 @@ describe('preview file regressions', () => {
     ]);
   });
 
+  test('force refresh ignores an empty cached directory', async () => {
+    const {fetchPreviewDirectoryEntries} = optionalRequire<PreviewDirectoryLoaderModule>(
+      '../web/src/preview/previewDirectoryLoader',
+    );
+    expect(fetchPreviewDirectoryEntries).toBeDefined();
+
+    const requestedHashes: Array<string | undefined> = [];
+    const result = await fetchPreviewDirectoryEntries!({
+      cachedEntries: [],
+      knownHash: 'cached-empty-hash',
+      forceRefresh: true,
+      request: async knownHash => {
+        requestedHashes.push(knownHash);
+        return {
+          entries: [{name: 'README.md', path: 'README.md', kind: 'file'}],
+          hash: 'fresh-hash',
+          notModified: false,
+        };
+      },
+    });
+
+    expect(requestedHashes).toEqual([undefined]);
+    expect(result.entries).toEqual([
+      {name: 'README.md', path: 'README.md', kind: 'file'},
+    ]);
+  });
+
   test('keeps preview directory expansion isolated by project', () => {
     const {togglePreviewDirectoryExpansion} = optionalRequire<PreviewDirectoryLoaderModule>(
       '../web/src/preview/previewDirectoryLoader',
@@ -211,7 +239,8 @@ describe('preview file regressions', () => {
         }),
       );
     });
-    expect(renderer.root.findByProps({role: 'status'}).children.join('')).toContain('No files');
+    expect(renderer.root.findByType('span').children.join('')).toContain('No files');
+    expect(renderer.root.findByType('button').children.join('')).toContain('Retry');
   });
 
   test('reports a file context action without applying it to directories', async () => {
@@ -569,6 +598,8 @@ describe('preview file regressions', () => {
 
     expect(main).toContain("from '../preview/previewDirectoryLoader';");
     expect(main).toContain('fetchPreviewDirectoryEntries({');
+    expect(main).toContain('forceRefresh: true');
+    expect(main).toContain("loadPreviewDirectory(targetProjectId, '.', {forceRefresh: true})");
     expect(main).toContain('togglePreviewDirectoryExpansion(');
     expect(main).toContain("if (previewWorkbench.drawerMode !== 'files') return;");
     expect(main).toContain('rootState={chatFilePreviewRootState}');

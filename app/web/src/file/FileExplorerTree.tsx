@@ -114,7 +114,12 @@ export function FileExplorerTree({
             ) : null}
           </div>
         ) : rootState === 'empty' ? (
-          <div className="file-tree-root-state" role="status">No files found</div>
+          <div className="file-tree-root-state" role="status">
+            <span>No files found</span>
+            {onRetryRoot ? (
+              <button type="button" onClick={onRetryRoot}>Retry</button>
+            ) : null}
+          </div>
         ) : (
           renderFileTree('.', 0)
         )}
