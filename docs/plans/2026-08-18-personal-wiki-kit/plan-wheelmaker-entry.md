@@ -168,9 +168,9 @@ Workdir: `app`
 
 Expected: PASS; no mobile title-bar width changes because the row is in the app menu.
 
-- [ ] **Step 5: Git checkpoint**
+- [x] **Step 5: Git checkpoint**
 
-Checkpoint icon, UI, and tests. Reuse the existing title-action classes without a new style contract.
+Checkpoint: `7d7f401f feat(web): add personal wiki entry`.
 
 ### Task 5: Run WheelMaker compatibility regression
 
@@ -179,7 +179,7 @@ Checkpoint icon, UI, and tests. Reuse the existing title-action classes without 
 
 **Acceptance:** New/old client-server combinations remain compatible, no protocol version changed, and unrelated Hub/project behavior is unchanged.
 
-- [ ] **Step 1: Run focused Go suites**
+- [x] **Step 1: Run focused Go suites**
 
 Run: `go test ./internal/shared ./internal/registry ./internal/protocol ./cmd/wheelmaker`
 
@@ -187,7 +187,7 @@ Workdir: `server`
 
 Expected: PASS.
 
-- [ ] **Step 2: Run focused Web and type/build suites**
+- [x] **Step 2: Run focused Web and type/build suites**
 
 Run: `npm test -- --runInBand web/src/shell/WheelMakerAppMenu.test.tsx web/src/registry/RegistryClient.test.ts __tests__/web-registry-workspace-service.test.ts __tests__/web-chat-file-peek-viewer.test.ts && npm run tsc:web && npm run build:web`
 
@@ -195,12 +195,12 @@ Workdir: `app`
 
 Expected: PASS.
 
-- [ ] **Step 3: Audit protocol and privacy boundaries**
+- [x] **Step 3: Audit protocol and privacy boundaries**
 
 Run: `git diff origin/main...HEAD -- server/internal/protocol | rg -n "DefaultProtocolVersion|RegistryProtocolVersion"`
 
 Expected: No changed version constant.
 
-- [ ] **Step 4: Git checkpoint**
+- [x] **Step 4: Git checkpoint**
 
 Checkpoint any test-only compatibility corrections and mark this plan complete.
