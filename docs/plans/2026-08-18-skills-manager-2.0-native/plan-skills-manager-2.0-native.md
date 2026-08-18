@@ -61,7 +61,7 @@
 
 - [x] **Step 1: Run focused regression tests, then the relevant Go and web verification commands.**
 - [x] **Step 2: Inspect status and diff, update completed checkboxes, and checkpoint the verified work.**
-- [ ] **Step 3: Rebase on refreshed `origin/main`, run final checks, finalize Git workflow, and report remaining risks.**
+- [x] **Step 3: Rebase on refreshed `origin/main`, run final checks, finalize Git workflow, and report remaining risks.**
 
 ## Task 2 implementation notes
 
