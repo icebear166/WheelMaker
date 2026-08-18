@@ -182,7 +182,7 @@ Expected: all commands exit 0；policy contains 9 packages；changelog validator
 
 **Acceptance:** finalize 根据真实验证结果完成 commit、push、main 合并和 cleanup 偏好；若无法执行其中一项，报告具体原因而不宣称全部完成。
 
-- [ ] **Step 1: Re-run final acceptance checks**
+- [x] **Step 1: Re-run final acceptance checks**
 
 使用 Task 5 的命令和最终 `git status -sb`/diff 检查，确认没有任务外文件被 stage。
 
