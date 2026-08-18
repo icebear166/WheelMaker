@@ -123,8 +123,9 @@ import type {
   RegistrySkillCommandResponse,
   RegistrySkillDetailPayload,
   RegistrySkillInstallPayload,
+  RegistrySkillInstallAllPayload,
+  RegistrySkillRepoPayload,
   RegistrySkillScopePayload,
-  RegistrySkillSourcePayload,
   RegistryTerminalCreateResponse,
   RegistryTerminalGetResponse,
   RegistryTerminalInputEvent,
@@ -2956,12 +2957,35 @@ export class RegistryRepository {
     };
   }
 
-  async listSkillsSource(hubId: string, source: string): Promise<RegistrySkillCommandResponse> {
-    const response = await this.runHubStateAction(hubId, 'skills', 'listSource', {source});
+  async inspectSkillRepo(payload: RegistrySkillRepoPayload): Promise<RegistrySkillCommandResponse> {
+    return this.runSkillRepoAction('inspectRepo', payload);
+  }
+
+  async addSkillRepo(payload: RegistrySkillRepoPayload): Promise<RegistrySkillCommandResponse> {
+    return this.runSkillRepoAction('addRepo', payload);
+  }
+
+  async refreshSkillRepo(payload: RegistrySkillRepoPayload): Promise<RegistrySkillCommandResponse> {
+    return this.runSkillRepoAction('refreshRepo', payload);
+  }
+
+  async updateSkillRepo(payload: RegistrySkillRepoPayload): Promise<RegistrySkillCommandResponse> {
+    return this.runSkillRepoAction('updateRepo', payload);
+  }
+
+  async installAllSkills(payload: RegistrySkillInstallAllPayload): Promise<RegistrySkillCommandResponse> {
+    return this.runSkillRepoAction('installAll', payload);
+  }
+
+  async removeSkillRepo(payload: RegistrySkillRepoPayload): Promise<RegistrySkillCommandResponse> {
+    return this.runSkillRepoAction('removeRepo', payload);
+  }
+
+  async querySkillOperation(hubId: string): Promise<RegistrySkillCommandResponse> {
+    const response = await this.runHubStateAction(hubId, 'skills', 'operation');
     return hubStateActionResult<RegistrySkillCommandResponse>(response) ?? {
       ok: false,
       hubId,
-      source,
       errorSummary: 'missing hub state response',
     };
   }
@@ -2996,44 +3020,9 @@ export class RegistryRepository {
     };
   }
 
-  async updateSkills(payload: RegistrySkillScopePayload): Promise<RegistrySkillCommandResponse> {
-    const {hubId, ...params} = payload;
-    const response = await this.runHubStateAction(hubId, 'skills', 'update', params);
-    return hubStateActionResult<RegistrySkillCommandResponse>(response) ?? {
-      ok: false,
-      hubId,
-      errorSummary: 'missing hub state response',
-    };
-  }
-
-  async previewSkillSource(payload: RegistrySkillSourcePayload): Promise<RegistrySkillCommandResponse> {
-    return this.runSkillSourcePreview('previewSource', payload);
-  }
-
-  async previewSkillInstall(payload: RegistrySkillSourcePayload): Promise<RegistrySkillCommandResponse> {
-    return this.runSkillSourcePreview('previewInstall', payload);
-  }
-
-  async previewSkillUpdate(payload: RegistrySkillSourcePayload): Promise<RegistrySkillCommandResponse> {
-    return this.runSkillSourcePreview('previewUpdate', payload);
-  }
-
-  async previewSkillDeleteSource(payload: RegistrySkillSourcePayload): Promise<RegistrySkillCommandResponse> {
-    return this.runSkillSourcePreview('previewDeleteSource', payload);
-  }
-
-  async applySkillPreview(hubId: string, previewId: string): Promise<RegistrySkillCommandResponse> {
-    const response = await this.runHubStateAction(hubId, 'skills', 'applyPreview', {previewId});
-    return hubStateActionResult<RegistrySkillCommandResponse>(response) ?? {
-      ok: false,
-      hubId,
-      errorSummary: 'missing hub state response',
-    };
-  }
-
-  private async runSkillSourcePreview(
-    action: 'previewSource' | 'previewInstall' | 'previewUpdate' | 'previewDeleteSource',
-    payload: RegistrySkillSourcePayload,
+  private async runSkillRepoAction(
+    action: 'inspectRepo' | 'addRepo' | 'refreshRepo' | 'updateRepo' | 'installAll' | 'removeRepo',
+    payload: RegistrySkillRepoPayload,
   ): Promise<RegistrySkillCommandResponse> {
     const {hubId, ...params} = payload;
     const response = await this.runHubStateAction(hubId, 'skills', action, params);

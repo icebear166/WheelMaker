@@ -195,24 +195,10 @@ func (r *Reporter) actionHubStateSkills(ctx context.Context, action string, para
 			"accepted": result.Accepted,
 			"hubId":    r.cfg.HubID,
 		}, nil
-	case "listSource":
-		return r.runHubStateTool(ctx, hubToolMethodSkills, hubStateToolPayload(r.cfg.HubID, "list", params))
-	case "previewSource", "previewInstall", "previewUpdate", "previewDeleteSource":
-		result, err := r.runHubStateTool(ctx, hubToolMethodSkills, hubStateToolPayload(r.cfg.HubID, action, params))
-		scope, _ := params["scope"].(string)
-		projectName, _ := params["projectName"].(string)
-		r.refreshSkillsStateTarget(scope, projectName)
-		return result, err
-	case "applyPreview":
+	case "inspectRepo", "detail", "operation":
+		return r.runHubStateTool(ctx, hubToolMethodSkills, hubStateToolPayload(r.cfg.HubID, action, params))
+	case "addRepo", "refreshRepo", "updateRepo", "install", "installAll", "uninstall", "removeRepo":
 		return r.runSkillsStateAction(ctx, action, params)
-	case "install":
-		return r.runSkillsStateAction(ctx, "install", params)
-	case "uninstall":
-		return r.runSkillsStateAction(ctx, "uninstall", params)
-	case "update":
-		return r.runSkillsStateAction(ctx, "update", params)
-	case "detail":
-		return r.runHubStateTool(ctx, hubToolMethodSkills, hubStateToolPayload(r.cfg.HubID, "detail", params))
 	default:
 		return nil, fmt.Errorf("unsupported %s action %q", hubStateSectionSkills, action)
 	}

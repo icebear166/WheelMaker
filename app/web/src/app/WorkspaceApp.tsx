@@ -554,12 +554,9 @@ import {
   type WheelMakerPublicMetadata,
 } from '../settings/agentPackageUpdateView';
 import {
-  parseSkillSourceInput,
-  sameSkillScopeTarget,
   skillActionPendingKey,
   skillDetailCacheKey,
   type SkillDetailTarget,
-  type SkillInstallTarget,
   type SkillScopeTarget,
   type SkillSourceSkillTarget,
   type SkillSourceTarget,
@@ -780,8 +777,8 @@ import type {
   RegistryPortRelaySnapshot,
   RegistrySkillCommandResponse,
   RegistrySkillDetail,
+  RegistrySkillRepoSnapshot,
   RegistrySkillScope,
-  RegistrySkillSourcePreview,
   RegistryWheelMakerUpdateResponse,
   RegistryGatewayUpdateResponse,
   RegistrySpeechTranscriptEvent,
@@ -1023,8 +1020,24 @@ type SkillDetailCacheEntry = {
 };
 type SkillConfirmedTarget = Extract<
   ConfirmTarget,
-  {kind: 'skillPreview' | 'skillUninstall'}
+  {kind: 'skillUninstall'}
 >;
+type SkillOperationAction =
+  | 'addRepo'
+  | 'refreshRepo'
+  | 'updateRepo'
+  | 'install'
+  | 'installAll'
+  | 'uninstall'
+  | 'removeRepo';
+type SkillOperationTarget = SkillScopeTarget & {
+  kind: 'skillOperation';
+  action: SkillOperationAction;
+  source?: string;
+  skillName?: string;
+  skills?: string[];
+};
+type SkillActionTarget = SkillConfirmedTarget | SkillOperationTarget;
 type ChatComposerDraft = {
   text: string;
   tokens: ChatComposerToken[];
@@ -2846,26 +2859,17 @@ export function App() {
   const [projectIndexScanAllPendingByHubId, setProjectIndexScanAllPendingByHubId] = useState<Record<string, boolean>>({});
   const [skillsPendingKey, setSkillsPendingKey] = useState('');
   const [skillRetryNotice, setSkillRetryNotice] =
-    useState<SkillRetryNotice<SkillConfirmedTarget> | null>(null);
-  const skillActionByHubIdRef = useRef(new Map<string, SkillConfirmedTarget>());
+    useState<SkillRetryNotice<SkillActionTarget> | null>(null);
+  const skillActionByHubIdRef = useRef(new Map<string, SkillActionTarget>());
   const seenSkillOperationRef = useRef(new Map<string, string>());
-  const [skillInstallTarget, setSkillInstallTarget] = useState<SkillInstallTarget | null>(null);
-  const [skillSourceInput, setSkillSourceInput] = useState('');
-  const [skillSourcePreview, setSkillSourcePreview] = useState<RegistrySkillSourcePreview | null>(null);
-  const [skillSourceRequestedNames, setSkillSourceRequestedNames] = useState<string[]>([]);
-  const [skillSourceLoading, setSkillSourceLoading] = useState(false);
-  const [skillSourceError, setSkillSourceError] = useState('');
   const [skillDetailTarget, setSkillDetailTarget] = useState<SkillDetailTarget | null>(null);
   const [skillDetailCache, setSkillDetailCache] = useState<Record<string, SkillDetailCacheEntry>>({});
   const chatHubSkillSurface = useMemo<ChatHubSkillSurface | null>(() => {
-    if (skillInstallTarget) {
-      return {kind: 'install', target: skillInstallTarget};
-    }
     if (skillDetailTarget) {
       return {kind: 'detail', target: skillDetailTarget};
     }
     return null;
-  }, [skillDetailTarget, skillInstallTarget]);
+  }, [skillDetailTarget]);
   const [chatHubSkillSurfaceVisible, setChatHubSkillSurfaceVisible, chatHubSkillSurfaceExiting] =
     useMenuExitState<ChatHubSkillSurface>();
   useEffect(() => {
@@ -2874,7 +2878,6 @@ export function App() {
   const chatHubSkillSurfaceForMenu = chatHubSkillSurface ?? chatHubSkillSurfaceVisible;
   const chatHubSkillSurfaceOpen = chatHubSkillSurface !== null;
   const closeChatHubSkillSurface = useCallback(() => {
-    setSkillInstallTarget(null);
     setSkillDetailTarget(null);
   }, []);
   const [portRelaySnapshot, setPortRelaySnapshot] = useState<RegistryPortRelaySnapshot>(DEFAULT_PORT_RELAY_SNAPSHOT);
@@ -6956,29 +6959,20 @@ export function App() {
         onRequestGatewayUpdate={handleChatHubGatewayUpdate}
         onRequestNpmUpdate={handleChatHubNpmUpdate}
         onPackageAction={handleChatHubPackageAction}
-        onRequestSkillInstall={requestSkillInstall}
+        onInspectSkillRepo={inspectSkillRepo}
+        onAddSkillRepo={requestSkillAddRepo}
         onRequestSkillDetail={requestSkillDetail}
         onRefreshSkillSource={requestSkillSourceRefresh}
+        onUpdateSkillSource={requestSkillSourceUpdate}
+        onInstallAllSkillSource={requestSkillSourceInstallAll}
         onDeleteSkillSource={requestSkillSourceDelete}
         onInstallSourceSkill={requestSourceSkillInstall}
-        onUpdateSourceSkill={requestSourceSkillUpdate}
-        onUpdateSkillSources={requestSkillSourcesUpdate}
         onRequestSkillUninstall={requestSkillUninstall}
         onRetrySkills={hubId => {
           service.hubStore.refresh(hubId, ['skills'], true).catch(() => undefined);
         }}
         skillSurface={chatHubSkillSurfaceForMenu}
         skillSurfaceExiting={chatHubSkillSurfaceExiting}
-        skillInstall={{
-          sourceInput: skillSourceInput,
-          onSourceInputChange: changeSkillSourceInput,
-          sourceLoading: skillSourceLoading,
-          sourceError: skillSourceError,
-          preview: skillSourcePreview,
-          requestedSkillNames: skillSourceRequestedNames,
-          onPreview: previewSkillSourceInstall,
-          onApply: requestSkillSourceApply,
-        }}
         skillDetail={{
           entries: skillDetailCache,
           pendingKey: skillsPendingKey,
@@ -13778,8 +13772,12 @@ export function App() {
       const failedSkills = (operation.results ?? [])
         .filter(result => result.status === 'failed')
         .map(result => result.skill);
-      const retryTarget = target?.kind === 'skillPreview' && failedSkills.length > 0
-        ? {...target, skills: failedSkills}
+      const retryTarget = target?.kind === 'skillOperation' && failedSkills.length > 0
+        ? {
+            ...target,
+            skills: failedSkills,
+            skillName: failedSkills.length === 1 ? failedSkills[0] : undefined,
+          }
         : target;
       const notice = createSkillRetryNotice(
         failedSkills.length > 0
@@ -13799,153 +13797,114 @@ export function App() {
     }
   }, [observeSkillOperation, skillHubs]);
 
-  const requestSkillInstall = useCallback((target: SkillInstallTarget) => {
-    const sameTarget = sameSkillScopeTarget(skillInstallTarget, target);
-    setSkillDetailTarget(null);
-    setSkillInstallTarget(target);
-    if (!sameTarget) {
-      setSkillSourceError('');
-      setSkillSourcePreview(null);
-      setSkillSourceRequestedNames([]);
-      setSkillSourceInput('');
+  const inspectSkillRepo = useCallback(async (
+    target: SkillScopeTarget,
+    source: string,
+  ): Promise<RegistrySkillRepoSnapshot> => {
+    const result = await service.inspectSkillRepo({...target, source});
+    if (!result.ok || !result.repo) {
+      throw new Error(skillCommandErrorMessage(result));
     }
-  }, [skillInstallTarget]);
-
-  const changeSkillSourceInput = useCallback((value: string) => {
-    setSkillSourceInput(value);
-    setSkillSourcePreview(null);
-    setSkillSourceRequestedNames([]);
-    setSkillSourceError('');
+    return result.repo;
   }, []);
 
-  const skillPreviewConfirmTarget = useCallback((
-    preview: RegistrySkillSourcePreview,
-    action: Extract<ConfirmTarget, {kind: 'skillPreview'}>['action'],
-  ): Extract<ConfirmTarget, {kind: 'skillPreview'}> => ({
-    kind: 'skillPreview',
-    action,
-    hubId: action === 'saveSource' || action === 'install'
-      ? skillInstallTarget?.hubId || ''
-      : '',
-    scope: preview.scope,
-    projectName: preview.projectName,
-    previewId: preview.id,
-    source: preview.source,
-    sourceKey: preview.sourceKey,
-    resolvedCommit: preview.resolvedCommit,
-    skills: preview.skills?.length
-      ? preview.skills
-      : action === 'saveSource'
-        ? preview.skillList.map(skill => skill.name)
-        : [],
-    overwritesLocal: preview.overwritesLocal,
-  }), [skillInstallTarget?.hubId]);
-
-  const previewSkillSourceInstall = useCallback(async () => {
-    const target = skillInstallTarget;
-    const parsed = parseSkillSourceInput(skillSourceInput);
-    const source = parsed.source;
-    if (parsed.error) {
-      setSkillSourceError(parsed.error);
-      return;
-    }
-    if (!target || !source) {
-      setSkillSourceError('Source is required.');
-      return;
-    }
-    setSkillSourceLoading(true);
-    setSkillSourceError('');
-    try {
-      const payload = {
-        ...target,
-        source,
-        skills: parsed.skillNames,
-      };
-      const result = parsed.skillNames.length > 0
-        ? await service.previewSkillInstall(payload)
-        : await service.previewSkillSource(payload);
-      if (!result.ok || !result.preview) {
-        throw new Error(skillCommandErrorMessage(result));
-      }
-      setSkillSourcePreview(result.preview);
-      setSkillSourceRequestedNames(parsed.skillNames);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      setSkillSourceError(message);
-    } finally {
-      setSkillSourceLoading(false);
-    }
-  }, [skillInstallTarget, skillSourceInput]);
-
-  const requestSkillSourceApply = useCallback((previewId: string) => {
-    const preview = skillSourcePreview;
-    if (!preview || preview.id !== previewId) {
-      setSkillSourceError('Preview expired. Preview the source again.');
-      return;
-    }
-    setConfirmError('');
-    setConfirmTarget(skillPreviewConfirmTarget(
-      preview,
-      preview.kind === 'previewInstall' ? 'install' : 'saveSource',
-    ));
-  }, [skillPreviewConfirmTarget, skillSourcePreview]);
-
-  const previewSkillLedgerAction = useCallback(async (
-    action: Extract<ConfirmTarget, {kind: 'skillPreview'}>['action'],
-    target: SkillScopeTarget | SkillSourceTarget,
-    skills: string[] = [],
-  ) => {
-    const hasSource = 'source' in target;
-    const pendingKey = skillActionPendingKey({...target, action: `skillPreview:${action}`});
+  const executeSkillOperation = useCallback(async (target: SkillOperationTarget) => {
+    const skillName = target.skillName || (target.skills?.length === 1 ? target.skills[0] : undefined);
+    const pendingKey = skillActionPendingKey({...target, skillName, action: target.action});
+    skillActionByHubIdRef.current.set(target.hubId, target);
+    setSkillRetryNotice(null);
     setSkillsPendingKey(pendingKey);
-    setConfirmError('');
     try {
-      const payload = {
+      const scopePayload = {
         hubId: target.hubId,
         scope: target.scope,
         projectName: target.projectName,
-        source: hasSource ? target.source : '',
-        skills,
       };
-      const result = action === 'install'
-        ? await service.previewSkillInstall(payload)
-        : action === 'update'
-          ? await service.previewSkillUpdate(payload)
-          : action === 'deleteSource'
-            ? await service.previewSkillDeleteSource(payload)
-            : await service.previewSkillSource(payload);
-      if (!result.ok || !result.preview) {
+      const sourcePayload = {
+        ...scopePayload,
+        source: target.source || '',
+      };
+      let result: RegistrySkillCommandResponse;
+      switch (target.action) {
+        case 'addRepo':
+          result = await service.addSkillRepo(sourcePayload);
+          break;
+        case 'refreshRepo':
+          result = await service.refreshSkillRepo(sourcePayload);
+          break;
+        case 'updateRepo':
+          result = await service.updateSkillRepo(sourcePayload);
+          break;
+        case 'installAll':
+          result = await service.installAllSkills(sourcePayload);
+          break;
+        case 'removeRepo':
+          result = await service.removeSkillRepo(sourcePayload);
+          break;
+        case 'install':
+          result = await service.installSkills({
+            ...sourcePayload,
+            skills: target.skills ?? (skillName ? [skillName] : []),
+          });
+          break;
+        case 'uninstall':
+          result = await service.uninstallSkills({
+            ...scopePayload,
+            skills: target.skills ?? (skillName ? [skillName] : []),
+          });
+          break;
+        default:
+          result = {ok: false, hubId: target.hubId, errorSummary: 'Unsupported skill operation.'};
+      }
+      if (!result.ok) {
         throw new Error(skillCommandErrorMessage(result));
       }
-      const confirm = skillPreviewConfirmTarget(result.preview, action);
-      confirm.hubId = target.hubId;
-      setConfirmTarget(confirm);
-    } catch (err) {
-      setToastMessage(err instanceof Error ? err.message : String(err));
-    } finally {
+      if (result.operation && !result.operation.running) {
+        observeSkillOperation(target.hubId, result.operation);
+        return;
+      }
+      if (result.accepted === true || result.operation?.running === true) {
+        return;
+      }
+      skillActionByHubIdRef.current.delete(target.hubId);
       setSkillsPendingKey('');
+      setToastMessage('Skill operation completed.');
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      skillActionByHubIdRef.current.delete(target.hubId);
+      setSkillsPendingKey('');
+      setSkillRetryNotice(createSkillRetryNotice(message, target));
     }
-  }, [skillPreviewConfirmTarget]);
+  }, [observeSkillOperation]);
+
+  const requestSkillAddRepo = useCallback((target: SkillScopeTarget, source: string) => {
+    void executeSkillOperation({kind: 'skillOperation', ...target, action: 'addRepo', source});
+  }, [executeSkillOperation]);
 
   const requestSkillSourceRefresh = useCallback((target: SkillSourceTarget) => {
-    void previewSkillLedgerAction('refresh', target);
-  }, [previewSkillLedgerAction]);
+    void executeSkillOperation({...target, kind: 'skillOperation', action: 'refreshRepo'});
+  }, [executeSkillOperation]);
+
+  const requestSkillSourceUpdate = useCallback((target: SkillSourceTarget) => {
+    void executeSkillOperation({...target, kind: 'skillOperation', action: 'updateRepo'});
+  }, [executeSkillOperation]);
+
+  const requestSkillSourceInstallAll = useCallback((target: SkillSourceTarget) => {
+    void executeSkillOperation({...target, kind: 'skillOperation', action: 'installAll'});
+  }, [executeSkillOperation]);
 
   const requestSkillSourceDelete = useCallback((target: SkillSourceTarget) => {
-    void previewSkillLedgerAction('deleteSource', target);
-  }, [previewSkillLedgerAction]);
+    void executeSkillOperation({...target, kind: 'skillOperation', action: 'removeRepo'});
+  }, [executeSkillOperation]);
 
   const requestSourceSkillInstall = useCallback((target: SkillSourceSkillTarget) => {
-    void previewSkillLedgerAction('install', target, [target.skillName]);
-  }, [previewSkillLedgerAction]);
-
-  const requestSourceSkillUpdate = useCallback((target: SkillSourceSkillTarget) => {
-    void previewSkillLedgerAction('update', target, [target.skillName]);
-  }, [previewSkillLedgerAction]);
-
-  const requestSkillSourcesUpdate = useCallback((target: SkillScopeTarget | SkillSourceTarget) => {
-    void previewSkillLedgerAction('update', target);
-  }, [previewSkillLedgerAction]);
+    void executeSkillOperation({
+      ...target,
+      kind: 'skillOperation',
+      action: 'install',
+      skills: [target.skillName],
+    });
+  }, [executeSkillOperation]);
 
   const requestSkillUninstall = useCallback((target: SkillUninstallTarget) => {
     setConfirmError('');
@@ -13992,7 +13951,6 @@ export function App() {
 
   const requestSkillDetail = useCallback(async (target: SkillDetailTarget) => {
     const cacheKey = skillDetailCacheKey(target);
-    setSkillInstallTarget(null);
     setSkillDetailTarget(target);
     const cached = skillDetailCache[cacheKey];
     if (cached?.detail || cached?.loading) {
@@ -14008,11 +13966,7 @@ export function App() {
       hubId: target.hubId,
       scope: target.scope,
       projectName: target.projectName,
-      skillName: target.kind === 'skillUninstall'
-        ? target.skillName
-        : target.skills.length === 1
-          ? target.skills[0]
-          : undefined,
+      skillName: target.skillName,
       action: target.kind,
     });
     skillActionByHubIdRef.current.set(target.hubId, target);
@@ -14021,17 +13975,12 @@ export function App() {
     setSkillsPendingKey(pendingKey);
     let operationPending = false;
     try {
-      let results: RegistrySkillCommandResponse[] = [];
-      if (target.kind === 'skillUninstall') {
-        results = [await service.uninstallSkills({
-          hubId: target.hubId,
-          scope: target.scope,
-          projectName: target.projectName,
-          skills: [target.skillName],
-        })];
-      } else {
-        results = [await service.applySkillPreview(target.hubId, target.previewId)];
-      }
+      const results: RegistrySkillCommandResponse[] = [await service.uninstallSkills({
+        hubId: target.hubId,
+        scope: target.scope,
+        projectName: target.projectName,
+        skills: [target.skillName],
+      })];
       const failed = results.find(result => !result.ok);
       if (failed) {
         throw new Error(skillCommandErrorMessage(failed));
@@ -14045,12 +13994,6 @@ export function App() {
       operationPending = !completedImmediately;
       setConfirmTarget(null);
       setConfirmError('');
-      if (target.kind === 'skillPreview' && (target.action === 'install' || target.action === 'saveSource')) {
-        setSkillInstallTarget(null);
-        setSkillSourcePreview(null);
-        setSkillSourceRequestedNames([]);
-        setSkillSourceInput('');
-      }
       if (terminalOperation) {
         observeSkillOperation(target.hubId, terminalOperation);
       } else if (completedImmediately) {
@@ -14075,19 +14018,12 @@ export function App() {
       return;
     }
     setSkillRetryNotice(null);
-    if (retry.target.kind === 'skillPreview') {
-      const sourceTarget = {
-        hubId: retry.target.hubId,
-        scope: retry.target.scope,
-        projectName: retry.target.projectName,
-        source: retry.target.source,
-        sourceKey: retry.target.sourceKey || '',
-      };
-      void previewSkillLedgerAction(retry.target.action, sourceTarget, retry.target.skills);
+    if (retry.target.kind === 'skillOperation') {
+      void executeSkillOperation(retry.target);
       return;
     }
     handleSkillConfirmedAction(retry.target).catch(() => undefined);
-  }, [handleSkillConfirmedAction, previewSkillLedgerAction, skillRetryNotice]);
+  }, [executeSkillOperation, handleSkillConfirmedAction, skillRetryNotice]);
 
   const dismissSkillRetryNotice = useCallback(() => {
     const retry = skillRetryNotice?.retry;
@@ -22542,9 +22478,8 @@ export function App() {
   const wheelMakerUpdateTarget = confirmTarget?.kind === 'wheelMakerUpdate' ? confirmTarget : null;
   const gatewayUpdateTarget = confirmTarget?.kind === 'gatewayUpdate' ? confirmTarget : null;
   const wheelMakerUpdateAllTarget = confirmTarget?.kind === 'wheelMakerUpdateAll' ? confirmTarget : null;
-  const activeSkillPreviewConfirmTarget = confirmTarget?.kind === 'skillPreview' ? confirmTarget : null;
   const skillUninstallConfirmTarget = confirmTarget?.kind === 'skillUninstall' ? confirmTarget : null;
-  const skillConfirmTarget = activeSkillPreviewConfirmTarget ?? skillUninstallConfirmTarget;
+  const skillConfirmTarget = skillUninstallConfirmTarget;
   const npmPackageConfirmPendingKey = npmPackageTarget
     ? agentPackageActionKey(npmPackageTarget.hubId, npmPackageTarget.packageName)
     : '';
@@ -22553,8 +22488,7 @@ export function App() {
         hubId: skillConfirmTarget.hubId,
         scope: skillConfirmTarget.scope,
         projectName: skillConfirmTarget.projectName,
-        skillName: skillUninstallConfirmTarget?.skillName ??
-          (activeSkillPreviewConfirmTarget?.skills.length === 1 ? activeSkillPreviewConfirmTarget.skills[0] : undefined),
+        skillName: skillUninstallConfirmTarget?.skillName,
         action: skillConfirmTarget.kind,
       })
     : '';
@@ -22657,10 +22591,7 @@ export function App() {
       handleWheelMakerUpdateAllConfirmedAction(confirmTarget).catch(() => undefined);
       return;
     }
-    if (
-      confirmTarget.kind === 'skillPreview' ||
-      confirmTarget.kind === 'skillUninstall'
-    ) {
+    if (confirmTarget.kind === 'skillUninstall') {
       handleSkillConfirmedAction(confirmTarget).catch(() => undefined);
       return;
     }

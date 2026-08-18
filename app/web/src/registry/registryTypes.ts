@@ -1176,7 +1176,7 @@ export type RegistrySkillCatalogStatus =
   | 'copies_differ'
   | 'needs_refresh';
 
-export type RegistrySkillSourceStatus = 'ready' | 'needs_refresh' | 'stale' | 'pending_removal';
+export type RegistrySkillSourceStatus = 'ready' | 'needs_refresh' | 'needs_clone' | 'stale' | 'pending_removal';
 
 export interface RegistrySkillCatalogItem {
   name: string;
@@ -1196,6 +1196,10 @@ export interface RegistrySkillCatalogItem {
 export interface RegistrySkillSourceSnapshot {
   source: string;
   sourceKey: string;
+  branch?: string;
+  commit?: string;
+  remoteCommit?: string;
+  updateAvailable?: boolean;
   resolvedCommit?: string;
   refreshedAt?: string;
   status: RegistrySkillSourceStatus | string;
@@ -1211,24 +1215,20 @@ export interface RegistrySkillSourceScopeSnapshot {
   needsResolutionSkills?: string[];
 }
 
+export interface RegistrySkillRepoSnapshot {
+  source: string;
+  sourceKey: string;
+  branch?: string;
+  commit?: string;
+  remoteCommit?: string;
+  updateAvailable: boolean;
+  skills: RegistrySkillSourceListItem[];
+}
+
 export interface RegistrySkillSourceListItem {
   name: string;
   skillPath: string;
   contentSha256: string;
-}
-
-export interface RegistrySkillSourcePreview {
-  id: string;
-  kind: 'previewSource' | 'previewInstall' | 'previewUpdate' | 'previewDeleteSource' | string;
-  scope: RegistrySkillScope;
-  projectName?: string;
-  source: string;
-  sourceKey: string;
-  resolvedCommit: string;
-  skillList: RegistrySkillSourceListItem[];
-  skills?: string[];
-  overwritesLocal?: boolean;
-  createdAt: string;
 }
 
 export interface RegistrySkillOperationItemResult {
@@ -1240,7 +1240,7 @@ export interface RegistrySkillOperationItemResult {
 
 export interface RegistrySkillOperation {
   running: boolean;
-  action: 'install' | 'uninstall' | 'update' | string;
+  action: 'addRepo' | 'refreshRepo' | 'updateRepo' | 'install' | 'installAll' | 'uninstall' | 'removeRepo' | string;
   scope?: RegistrySkillScope;
   projectName?: string;
   source?: string;
@@ -1270,7 +1270,7 @@ export interface RegistrySkillCommandResponse {
   operation?: RegistrySkillOperation | null;
   message?: string;
   errorSummary?: string;
-  preview?: RegistrySkillSourcePreview;
+  repo?: RegistrySkillRepoSnapshot;
   hubSources?: RegistrySkillSourceScopeSnapshot;
   projectSources?: Record<string, RegistrySkillSourceScopeSnapshot>;
 }
@@ -1290,13 +1290,14 @@ export interface RegistrySkillScopePayload {
   skills?: string[];
 }
 
-export interface RegistrySkillSourcePayload {
+export interface RegistrySkillRepoPayload {
   hubId: string;
   scope: RegistrySkillScope;
   projectName?: string;
   source: string;
-  skills?: string[];
 }
+
+export interface RegistrySkillInstallAllPayload extends RegistrySkillRepoPayload {}
 
 export interface RegistrySkillDetailPayload {
   hubId: string;

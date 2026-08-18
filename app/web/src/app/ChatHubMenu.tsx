@@ -13,6 +13,7 @@ import type {
   RegistryHubMCPRuntimeStatusData,
   RegistrySkillProjectSnapshot,
   RegistrySkillOperation,
+  RegistrySkillRepoSnapshot,
   RegistrySkillSnapshot,
   RegistrySkillSourceScopeSnapshot,
 } from '../registry/registryTypes';
@@ -20,7 +21,6 @@ import {
   projectSkillTotal,
   sortSkillProjects,
   type SkillDetailTarget,
-  type SkillInstallTarget,
   type SkillScopeTarget,
   type SkillSourceSkillTarget,
   type SkillSourceTarget,
@@ -246,18 +246,18 @@ export interface ChatHubMenuProps {
   onRequestGatewayUpdate: (hubId: string) => void;
   onRequestNpmUpdate: (hubId: string) => void;
   onPackageAction: (hubId: string, action: 'install' | 'update' | 'uninstall', pkg: ChatHubNpmPackageView) => void;
-  onRequestSkillInstall: (target: SkillInstallTarget) => void;
+  onInspectSkillRepo: (target: SkillScopeTarget, source: string) => Promise<RegistrySkillRepoSnapshot>;
+  onAddSkillRepo: (target: SkillScopeTarget, source: string) => void;
   onRequestSkillDetail: (target: SkillDetailTarget) => void;
   onRefreshSkillSource: (target: SkillSourceTarget) => void;
+  onUpdateSkillSource: (target: SkillSourceTarget) => void;
+  onInstallAllSkillSource: (target: SkillSourceTarget) => void;
   onDeleteSkillSource: (target: SkillSourceTarget) => void;
   onInstallSourceSkill: (target: SkillSourceSkillTarget) => void;
-  onUpdateSourceSkill: (target: SkillSourceSkillTarget) => void;
-  onUpdateSkillSources: (target: SkillScopeTarget | SkillSourceTarget) => void;
   onRequestSkillUninstall: (target: SkillUninstallTarget) => void;
   onRetrySkills: (hubId: string) => void;
   skillSurface: ChatHubSkillSurface | null;
   skillSurfaceExiting: boolean;
-  skillInstall: ChatHubSkillCompanionProps['install'];
   skillDetail: ChatHubSkillCompanionProps['detail'];
   onCloseSkillSurface: () => void;
   onScanAllIndexes: (hubId: string) => void;
@@ -1029,13 +1029,14 @@ function ChatHubBlock(props: ChatHubMenuProps & {hubId: string}): React.JSX.Elem
     onRequestGatewayUpdate,
     onRequestNpmUpdate,
     onPackageAction,
-    onRequestSkillInstall,
+    onInspectSkillRepo,
+    onAddSkillRepo,
     onRequestSkillDetail,
     onRefreshSkillSource,
+    onUpdateSkillSource,
+    onInstallAllSkillSource,
     onDeleteSkillSource,
     onInstallSourceSkill,
-    onUpdateSourceSkill,
-    onUpdateSkillSources,
     onRequestSkillUninstall,
     onRetrySkills,
     onScanAllIndexes,
@@ -1056,13 +1057,14 @@ function ChatHubBlock(props: ChatHubMenuProps & {hubId: string}): React.JSX.Elem
   const sectionOpen = (section: ChatHubDetailId) => openSections.includes(section);
   const visibleProjectCount = treeItem.projects.filter(project => !hiddenProjectIdSet.has(project.projectId)).length;
   const skillActions: ChatHubSkillActions = {
-    onAdd: onRequestSkillInstall,
+    onInspectRepo: onInspectSkillRepo,
+    onAddRepo: onAddSkillRepo,
     onDetail: onRequestSkillDetail,
     onRefreshSource: onRefreshSkillSource,
+    onUpdateSource: onUpdateSkillSource,
+    onInstallAll: onInstallAllSkillSource,
     onDeleteSource: onDeleteSkillSource,
     onInstallSkill: onInstallSourceSkill,
-    onUpdateSkill: onUpdateSourceSkill,
-    onUpdateAll: onUpdateSkillSources,
     onUninstall: onRequestSkillUninstall,
     onRetry: onRetrySkills,
   };
@@ -1352,7 +1354,6 @@ export const ChatHubMenu = React.memo(function ChatHubMenu(props: ChatHubMenuPro
     onUpdateAllHubs,
     skillSurface,
     skillSurfaceExiting,
-    skillInstall,
     skillDetail,
     onCloseSkillSurface,
   } = props;
@@ -1417,9 +1418,7 @@ export const ChatHubMenu = React.memo(function ChatHubMenu(props: ChatHubMenuPro
               </button>
               <span className="chat-hub-page-title">
                 {skillSurface
-                  ? skillSurface.kind === 'install'
-                    ? 'Add Skill Source'
-                    : skillSurface.target.skillName
+                  ? skillSurface.target.skillName
                   : 'Hubs'}
               </span>
             </div>
@@ -1428,7 +1427,6 @@ export const ChatHubMenu = React.memo(function ChatHubMenu(props: ChatHubMenuPro
                 <React.Suspense fallback={null}>
                   <ChatHubSkillCompanion
                     surface={skillSurface}
-                    install={skillInstall}
                     detail={skillDetail}
                     onClose={onCloseSkillSurface}
                   />
@@ -1454,7 +1452,6 @@ export const ChatHubMenu = React.memo(function ChatHubMenu(props: ChatHubMenuPro
                 <React.Suspense fallback={null}>
                   <ChatHubSkillCompanion
                     surface={skillSurface}
-                    install={skillInstall}
                     detail={skillDetail}
                     onClose={onCloseSkillSurface}
                   />

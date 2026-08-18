@@ -145,6 +145,11 @@ func discoverSkillSourceCatalog(checkout string) ([]skillSourceSkillSnapshot, er
 		if !entry.IsDir() {
 			return nil
 		}
+		// A repository-level skills/SKILL.md is not a published skill. Only
+		// child directories under skills/ may become installable units.
+		if filepath.Clean(path) == filepath.Clean(skillsRoot) {
+			return nil
+		}
 		skillFile := filepath.Join(path, "SKILL.md")
 		skillInfo, skillErr := os.Lstat(skillFile)
 		if errors.Is(skillErr, os.ErrNotExist) {

@@ -79,8 +79,9 @@ import type {
   RegistrySkillCommandResponse,
   RegistrySkillDetailPayload,
   RegistrySkillInstallPayload,
+  RegistrySkillInstallAllPayload,
+  RegistrySkillRepoPayload,
   RegistrySkillScopePayload,
-  RegistrySkillSourcePayload,
   RegistrySpeechCancelPayload,
   RegistrySpeechChunkPayload,
   RegistrySpeechFinishPayload,
@@ -1266,11 +1267,34 @@ export class RegistryWorkspaceService {
     return this.repository.reindexSkills(hubId);
   }
 
-  async listSkillsSource(hubId: string, source: string): Promise<RegistrySkillCommandResponse> {
-    if (!this.repository) {
-      throw new Error('session is not ready');
-    }
-    return this.repository.listSkillsSource(hubId, source);
+  async inspectSkillRepo(payload: RegistrySkillRepoPayload): Promise<RegistrySkillCommandResponse> {
+    if (!this.repository) throw new Error('session is not ready');
+    return this.repository.inspectSkillRepo(payload);
+  }
+
+  async addSkillRepo(payload: RegistrySkillRepoPayload): Promise<RegistrySkillCommandResponse> {
+    if (!this.repository) throw new Error('session is not ready');
+    return this.repository.addSkillRepo(payload);
+  }
+
+  async refreshSkillRepo(payload: RegistrySkillRepoPayload): Promise<RegistrySkillCommandResponse> {
+    if (!this.repository) throw new Error('session is not ready');
+    return this.repository.refreshSkillRepo(payload);
+  }
+
+  async updateSkillRepo(payload: RegistrySkillRepoPayload): Promise<RegistrySkillCommandResponse> {
+    if (!this.repository) throw new Error('session is not ready');
+    return this.repository.updateSkillRepo(payload);
+  }
+
+  async installAllSkills(payload: RegistrySkillInstallAllPayload): Promise<RegistrySkillCommandResponse> {
+    if (!this.repository) throw new Error('session is not ready');
+    return this.repository.installAllSkills(payload);
+  }
+
+  async removeSkillRepo(payload: RegistrySkillRepoPayload): Promise<RegistrySkillCommandResponse> {
+    if (!this.repository) throw new Error('session is not ready');
+    return this.repository.removeSkillRepo(payload);
   }
 
   async installSkills(payload: RegistrySkillInstallPayload): Promise<RegistrySkillCommandResponse> {
@@ -1292,38 +1316,6 @@ export class RegistryWorkspaceService {
       throw new Error('session is not ready');
     }
     return this.repository.getSkillDetail(payload);
-  }
-
-  async updateSkills(payload: RegistrySkillScopePayload): Promise<RegistrySkillCommandResponse> {
-    if (!this.repository) {
-      throw new Error('session is not ready');
-    }
-    return this.repository.updateSkills(payload);
-  }
-
-  async previewSkillSource(payload: RegistrySkillSourcePayload): Promise<RegistrySkillCommandResponse> {
-    if (!this.repository) throw new Error('session is not ready');
-    return this.repository.previewSkillSource(payload);
-  }
-
-  async previewSkillInstall(payload: RegistrySkillSourcePayload): Promise<RegistrySkillCommandResponse> {
-    if (!this.repository) throw new Error('session is not ready');
-    return this.repository.previewSkillInstall(payload);
-  }
-
-  async previewSkillUpdate(payload: RegistrySkillSourcePayload): Promise<RegistrySkillCommandResponse> {
-    if (!this.repository) throw new Error('session is not ready');
-    return this.repository.previewSkillUpdate(payload);
-  }
-
-  async previewSkillDeleteSource(payload: RegistrySkillSourcePayload): Promise<RegistrySkillCommandResponse> {
-    if (!this.repository) throw new Error('session is not ready');
-    return this.repository.previewSkillDeleteSource(payload);
-  }
-
-  async applySkillPreview(hubId: string, previewId: string): Promise<RegistrySkillCommandResponse> {
-    if (!this.repository) throw new Error('session is not ready');
-    return this.repository.applySkillPreview(hubId, previewId);
   }
 
   async startSpeech(payload: RegistrySpeechStartPayload): Promise<RegistrySpeechStartResponse> {

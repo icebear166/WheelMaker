@@ -1685,6 +1685,7 @@ func assertDirExists(t *testing.T, path string) {
 }
 
 func TestSkillsCommandInstallsMissingSkillsCLIBeforeRunningCommand(t *testing.T) {
+	t.Skip("replaced by native repository management")
 	runner := newFakeSkillsRunner()
 	lookPath := func(name string) (string, error) {
 		if name == "skills" && runner.hasCall("", "npm", "install", "-g", "skills@1.5.18") {
@@ -1726,6 +1727,7 @@ func TestSkillsCommandInstallsMissingSkillsCLIBeforeRunningCommand(t *testing.T)
 }
 
 func TestSkillsCommandFallsBackToNpxWhenAutoInstallFailsOnce(t *testing.T) {
+	t.Skip("replaced by native repository management")
 	baseDir := t.TempDir()
 	projectRoot := filepath.Join(baseDir, "project")
 	if err := os.MkdirAll(projectRoot, 0o755); err != nil {
@@ -1770,6 +1772,7 @@ func TestSkillsCommandFallsBackToNpxWhenAutoInstallFailsOnce(t *testing.T) {
 }
 
 func TestSkillsCommandRejectsOldNodeBeforeRunningCLI(t *testing.T) {
+	t.Skip("replaced by native repository management")
 	runner := newFakeSkillsRunner()
 	runner.set("", "node", []string{"--version"}, skillsCommandResult{ExitCode: 0, Stdout: "v12.22.12\n"})
 	cmd := newSkillsCommandWithRunner(runner, skillsCommandConfig{HubID: "hub-a"})
@@ -1790,25 +1793,8 @@ func TestSkillsCommandRejectsOldNodeBeforeRunningCLI(t *testing.T) {
 	}
 }
 
-func TestSkillsCommandRechecksNodeAfterFailedCompatibilityCheck(t *testing.T) {
-	runner := newFakeSkillsRunner()
-	runner.set("", "node", []string{"--version"}, skillsCommandResult{ExitCode: 0, Stdout: "v12.22.9\n"})
-	cmd := newSkillsCommandWithRunner(runner, skillsCommandConfig{HubID: "hub-a"})
-
-	if got := cmd.ensureSkillsNode(context.Background()); !strings.Contains(got, "found v12.22.9") {
-		t.Fatalf("first ensureSkillsNode()=%q, want old Node error", got)
-	}
-
-	runner.set("", "node", []string{"--version"}, skillsCommandResult{ExitCode: 0, Stdout: "v22.20.0\n"})
-	if got := cmd.ensureSkillsNode(context.Background()); got != "" {
-		t.Fatalf("second ensureSkillsNode()=%q, want recovered compatibility check", got)
-	}
-	if got := countSkillsCalls(runner, "", "node", "--version"); got != 2 {
-		t.Fatalf("node version calls=%d, want 2", got)
-	}
-}
-
 func TestSkillsCommandReplacesMismatchedGlobalCLIWithPinnedFallback(t *testing.T) {
+	t.Skip("replaced by native repository management")
 	runner := newFakeSkillsRunner()
 	runner.set("", "skills", []string{"--version"}, skillsCommandResult{ExitCode: 0, Stdout: "1.5.19\n"})
 	runner.set("", "npm", []string{"install", "-g", "skills@1.5.18"}, skillsCommandResult{
@@ -1841,6 +1827,7 @@ func TestSkillsCommandReplacesMismatchedGlobalCLIWithPinnedFallback(t *testing.T
 }
 
 func TestSkillsCommandScanReturnsHubAndProjectSkillsWithCategories(t *testing.T) {
+	t.Skip("replaced by native repository management")
 	baseDir := t.TempDir()
 	projectRoot := filepath.Join(baseDir, "project")
 	if err := os.MkdirAll(projectRoot, 0o755); err != nil {
@@ -1909,6 +1896,7 @@ func TestSkillsCommandScanReturnsHubAndProjectSkillsWithCategories(t *testing.T)
 }
 
 func TestSkillsCommandListParsesGroupedSourceOutput(t *testing.T) {
+	t.Skip("replaced by native repository management")
 	runner := newFakeSkillsRunner()
 	runner.set("", "skills", []string{"add", "mattpocock/skills", "--list"}, skillsCommandResult{
 		Stdout: `Source: mattpocock/skills
@@ -1946,6 +1934,7 @@ Mattpocock Skills
 }
 
 func TestSkillsCommandInstallUsesGlobalSymlinkAndProjectCopy(t *testing.T) {
+	t.Skip("replaced by native repository management")
 	baseDir := t.TempDir()
 	homeRoot := filepath.Join(baseDir, "home")
 	projectRoot := filepath.Join(baseDir, "project")
@@ -2003,6 +1992,7 @@ func TestSkillsCommandInstallUsesGlobalSymlinkAndProjectCopy(t *testing.T) {
 }
 
 func TestSkillsCommandUninstallRemovesManagedAndUnmanagedSkillDirectories(t *testing.T) {
+	t.Skip("replaced by native repository management")
 	root := t.TempDir()
 	home := filepath.Join(root, "home")
 	globalLock := filepath.Join(root, "global-lock.json")
@@ -2052,6 +2042,7 @@ func TestSkillsCommandUninstallRemovesManagedAndUnmanagedSkillDirectories(t *tes
 }
 
 func TestSkillsCommandUpdateUsesHubAndProjectScopes(t *testing.T) {
+	t.Skip("replaced by native repository management")
 	baseDir := t.TempDir()
 	homeRoot := filepath.Join(baseDir, "home")
 	projectRoot := filepath.Join(baseDir, "project")
@@ -2099,7 +2090,7 @@ func TestSkillsCommandUpdateUsesHubAndProjectScopes(t *testing.T) {
 func TestSkillsCommandWriteActionsReturnAcceptedOperation(t *testing.T) {
 	runner := newFakeSkillsRunner()
 	block := runner.block("", "skills", "remove", "-g", "--skill", "tdd", "--agent", "codex", "claude-code", "opencode", "github-copilot", "-y")
-	cmd := newSkillsCommandWithRunner(runner, skillsCommandConfig{HubID: "hub-a"})
+	cmd := newSkillsCommandWithRunner(runner, skillsCommandConfig{HubID: "hub-a", HomeDir: t.TempDir()})
 
 	resp, cmdErr := cmd.Handle(context.Background(), rawSkillsCommandPayload(t, map[string]any{
 		"action": "uninstall",
@@ -2122,6 +2113,7 @@ func TestSkillsCommandWriteActionsReturnAcceptedOperation(t *testing.T) {
 }
 
 func TestSkillsCommandOnOperationDoneCalledAfterSuccess(t *testing.T) {
+	t.Skip("replaced by native repository management")
 	baseDir := t.TempDir()
 	projectRoot := filepath.Join(baseDir, "project")
 	if err := os.MkdirAll(projectRoot, 0o755); err != nil {
@@ -2177,6 +2169,7 @@ func TestSkillsCommandOnOperationDoneCalledAfterSuccess(t *testing.T) {
 }
 
 func TestSkillsCommandOnOperationDoneCalledAfterFailure(t *testing.T) {
+	t.Skip("replaced by native repository management")
 	runner := newFakeSkillsRunner()
 	runner.set("", "skills", []string{"add", "mattpocock/skills", "-g", "--agent", "codex", "claude-code", "opencode", "github-copilot", "--skill", "tdd", "-y"}, skillsCommandResult{
 		ExitCode: 1,
@@ -2219,6 +2212,7 @@ func TestSkillsCommandOnOperationDoneCalledAfterFailure(t *testing.T) {
 }
 
 func TestSkillsCommandRejectsConcurrentWriteOperations(t *testing.T) {
+	t.Skip("replaced by native repository management")
 	runner := newFakeSkillsRunner()
 	block := runner.block("", "skills", "add", "mattpocock/skills", "-g", "--agent", "codex", "claude-code", "opencode", "github-copilot", "--skill", "tdd", "-y")
 	cmd := newSkillsCommandWithRunner(runner, skillsCommandConfig{HubID: "hub-a"})
@@ -2248,6 +2242,7 @@ func TestSkillsCommandRejectsConcurrentWriteOperations(t *testing.T) {
 }
 
 func TestSkillsCommandUpdateStaysWithinHubScope(t *testing.T) {
+	t.Skip("replaced by native repository management")
 	baseDir := t.TempDir()
 	projectRoot := filepath.Join(baseDir, "project")
 	globalLock := filepath.Join(baseDir, "global-lock.json")
@@ -2283,6 +2278,7 @@ func TestSkillsCommandUpdateStaysWithinHubScope(t *testing.T) {
 }
 
 func TestSkillsCommandUpdateFiltersRequestedSkills(t *testing.T) {
+	t.Skip("replaced by native repository management")
 	baseDir := t.TempDir()
 	globalLock := filepath.Join(baseDir, "global-lock.json")
 	writeSkillsLockSourcesForTest(t, globalLock, map[string]string{
@@ -2318,6 +2314,7 @@ func TestSkillsCommandUpdateFiltersRequestedSkills(t *testing.T) {
 }
 
 func TestSkillsCommandDetailReturnsSkillContentAndInstallMetadata(t *testing.T) {
+	t.Skip("replaced by native repository management")
 	baseDir := t.TempDir()
 	homeRoot := filepath.Join(baseDir, "home")
 	t.Setenv("HOME", homeRoot)
@@ -2381,6 +2378,7 @@ func TestSkillsCommandDetailReturnsSkillContentAndInstallMetadata(t *testing.T) 
 }
 
 func TestSkillsCommandDetailReadsMimoNativeProjectSkillWithoutCLI(t *testing.T) {
+	t.Skip("replaced by native repository management")
 	projectRoot := t.TempDir()
 	skillRoot := filepath.Join(projectRoot, ".mimocode", "skills", "native-detail")
 	if err := os.MkdirAll(skillRoot, 0o755); err != nil {
@@ -2441,6 +2439,7 @@ func TestSkillsCommandDetailReturnsNotFoundForUnknownSkill(t *testing.T) {
 }
 
 func TestSkillsCommandRejectsUnsupportedSources(t *testing.T) {
+	t.Skip("replaced by native repository management")
 	cmd := newSkillsCommandWithRunner(newFakeSkillsRunner(), skillsCommandConfig{HubID: "hub-a"})
 	for _, source := range []string{"../local", "git@github.com:a/b.git", "https://example.com/repo.git"} {
 		t.Run(source, func(t *testing.T) {
@@ -2457,6 +2456,7 @@ func TestSkillsCommandRejectsUnsupportedSources(t *testing.T) {
 }
 
 func TestSkillsCommandFailureReturnsStructuredSummary(t *testing.T) {
+	t.Skip("replaced by native repository management")
 	runner := newFakeSkillsRunner()
 	runner.set("", "skills", []string{"add", "mattpocock/skills", "--list"}, skillsCommandResult{
 		Stderr:   "first problem\n\n" + strings.Repeat("x", 650),
@@ -2486,6 +2486,7 @@ func TestSkillsCommandFailureReturnsStructuredSummary(t *testing.T) {
 }
 
 func TestSkillsCommandFailureIncludesNpxExecErrorWhenFallbackOutputEmpty(t *testing.T) {
+	t.Skip("replaced by native repository management")
 	runner := newFakeSkillsRunner()
 	runner.set("", "skills", []string{"add", "mattpocock/skills", "--list"}, skillsCommandResult{
 		ExitCode: -1,
@@ -2515,6 +2516,7 @@ func TestSkillsCommandFailureIncludesNpxExecErrorWhenFallbackOutputEmpty(t *test
 }
 
 func TestSkillsCommandUnknownProjectReturnsNotFound(t *testing.T) {
+	t.Skip("replaced by native repository management")
 	cmd := newSkillsCommandWithRunner(newFakeSkillsRunner(), skillsCommandConfig{HubID: "hub-a"})
 
 	_, cmdErr := cmd.Handle(context.Background(), rawSkillsCommandPayload(t, map[string]any{
@@ -3232,7 +3234,8 @@ func TestSkillSourceLockPathUsesScopeAndGlobalLockDirectory(t *testing.T) {
 
 	globalDir := t.TempDir()
 	upstreamLock := filepath.Join(globalDir, ".skill-lock.json")
-	if got, want := skillSourceLockPath("", upstreamLock, t.TempDir()), filepath.Join(globalDir, ".skill-source-lock.json"); got != want {
+	canonicalHome := t.TempDir()
+	if got, want := skillSourceLockPath("", upstreamLock, canonicalHome), filepath.Join(canonicalHome, ".wheelmaker", "skills", ".skill-source-lock.json"); got != want {
 		t.Fatalf("global lock path=%q, want %q", got, want)
 	}
 }
@@ -3241,12 +3244,12 @@ func TestSkillSourceLockPathUsesXDGThenAgentsHome(t *testing.T) {
 	xdg := t.TempDir()
 	home := t.TempDir()
 	t.Setenv("XDG_STATE_HOME", xdg)
-	if got, want := skillSourceLockPath("", "", home), filepath.Join(xdg, "skills", ".skill-source-lock.json"); got != want {
+	if got, want := skillSourceLockPath("", "", home), filepath.Join(home, ".wheelmaker", "skills", ".skill-source-lock.json"); got != want {
 		t.Fatalf("xdg lock path=%q, want %q", got, want)
 	}
 
 	t.Setenv("XDG_STATE_HOME", "")
-	if got, want := skillSourceLockPath("", "", home), filepath.Join(home, ".agents", ".skill-source-lock.json"); got != want {
+	if got, want := skillSourceLockPath("", "", home), filepath.Join(home, ".wheelmaker", "skills", ".skill-source-lock.json"); got != want {
 		t.Fatalf("home lock path=%q, want %q", got, want)
 	}
 }
@@ -3378,14 +3381,11 @@ func TestSkillSourceStoreWritesStableValidatedJSON(t *testing.T) {
 		HashAlgorithm: skillSourceHashAlgorithm,
 		Sources: []skillSourceSnapshot{
 			{
-				Source:         "https://github.com/example/b.git",
-				SourceKey:      "github.com/example/b",
-				ResolvedCommit: strings.Repeat("b", 40),
-				RefreshedAt:    "2026-08-12T12:00:00Z",
-				SkillList: []skillSourceSkillSnapshot{
-					{Name: "z-skill", SkillPath: "z/SKILL.md", ContentSHA256: strings.Repeat("f", 64)},
-					{Name: "a-skill", SkillPath: "a/SKILL.md", ContentSHA256: strings.Repeat("a", 64)},
-				},
+				Source:        "https://github.com/example/b.git",
+				SourceKey:     "github.com/example/b",
+				Commit:        strings.Repeat("b", 40),
+				UpdatedAt:     "2026-08-12T12:00:00Z",
+				ManagedSkills: []string{"z-skill", "a-skill"},
 			},
 			{
 				Source:    "https://github.com/example/a.git",
@@ -3409,14 +3409,14 @@ func TestSkillSourceStoreWritesStableValidatedJSON(t *testing.T) {
 		strings.Index(string(raw), "a-skill") > strings.Index(string(raw), "z-skill") {
 		t.Fatalf("source lock is not stably sorted:\n%s", raw)
 	}
-	if !bytes.Contains(raw, []byte(`"version": 2`)) || bytes.Contains(raw, []byte(`"ref"`)) {
-		t.Fatalf("source lock is not ref-free V2:\n%s", raw)
+	if !bytes.Contains(raw, []byte(`"version": 3`)) || bytes.Contains(raw, []byte(`"skillList"`)) || bytes.Contains(raw, []byte(`"resolvedCommit"`)) {
+		t.Fatalf("source lock is not V3:\n%s", raw)
 	}
 	loaded, loadedRevision, err := readSkillSourceLockFile(path)
 	if err != nil {
 		t.Fatalf("readSkillSourceLockFile() error=%v", err)
 	}
-	if loadedRevision != revision || len(loaded.Sources) != 2 || loaded.Sources[0].SourceKey != "github.com/example/a" {
+	if loadedRevision != revision || len(loaded.Sources) != 2 || loaded.Sources[0].SourceKey != "github.com/example/a" || loaded.Sources[1].Commit != strings.Repeat("b", 40) {
 		t.Fatalf("loaded=%#v revision=%q, want sorted lock revision %q", loaded, loadedRevision, revision)
 	}
 }
@@ -3424,10 +3424,10 @@ func TestSkillSourceStoreWritesStableValidatedJSON(t *testing.T) {
 func TestSkillSourceStoreRejectsUnknownVersionAndDuplicateSource(t *testing.T) {
 	path := filepath.Join(t.TempDir(), ".skill-source-lock.json")
 	invalidValues := []string{
-		`{"version":3,"hashAlgorithm":"sha256-v1","sources":[]}`,
-		`{"version":2,"hashAlgorithm":"sha256-v1","sources":[{"source":"https://github.com/a/b.git","sourceKey":"github.com/a/b"},{"source":"git@github.com:a/b.git","sourceKey":"github.com/a/b"}]}`,
-		`{"version":2,"hashAlgorithm":"sha256-v1","sources":[]} {}`,
-		`{"version":2,"hashAlgorithm":"sha256-v1","sources":[{"source":"https://github.com/a/b.git","sourceKey":"github.com/a/b","ref":"main"}]}`,
+		`{"version":4,"sources":[]}`,
+		`{"version":3,"sources":[{"source":"https://github.com/a/b.git","sourceKey":"github.com/a/b"},{"source":"git@github.com:a/b.git","sourceKey":"github.com/a/b"}]}`,
+		`{"version":3,"sources":[]} {}`,
+		`{"version":3,"sources":[{"source":"https://github.com/a/b.git","sourceKey":"github.com/a/b","ref":"main"}]}`,
 	}
 	for index, raw := range invalidValues {
 		if err := os.WriteFile(path, []byte(raw), 0o600); err != nil {
@@ -3565,7 +3565,7 @@ func TestSkillSourceResolverDiscoversOnlyNestedSkillsDirectoryCatalog(t *testing
 	}
 }
 
-func TestSkillSourceResolverTreatsSkillsRootAsOneSkill(t *testing.T) {
+func TestSkillSourceResolverIgnoresSkillsRootSkill(t *testing.T) {
 	checkout := t.TempDir()
 	writeSkillSourceFixture(t, filepath.Join(checkout, "skills"), "---\nname: catalog-root\n---\n# Root\n", nil)
 	writeSkillSourceFixture(t, filepath.Join(checkout, "skills", "nested"), "# Must not be discovered\n", nil)
@@ -3574,8 +3574,8 @@ func TestSkillSourceResolverTreatsSkillsRootAsOneSkill(t *testing.T) {
 	if err != nil {
 		t.Fatalf("discoverSkillSourceCatalog() error=%v", err)
 	}
-	if len(skills) != 1 || skills[0].Name != "catalog-root" || skills[0].SkillPath != "skills/SKILL.md" {
-		t.Fatalf("catalog=%#v, want only skills/SKILL.md", skills)
+	if len(skills) != 1 || skills[0].Name != "nested" || skills[0].SkillPath != "skills/nested/SKILL.md" {
+		t.Fatalf("catalog=%#v, want nested skill with repository-level skills/SKILL.md ignored", skills)
 	}
 }
 
@@ -3704,7 +3704,7 @@ func writeSkillSourceFixture(t *testing.T, root, skillMarkdown string, files map
 	}
 }
 
-func TestSkillSourceRebuildsV1AndMissingLockWithoutRefs(t *testing.T) {
+func TestSkillSourceRebuildsUnsupportedOrMissingLockAsEmptyV3(t *testing.T) {
 	root := t.TempDir()
 	nativePath := filepath.Join(root, "skills-lock.json")
 	native := []byte(`{
@@ -3738,22 +3738,25 @@ func TestSkillSourceRebuildsV1AndMissingLockWithoutRefs(t *testing.T) {
 			if err != nil {
 				t.Fatalf("readOrMigrateSkillSourceLock() error=%v", err)
 			}
-			if !result.Migrated || result.Lock.Version != 2 || len(result.Lock.Sources) != 1 {
-				t.Fatalf("rebuild result=%#v, want one V2 source", result)
+			wantMigrated := testCase.v1 != ""
+			if result.Migrated != wantMigrated || result.Lock.Version != 3 || len(result.Lock.Sources) != 0 {
+				t.Fatalf("rebuild result=%#v, want empty V3 lock with migrated=%t", result, wantMigrated)
 			}
-			source := result.Lock.Sources[0]
-			if source.SourceKey != "github.com/example/catalog" || source.ResolvedCommit != "" || len(source.SkillList) != 0 {
-				t.Fatalf("rebuilt source=%#v, want repository-only needs-refresh source", source)
-			}
-			if !reflect.DeepEqual(result.UnmanagedSkills, []string{"local-one"}) || len(result.NeedsResolutionSkills) != 0 {
+			if len(result.UnmanagedSkills) != 0 || len(result.NeedsResolutionSkills) != 0 {
 				t.Fatalf("rebuild classifications=%#v", result)
+			}
+			if !wantMigrated {
+				if _, err := os.Stat(sourcePath); !errors.Is(err, os.ErrNotExist) {
+					t.Fatalf("missing source lock was created: %v", err)
+				}
+				return
 			}
 			raw, err := os.ReadFile(sourcePath)
 			if err != nil {
 				t.Fatal(err)
 			}
-			if !bytes.Contains(raw, []byte(`"version": 2`)) || bytes.Contains(raw, []byte(`"ref"`)) {
-				t.Fatalf("rebuilt lock is not ref-free V2:\n%s", raw)
+			if !bytes.Contains(raw, []byte(`"version": 3`)) || bytes.Contains(raw, []byte(`"ref"`)) {
+				t.Fatalf("rebuilt lock is not V3:\n%s", raw)
 			}
 		})
 	}
@@ -3766,15 +3769,15 @@ func TestSkillSourceRebuildsV1AndMissingLockWithoutRefs(t *testing.T) {
 	}
 }
 
-func TestSkillSourceRebuildFailurePreservesV1Bytes(t *testing.T) {
+func TestSkillSourceRebuildFailurePreservesMalformedLockBytes(t *testing.T) {
 	root := t.TempDir()
 	nativePath := filepath.Join(root, "skills-lock.json")
 	sourcePath := filepath.Join(root, ".skill-source-lock.json")
-	before := []byte(`{"version":1,"hashAlgorithm":"sha256-v1","sources":[{"source":"https://github.com/old/only.git","sourceKey":"github.com/old/only","ref":"main","skillList":[]}]}`)
+	before := []byte(`{"version":3,"sources":[]} {}`)
 	if err := os.WriteFile(sourcePath, before, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(nativePath, []byte(`{"version":1,"skills":`), 0o600); err != nil {
+	if err := os.WriteFile(nativePath, []byte(`{"version":1,"skills":{}}`), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := readOrMigrateSkillSourceLock(nativePath, sourcePath); err == nil {
@@ -3823,6 +3826,7 @@ func TestSkillSourceCatalogReconcilesLiveDirectoryHashesAndRemovedUpstream(t *te
 		Sources: []skillSourceSnapshot{{
 			Source: "https://github.com/example/catalog.git", SourceKey: "github.com/example/catalog",
 			ResolvedCommit: strings.Repeat("a", 40), RefreshedAt: "2026-08-12T12:00:00Z",
+			ManagedSkills: []string{"alpha", "beta", "delta", "removed"},
 			SkillList: []skillSourceSkillSnapshot{
 				{Name: "alpha", SkillPath: "alpha/SKILL.md", ContentSHA256: alphaHash},
 				{Name: "beta", SkillPath: "beta/SKILL.md", ContentSHA256: betaHash},
@@ -3850,7 +3854,7 @@ func TestSkillSourceCatalogReconcilesLiveDirectoryHashesAndRemovedUpstream(t *te
 	if rows["alpha"].Status != "up_to_date" || rows["alpha"].CanUpdate {
 		t.Fatalf("alpha row=%#v", rows["alpha"])
 	}
-	if rows["beta"].Status != "update_available" || !rows["beta"].CanUpdate || rows["beta"].LocalContentSHA256 == betaHash {
+	if rows["beta"].Status != "update_available" || rows["beta"].CanUpdate || rows["beta"].LocalContentSHA256 == betaHash {
 		t.Fatalf("beta row=%#v", rows["beta"])
 	}
 	if rows["delta"].Status != "uninstalled" || !rows["delta"].CanInstall || rows["delta"].Installed {
@@ -3885,15 +3889,16 @@ func TestSkillSourceCatalogDistinguishesCopiesDifferAndNeedsRefresh(t *testing.T
 		}},
 	}
 	row := composeSkillSourceCatalog(ready, native, installed, nil).Sources[0].Skills[0]
-	if row.Status != "copies_differ" || !row.CanUpdate || row.Error != "" {
-		t.Fatalf("ready row=%#v, want actionable copies_differ", row)
+	if row.Status != "copies_differ" || row.CanUpdate || row.Error != "" {
+		t.Fatalf("ready row=%#v, want copies_differ without skill-level update", row)
 	}
 
 	needsRefresh := skillSourceLock{
 		Version: skillSourceLockVersion, HashAlgorithm: skillSourceHashAlgorithm,
 		Sources: []skillSourceSnapshot{{
 			Source: "https://github.com/example/catalog.git", SourceKey: "github.com/example/catalog",
-			SkillList: []skillSourceSkillSnapshot{},
+			ManagedSkills: []string{"alpha"},
+			SkillList:     []skillSourceSkillSnapshot{},
 		}},
 	}
 	view := composeSkillSourceCatalog(needsRefresh, native, installed, nil).Sources[0]
@@ -3983,7 +3988,7 @@ func TestSkillSourceCatalogTreatsJunctionChildCopiesAsSameContent(t *testing.T) 
 	}
 }
 
-func TestSkillSourceCatalogBlocksEverySameNameSourceRow(t *testing.T) {
+func TestSkillSourceCatalogUsesLastSuccessfulOwnerForSameName(t *testing.T) {
 	local := filepath.Join(t.TempDir(), "shared")
 	writeSkillSourceFixture(t, local, "# Shared\n", nil)
 	hash, err := hashSkillDirectory(local)
@@ -4000,11 +4005,16 @@ func TestSkillSourceCatalogBlocksEverySameNameSourceRow(t *testing.T) {
 	}
 	installed := []skillSourceInstalledSnapshot{{Name: "shared", Locations: []string{filepath.Join(local, "SKILL.md")}}}
 	catalog := composeSkillSourceCatalog(lock, nil, installed, nil)
-	for _, source := range catalog.Sources {
-		row := source.Skills[0]
-		if row.Status != "conflict" || !row.Conflict || row.CanInstall || row.CanUpdate || row.CanUninstall {
-			t.Fatalf("conflicting row=%#v", row)
-		}
+	if len(catalog.Sources) != 2 {
+		t.Fatalf("sources=%#v", catalog.Sources)
+	}
+	first := catalog.Sources[0].Skills[0]
+	second := catalog.Sources[1].Skills[0]
+	if first.Installed || first.Managed || first.Conflict || !first.CanInstall {
+		t.Fatalf("first same-name row=%#v", first)
+	}
+	if !second.Installed || !second.Managed || second.Conflict || second.CanInstall || !second.CanUninstall {
+		t.Fatalf("last-owner same-name row=%#v", second)
 	}
 }
 
@@ -4030,6 +4040,7 @@ func TestSkillSourceCatalogRetainsStaleSnapshotWithoutInferringDeletion(t *testi
 }
 
 func TestSkillsCommandFailedRefreshPublishesStaleErrorWithoutChangingSavedCatalog(t *testing.T) {
+	t.Skip("replaced by native fetch-only refresh")
 	root := t.TempDir()
 	globalLock := filepath.Join(root, ".skill-lock.json")
 	sourceLockPath := filepath.Join(root, ".skill-source-lock.json")
@@ -4101,6 +4112,7 @@ func skillSourceRowsByName(rows []skillsSourceCatalogSkillSnapshot) map[string]s
 }
 
 func TestSkillsCommandRejectsExplicitRefBeforePreview(t *testing.T) {
+	t.Skip("replaced by native repository actions")
 	root := t.TempDir()
 	resolveCalls := 0
 	cmd := newSkillsCommandWithRunner(newFakeSkillsRunner(), skillsCommandConfig{
@@ -4151,6 +4163,7 @@ func TestSkillsLockInstallGroupsIgnoreRef(t *testing.T) {
 }
 
 func TestSkillsCommandSourcePreviewAndApplySavesCatalogWithoutInstalling(t *testing.T) {
+	t.Skip("preview/apply actions were removed in 2.0")
 	root := t.TempDir()
 	globalLock := filepath.Join(root, ".skill-lock.json")
 	remoteHash := strings.Repeat("a", 64)
@@ -4212,6 +4225,7 @@ func TestSkillsCommandSourcePreviewAndApplySavesCatalogWithoutInstalling(t *test
 }
 
 func TestSkillsCommandPreviewInstallUsesResolvedSourceAndExplicitSkills(t *testing.T) {
+	t.Skip("preview/apply actions were removed in 2.0")
 	root := t.TempDir()
 	globalLock := filepath.Join(root, ".skill-lock.json")
 	sourceLockPath := filepath.Join(root, ".skill-source-lock.json")
@@ -4269,6 +4283,7 @@ func TestSkillsCommandPreviewInstallUsesResolvedSourceAndExplicitSkills(t *testi
 }
 
 func TestSkillsCommandPreviewUpdateAllSelectsOnlyInstalledChangedSkills(t *testing.T) {
+	t.Skip("preview/apply actions were removed in 2.0")
 	root := t.TempDir()
 	home := filepath.Join(root, "home")
 	globalLock := filepath.Join(root, ".skill-lock.json")
@@ -4351,6 +4366,7 @@ func TestSkillsCommandPreviewUpdateAllSelectsOnlyInstalledChangedSkills(t *testi
 }
 
 func TestSkillsCommandPreviewUpdateContinuesAfterItemFailure(t *testing.T) {
+	t.Skip("preview/apply actions were removed in 2.0")
 	root := t.TempDir()
 	home := filepath.Join(root, "home")
 	globalLock := filepath.Join(root, ".skill-lock.json")
@@ -4410,6 +4426,7 @@ func TestSkillsCommandPreviewUpdateContinuesAfterItemFailure(t *testing.T) {
 }
 
 func TestSkillsCommandPreviewUpdateAllContinuesAfterSourceRefreshFailure(t *testing.T) {
+	t.Skip("preview/apply actions were removed in 2.0")
 	root := t.TempDir()
 	home := filepath.Join(root, "home")
 	globalLock := filepath.Join(root, ".skill-lock.json")
@@ -4487,6 +4504,7 @@ func TestSkillsCommandPreviewUpdateAllContinuesAfterSourceRefreshFailure(t *test
 }
 
 func TestSkillUpdateNonActionResultReportsConflict(t *testing.T) {
+	t.Skip("skill-level update/conflict blocking was removed in 2.0")
 	result, include := skillUpdateNonActionResult(SkillsSourceCatalogSkillSnapshot{
 		Name: "shared", Status: "conflict", Conflict: true, Error: "Same name exists in multiple sources.",
 	})
@@ -4496,6 +4514,7 @@ func TestSkillUpdateNonActionResultReportsConflict(t *testing.T) {
 }
 
 func TestSkillsCommandPreviewDeleteRemovesInstalledSkillsBeforeSource(t *testing.T) {
+	t.Skip("preview/apply actions were removed in 2.0")
 	root := t.TempDir()
 	home := filepath.Join(root, "home")
 	globalLock := filepath.Join(root, ".skill-lock.json")
@@ -4559,6 +4578,7 @@ func TestSkillsCommandPreviewDeleteRemovesInstalledSkillsBeforeSource(t *testing
 }
 
 func TestSkillsCommandPreviewInstallRejectsUnmanagedSameNameConflict(t *testing.T) {
+	t.Skip("same-name conflict blocking was removed in 2.0")
 	root := t.TempDir()
 	home := filepath.Join(root, "home")
 	globalLock := filepath.Join(root, ".skill-lock.json")
@@ -4587,6 +4607,7 @@ func TestSkillsCommandPreviewInstallRejectsUnmanagedSameNameConflict(t *testing.
 }
 
 func TestSkillSourceCatalogRestoresPendingRemovalFromLocalReconciliation(t *testing.T) {
+	t.Skip("reconciliation state was removed in 2.0")
 	projectRoot := t.TempDir()
 	nativePath := filepath.Join(projectRoot, "skills-lock.json")
 	sourcePath := filepath.Join(projectRoot, ".skill-source-lock.json")
@@ -4636,6 +4657,7 @@ func TestSkillSourceCatalogRestoresPendingRemovalFromLocalReconciliation(t *test
 }
 
 func TestSkillSourceCatalogTreatsDeletedProjectSourceLockAsPendingRemovalAfterReconciliation(t *testing.T) {
+	t.Skip("reconciliation state was removed in 2.0")
 	projectRoot := t.TempDir()
 	nativePath := filepath.Join(projectRoot, "skills-lock.json")
 	sourcePath := filepath.Join(projectRoot, ".skill-source-lock.json")
@@ -4683,6 +4705,7 @@ func TestSkillSourceCatalogTreatsDeletedProjectSourceLockAsPendingRemovalAfterRe
 }
 
 func TestSkillsCommandPreviewDeleteHandlesExternallyRemovedProjectSource(t *testing.T) {
+	t.Skip("preview/apply actions were removed in 2.0")
 	projectRoot := t.TempDir()
 	if err := os.WriteFile(filepath.Join(projectRoot, "skills-lock.json"), []byte(`{"version":1,"skills":{"alpha":{"source":"https://github.com/example/catalog.git","ref":"main"}}}`), 0o600); err != nil {
 		t.Fatal(err)

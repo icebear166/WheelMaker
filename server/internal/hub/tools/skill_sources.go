@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"net/url"
 	"os"
@@ -16,10 +17,12 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/swm8023/wheelmaker/internal/shared"
 )
 
 const (
-	skillSourceLockVersion     = 2
+	skillSourceLockVersion     = 3
 	skillSourceHashAlgorithm   = "sha256-v1"
 	skillSourceMissingRevision = "missing"
 )
@@ -32,16 +35,27 @@ var (
 
 type skillSourceLock struct {
 	Version       int                   `json:"version"`
-	HashAlgorithm string                `json:"hashAlgorithm"`
+	HashAlgorithm string                `json:"-"` // Legacy V2 compatibility; never written in V3.
 	Sources       []skillSourceSnapshot `json:"sources"`
 }
 
 type skillSourceSnapshot struct {
-	Source         string                     `json:"source"`
-	SourceKey      string                     `json:"sourceKey"`
-	ResolvedCommit string                     `json:"resolvedCommit,omitempty"`
-	RefreshedAt    string                     `json:"refreshedAt,omitempty"`
-	SkillList      []skillSourceSkillSnapshot `json:"skillList"`
+	Source          string   `json:"source"`
+	SourceKey       string   `json:"sourceKey"`
+	Branch          string   `json:"branch,omitempty"`
+	Commit          string   `json:"commit,omitempty"`
+	UpdatedAt       string   `json:"updatedAt,omitempty"`
+	ManagedSkills   []string `json:"managedSkills"`
+	RemoteCommit    string   `json:"-"`
+	UpdateAvailable bool     `json:"-"`
+	Status          string   `json:"-"`
+	Error           string   `json:"-"`
+
+	// These fields are retained as in-memory compatibility aliases while the
+	// source catalog is migrated away from the V2 lock shape.
+	ResolvedCommit string                     `json:"-"`
+	RefreshedAt    string                     `json:"-"`
+	SkillList      []skillSourceSkillSnapshot `json:"-"`
 }
 
 type skillSourceSkillSnapshot struct {
@@ -75,12 +89,6 @@ func skillSourceLockPath(projectRoot, globalLockPath, homeDir string) string {
 	if projectRoot = strings.TrimSpace(projectRoot); projectRoot != "" {
 		return filepath.Join(projectRoot, ".skill-source-lock.json")
 	}
-	if globalLockPath = strings.TrimSpace(globalLockPath); globalLockPath != "" {
-		return filepath.Join(filepath.Dir(globalLockPath), ".skill-source-lock.json")
-	}
-	if stateHome := strings.TrimSpace(os.Getenv("XDG_STATE_HOME")); stateHome != "" {
-		return filepath.Join(stateHome, "skills", ".skill-source-lock.json")
-	}
 	if homeDir = strings.TrimSpace(homeDir); homeDir == "" {
 		resolved, err := os.UserHomeDir()
 		if err != nil {
@@ -88,42 +96,132 @@ func skillSourceLockPath(projectRoot, globalLockPath, homeDir string) string {
 		}
 		homeDir = resolved
 	}
-	return filepath.Join(homeDir, ".agents", ".skill-source-lock.json")
+	return filepath.Join(homeDir, ".wheelmaker", "skills", ".skill-source-lock.json")
+}
+
+// ManagedSkillNamesForScope returns ownership declared by the canonical source
+// lock. Legacy native skills locks are intentionally not consulted.
+func ManagedSkillNamesForScope(projectRoot, homeDir string) map[string]bool {
+	projectRoot = strings.TrimSpace(projectRoot)
+	nativeLockPath := ""
+	if projectRoot != "" {
+		nativeLockPath = filepath.Join(projectRoot, "skills-lock.json")
+	} else {
+		nativeLockPath = defaultGlobalSkillsLockPath(homeDir)
+	}
+	installed := map[string]struct{}{}
+	if projectRoot != "" {
+		for _, directory := range []string{filepath.Join(projectRoot, ".agents", "skills"), filepath.Join(projectRoot, ".claude", "skills")} {
+			collectSkillDirectoryNames(directory, installed)
+		}
+	} else {
+		home := strings.TrimSpace(homeDir)
+		if home == "" {
+			home, _ = os.UserHomeDir()
+		}
+		for _, directory := range []string{filepath.Join(home, ".agents", "skills"), filepath.Join(home, ".claude", "skills")} {
+			collectSkillDirectoryNames(directory, installed)
+		}
+	}
+	path := skillSourceLockPath(projectRoot, nativeLockPath, homeDir)
+	var migration skillSourceMigrationResult
+	err := withSkillSourceLockFile(path, func() error {
+		var err error
+		migration, err = readOrMigrateSkillSourceLockWithInstalled(nativeLockPath, path, installed)
+		return err
+	})
+	if err != nil {
+		return map[string]bool{}
+	}
+	out := map[string]bool{}
+	for _, source := range migration.Lock.Sources {
+		for _, name := range source.ManagedSkills {
+			if name = strings.TrimSpace(name); name != "" {
+				out[strings.ToLower(name)] = true
+			}
+		}
+	}
+	return out
+}
+
+func withSkillSourceLockFile(path string, fn func() error) error {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return errors.New("skill source lock path is unavailable")
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return err
+	}
+	release, err := shared.AcquireFileLock(path + ".lock")
+	if err != nil {
+		return err
+	}
+	defer release()
+	return fn()
+}
+
+func collectSkillDirectoryNames(directory string, names map[string]struct{}) {
+	entries, err := os.ReadDir(directory)
+	if err != nil {
+		return
+	}
+	for _, entry := range entries {
+		if !entry.IsDir() || validateSkillNames([]string{entry.Name()}) != nil {
+			continue
+		}
+		if info, err := os.Stat(filepath.Join(directory, entry.Name(), "SKILL.md")); err == nil && !info.IsDir() {
+			names[strings.ToLower(entry.Name())] = struct{}{}
+		}
+	}
 }
 
 func readOrMigrateSkillSourceLock(nativeLockPath, sourceLockPath string) (skillSourceMigrationResult, error) {
-	lock, revision, rebuild, err := readSkillSourceLockForRebuild(sourceLockPath)
+	return readOrMigrateSkillSourceLockWithInstalled(nativeLockPath, sourceLockPath, nil)
+}
+
+func readOrMigrateSkillSourceLockWithInstalled(nativeLockPath, sourceLockPath string, installed map[string]struct{}) (skillSourceMigrationResult, error) {
+	canonicalPath := strings.TrimSpace(sourceLockPath)
+	if canonicalPath == "" {
+		return skillSourceMigrationResult{}, errors.New("skill source lock path is unavailable")
+	}
+	readPath := canonicalPath
+	canonicalExists := false
+	if _, err := os.Stat(readPath); err == nil {
+		canonicalExists = true
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return skillSourceMigrationResult{}, fmt.Errorf("stat skill source lock: %w", err)
+	}
+	if !canonicalExists {
+		legacyPath := legacySkillSourceLockPath(nativeLockPath, canonicalPath)
+		if legacyPath != "" {
+			if _, legacyErr := os.Stat(legacyPath); legacyErr == nil {
+				readPath = legacyPath
+			} else if !errors.Is(legacyErr, os.ErrNotExist) {
+				return skillSourceMigrationResult{}, fmt.Errorf("stat legacy skill source lock: %w", legacyErr)
+			}
+		}
+		if readPath == canonicalPath {
+			return skillSourceMigrationResult{Lock: newSkillSourceLock(), Revision: skillSourceMissingRevision}, nil
+		}
+	}
+	lock, revision, rebuild, err := readSkillSourceLockForRebuild(readPath)
 	if err != nil {
 		return skillSourceMigrationResult{}, err
 	}
-	entries, err := loadNativeSkillSourceEntries(nativeLockPath)
-	if err != nil && rebuild {
-		return skillSourceMigrationResult{}, err
-	}
-	if err != nil {
-		entries = nil
-	}
-	groups, unmanaged := classifyNativeSkillSourceEntries(entries)
 	result := skillSourceMigrationResult{
-		Lock:            lock,
-		Revision:        revision,
-		UnmanagedSkills: unmanaged,
+		Lock:     lock,
+		Revision: revision,
 	}
 	if rebuild {
-		lock = newSkillSourceLock()
-		for _, group := range groups {
-			sources := make([]string, 0, len(group.Sources))
-			for source := range group.Sources {
-				sources = append(sources, source)
-			}
-			sort.Strings(sources)
-			lock.Sources = append(lock.Sources, skillSourceSnapshot{
-				Source:    sources[0],
-				SourceKey: group.SourceKey,
-				SkillList: []skillSourceSkillSnapshot{},
-			})
+		lock, err = migrateSkillSourceLockToV3(lock, installed)
+		if err != nil {
+			return skillSourceMigrationResult{}, err
 		}
-		updatedRevision, err := writeSkillSourceLockFile(sourceLockPath, revision, lock)
+		writeExpected := skillSourceMissingRevision
+		if readPath == canonicalPath {
+			writeExpected = revision
+		}
+		updatedRevision, err := writeSkillSourceLockFile(canonicalPath, writeExpected, lock)
 		if err != nil {
 			return skillSourceMigrationResult{}, err
 		}
@@ -132,6 +230,28 @@ func readOrMigrateSkillSourceLock(nativeLockPath, sourceLockPath string) (skillS
 		result.Migrated = true
 	}
 	return result, nil
+}
+
+func legacySkillSourceLockPath(nativeLockPath, canonicalPath string) string {
+	nativeLockPath = strings.TrimSpace(nativeLockPath)
+	canonicalPath = strings.TrimSpace(canonicalPath)
+	if nativeLockPath == "" || canonicalPath == "" {
+		return ""
+	}
+	legacy := filepath.Join(filepath.Dir(nativeLockPath), ".skill-source-lock.json")
+	if samePath(legacy, canonicalPath) {
+		return ""
+	}
+	return legacy
+}
+
+func samePath(left, right string) bool {
+	leftAbs, leftErr := filepath.Abs(left)
+	rightAbs, rightErr := filepath.Abs(right)
+	if leftErr != nil || rightErr != nil {
+		return filepath.Clean(left) == filepath.Clean(right)
+	}
+	return strings.EqualFold(filepath.Clean(leftAbs), filepath.Clean(rightAbs))
 }
 
 func readNativeSkillSourceEntries(path string) []nativeSkillSourceEntry {
@@ -242,7 +362,18 @@ func normalizeSkillGitSource(raw string) (string, string, error) {
 		if err != nil {
 			return "", "", err
 		}
-		return match[1] + host + ":" + repoPath, host + "/" + strings.ToLower(keyPath), nil
+		user := strings.TrimSuffix(strings.TrimSpace(match[1]), "@")
+		normalizedUser := ""
+		sourceUser := ""
+		if user != "" {
+			sourceUser = user + "@"
+		}
+		keyHost := host
+		if user != "" && !strings.EqualFold(user, "git") {
+			normalizedUser = strings.ToLower(user) + "@"
+			keyHost = normalizedUser + keyHost
+		}
+		return sourceUser + host + ":" + repoPath, keyHost + "/" + strings.ToLower(keyPath), nil
 	}
 
 	parsed, err := url.Parse(raw)
@@ -263,18 +394,29 @@ func normalizeSkillGitSource(raw string) (string, string, error) {
 	if host == "" {
 		return "", "", errors.New("skill source host is required")
 	}
+	port := parsed.Port()
 	repoPath, keyPath, err := normalizeSkillRepositoryPath(parsed.EscapedPath())
 	if err != nil {
 		return "", "", err
 	}
 	parsed.Scheme = scheme
 	parsed.Host = host
-	if port := parsed.Port(); port != "" {
+	if port != "" {
 		parsed.Host += ":" + port
 	}
 	parsed.Path = "/" + repoPath
 	parsed.RawPath = ""
-	return parsed.String(), host + "/" + strings.ToLower(keyPath), nil
+	keyHost := host
+	if port != "" {
+		keyHost += ":" + port
+	}
+	if scheme == "ssh" && parsed.User != nil {
+		user := strings.TrimSpace(parsed.User.Username())
+		if user != "" && !strings.EqualFold(user, "git") {
+			keyHost = strings.ToLower(user) + "@" + keyHost
+		}
+	}
+	return parsed.String(), keyHost + "/" + strings.ToLower(keyPath), nil
 }
 
 func normalizeSkillRepositoryPath(raw string) (string, string, error) {
@@ -409,7 +551,7 @@ func readSkillSourceLockForRebuild(path string) (skillSourceLock, string, bool, 
 	if err != nil {
 		return skillSourceLock{}, "", false, err
 	}
-	return lock, revision, false, nil
+	return lock, revision, lock.Version != skillSourceLockVersion, nil
 }
 
 func readSkillSourceLockFile(path string) (skillSourceLock, string, error) {
@@ -428,31 +570,108 @@ func readSkillSourceLockFile(path string) (skillSourceLock, string, error) {
 }
 
 func decodeSkillSourceLock(raw []byte) (skillSourceLock, error) {
-	decoder := json.NewDecoder(bytes.NewReader(raw))
-	decoder.DisallowUnknownFields()
-	var lock skillSourceLock
-	if err := decoder.Decode(&lock); err != nil {
+	var envelope struct {
+		Version int `json:"version"`
+	}
+	if err := json.Unmarshal(raw, &envelope); err != nil {
 		return skillSourceLock{}, fmt.Errorf("decode skill source lock: %w", err)
 	}
-	if decoder.More() {
-		return skillSourceLock{}, errors.New("decode skill source lock: trailing data")
+	switch envelope.Version {
+	case 2:
+		var legacy skillSourceLockV2Wire
+		if err := decodeStrictSkillJSON(raw, &legacy); err != nil {
+			return skillSourceLock{}, fmt.Errorf("decode skill source lock: %w", err)
+		}
+		lock := skillSourceLock{Version: 2, HashAlgorithm: legacy.HashAlgorithm, Sources: make([]skillSourceSnapshot, 0, len(legacy.Sources))}
+		for _, source := range legacy.Sources {
+			lock.Sources = append(lock.Sources, skillSourceSnapshot{
+				Source: source.Source, SourceKey: source.SourceKey,
+				ResolvedCommit: source.ResolvedCommit, RefreshedAt: source.RefreshedAt,
+				SkillList: append([]skillSourceSkillSnapshot(nil), source.SkillList...),
+			})
+		}
+		if err := validateLegacySkillSourceLock(lock); err != nil {
+			return skillSourceLock{}, err
+		}
+		sortSkillSourceLock(&lock)
+		return lock, nil
+	case skillSourceLockVersion:
+		var wire skillSourceLockV3Wire
+		if err := decodeStrictSkillJSON(raw, &wire); err != nil {
+			return skillSourceLock{}, fmt.Errorf("decode skill source lock: %w", err)
+		}
+		lock := newSkillSourceLock()
+		for _, source := range wire.Sources {
+			snapshot := skillSourceSnapshot{
+				Source: source.Source, SourceKey: source.SourceKey, Branch: source.Branch,
+				Commit: source.Commit, UpdatedAt: source.UpdatedAt,
+				ManagedSkills: append([]string(nil), source.ManagedSkills...),
+			}
+			canonicalizeSkillSourceSnapshot(&snapshot)
+			lock.Sources = append(lock.Sources, snapshot)
+		}
+		if err := validateSkillSourceLock(lock); err != nil {
+			return skillSourceLock{}, err
+		}
+		sortSkillSourceLock(&lock)
+		return lock, nil
+	default:
+		return skillSourceLock{}, fmt.Errorf("unsupported skill source lock version %d", envelope.Version)
 	}
-	if err := validateSkillSourceLock(lock); err != nil {
-		return skillSourceLock{}, err
+}
+
+type skillSourceLockV2Wire struct {
+	Version       int                         `json:"version"`
+	HashAlgorithm string                      `json:"hashAlgorithm"`
+	Sources       []skillSourceSnapshotV2Wire `json:"sources"`
+}
+
+type skillSourceSnapshotV2Wire struct {
+	Source         string                     `json:"source"`
+	SourceKey      string                     `json:"sourceKey"`
+	ResolvedCommit string                     `json:"resolvedCommit,omitempty"`
+	RefreshedAt    string                     `json:"refreshedAt,omitempty"`
+	SkillList      []skillSourceSkillSnapshot `json:"skillList"`
+}
+
+type skillSourceLockV3Wire struct {
+	Version int                         `json:"version"`
+	Sources []skillSourceSnapshotV3Wire `json:"sources"`
+}
+
+type skillSourceSnapshotV3Wire struct {
+	Source        string   `json:"source"`
+	SourceKey     string   `json:"sourceKey"`
+	Branch        string   `json:"branch,omitempty"`
+	Commit        string   `json:"commit,omitempty"`
+	UpdatedAt     string   `json:"updatedAt,omitempty"`
+	ManagedSkills []string `json:"managedSkills"`
+}
+
+func decodeStrictSkillJSON(raw []byte, target any) error {
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(target); err != nil {
+		return err
 	}
-	sortSkillSourceLock(&lock)
-	return lock, nil
+	var trailing any
+	if err := decoder.Decode(&trailing); err != io.EOF {
+		if err == nil {
+			return errors.New("trailing data")
+		}
+		return fmt.Errorf("trailing data: %w", err)
+	}
+	return nil
 }
 
 func validateSkillSourceLock(lock skillSourceLock) error {
 	if lock.Version != skillSourceLockVersion {
 		return fmt.Errorf("unsupported skill source lock version %d", lock.Version)
 	}
-	if lock.HashAlgorithm != skillSourceHashAlgorithm {
-		return fmt.Errorf("unsupported skill source hash algorithm %q", lock.HashAlgorithm)
-	}
 	seenSources := map[string]struct{}{}
-	for _, source := range lock.Sources {
+	for index := range lock.Sources {
+		source := &lock.Sources[index]
+		canonicalizeSkillSourceSnapshot(source)
 		normalizedSource, normalizedKey, err := normalizeSkillGitSource(source.Source)
 		if err != nil {
 			return fmt.Errorf("invalid skill source %q: %w", source.SourceKey, err)
@@ -465,42 +684,123 @@ func validateSkillSourceLock(lock skillSourceLock) error {
 			return fmt.Errorf("duplicate skill source %q", source.SourceKey)
 		}
 		seenSources[key] = struct{}{}
-		if source.ResolvedCommit != "" && (len(source.ResolvedCommit) < 40 || len(source.ResolvedCommit) > 64 || !skillSourceHexPattern.MatchString(source.ResolvedCommit)) {
-			return fmt.Errorf("skill source %q has invalid resolved commit", source.SourceKey)
+		if source.Commit != "" && (len(source.Commit) < 40 || len(source.Commit) > 64 || !skillSourceHexPattern.MatchString(source.Commit)) {
+			return fmt.Errorf("skill source %q has invalid commit", source.SourceKey)
 		}
-		if source.RefreshedAt != "" {
-			if _, err := time.Parse(time.RFC3339, source.RefreshedAt); err != nil {
-				return fmt.Errorf("skill source %q has invalid refreshed time", source.SourceKey)
+		if source.UpdatedAt != "" {
+			if _, err := time.Parse(time.RFC3339, source.UpdatedAt); err != nil {
+				return fmt.Errorf("skill source %q has invalid updated time", source.SourceKey)
 			}
 		}
-		if (source.ResolvedCommit == "") != (source.RefreshedAt == "") {
-			return fmt.Errorf("skill source %q has incomplete refresh metadata", source.SourceKey)
+		if (source.Commit == "") != (source.UpdatedAt == "") {
+			return fmt.Errorf("skill source %q has incomplete commit metadata", source.SourceKey)
 		}
 		seenSkills := map[string]struct{}{}
-		for _, skill := range source.SkillList {
-			nameKey := strings.ToLower(strings.TrimSpace(skill.Name))
-			if !skillNamePattern.MatchString(skill.Name) || nameKey == "" {
-				return fmt.Errorf("skill source %q has invalid skill name %q", source.SourceKey, skill.Name)
+		for _, name := range source.ManagedSkills {
+			name = strings.TrimSpace(name)
+			nameKey := strings.ToLower(name)
+			if !skillNamePattern.MatchString(name) || nameKey == "" {
+				return fmt.Errorf("skill source %q has invalid skill name %q", source.SourceKey, name)
 			}
 			if _, exists := seenSkills[nameKey]; exists {
-				return fmt.Errorf("skill source %q has duplicate skill %q", source.SourceKey, skill.Name)
+				return fmt.Errorf("skill source %q has duplicate skill %q", source.SourceKey, name)
 			}
 			seenSkills[nameKey] = struct{}{}
-			path := strings.ReplaceAll(strings.TrimSpace(skill.SkillPath), "\\", "/")
-			if path != skill.SkillPath || strings.HasPrefix(path, "/") || filepath.IsAbs(path) || !strings.HasSuffix(path, "/SKILL.md") && path != "SKILL.md" {
-				return fmt.Errorf("skill source %q has invalid skill path %q", source.SourceKey, skill.SkillPath)
-			}
-			for _, part := range strings.Split(path, "/") {
-				if part == "" || part == "." || part == ".." {
-					return fmt.Errorf("skill source %q has unsafe skill path %q", source.SourceKey, skill.SkillPath)
-				}
-			}
-			if len(skill.ContentSHA256) != 64 || !skillSourceHexPattern.MatchString(skill.ContentSHA256) {
-				return fmt.Errorf("skill source %q has invalid content hash for %q", source.SourceKey, skill.Name)
-			}
 		}
 	}
 	return nil
+}
+
+func validateLegacySkillSourceLock(lock skillSourceLock) error {
+	if lock.Version != 2 || lock.HashAlgorithm != skillSourceHashAlgorithm {
+		return fmt.Errorf("unsupported legacy skill source lock")
+	}
+	for _, source := range lock.Sources {
+		if _, _, err := normalizeSkillGitSource(source.Source); err != nil {
+			return fmt.Errorf("invalid legacy skill source %q: %w", source.SourceKey, err)
+		}
+		seen := map[string]struct{}{}
+		for _, skill := range source.SkillList {
+			key := strings.ToLower(strings.TrimSpace(skill.Name))
+			if !skillNamePattern.MatchString(skill.Name) || key == "" {
+				return fmt.Errorf("invalid legacy skill name %q", skill.Name)
+			}
+			if _, exists := seen[key]; exists {
+				return fmt.Errorf("duplicate legacy skill %q", skill.Name)
+			}
+			seen[key] = struct{}{}
+		}
+	}
+	return nil
+}
+
+func canonicalizeSkillSourceSnapshot(source *skillSourceSnapshot) {
+	if source == nil {
+		return
+	}
+	if source.Commit == "" {
+		source.Commit = strings.TrimSpace(source.ResolvedCommit)
+	}
+	if source.UpdatedAt == "" {
+		source.UpdatedAt = strings.TrimSpace(source.RefreshedAt)
+	}
+	if source.ResolvedCommit == "" {
+		source.ResolvedCommit = source.Commit
+	}
+	if source.RefreshedAt == "" {
+		source.RefreshedAt = source.UpdatedAt
+	}
+	if len(source.ManagedSkills) == 0 && len(source.SkillList) > 0 {
+		for _, skill := range source.SkillList {
+			if strings.TrimSpace(skill.Name) != "" {
+				source.ManagedSkills = append(source.ManagedSkills, skill.Name)
+			}
+		}
+	}
+	if source.SkillList == nil {
+		for _, name := range source.ManagedSkills {
+			source.SkillList = append(source.SkillList, skillSourceSkillSnapshot{Name: name})
+		}
+	}
+}
+
+func migrateSkillSourceLockToV3(legacy skillSourceLock, installed map[string]struct{}) (skillSourceLock, error) {
+	if legacy.Version != 2 {
+		if legacy.Version == skillSourceLockVersion {
+			if err := validateSkillSourceLock(legacy); err != nil {
+				return skillSourceLock{}, err
+			}
+			return legacy, nil
+		}
+		return skillSourceLock{}, fmt.Errorf("unsupported legacy skill source lock version %d", legacy.Version)
+	}
+	if err := validateLegacySkillSourceLock(legacy); err != nil {
+		return skillSourceLock{}, err
+	}
+	migrated := newSkillSourceLock()
+	for _, source := range legacy.Sources {
+		normalizedSource, sourceKey, err := normalizeSkillGitSource(source.Source)
+		if err != nil {
+			return skillSourceLock{}, err
+		}
+		converted := skillSourceSnapshot{
+			Source: normalizedSource, SourceKey: sourceKey,
+			Commit: source.ResolvedCommit, UpdatedAt: source.RefreshedAt,
+			ResolvedCommit: source.ResolvedCommit, RefreshedAt: source.RefreshedAt,
+		}
+		for _, skill := range source.SkillList {
+			if _, exists := installed[strings.ToLower(strings.TrimSpace(skill.Name))]; exists {
+				converted.ManagedSkills = append(converted.ManagedSkills, skill.Name)
+				converted.SkillList = append(converted.SkillList, skill)
+			}
+		}
+		migrated.Sources = append(migrated.Sources, converted)
+	}
+	sortSkillSourceLock(&migrated)
+	if err := validateSkillSourceLock(migrated); err != nil {
+		return skillSourceLock{}, err
+	}
+	return migrated, nil
 }
 
 func sortSkillSourceLock(lock *skillSourceLock) {
@@ -511,9 +811,16 @@ func sortSkillSourceLock(lock *skillSourceLock) {
 		return strings.ToLower(lock.Sources[i].SourceKey) < strings.ToLower(lock.Sources[j].SourceKey)
 	})
 	for index := range lock.Sources {
+		canonicalizeSkillSourceSnapshot(&lock.Sources[index])
 		if lock.Sources[index].SkillList == nil {
 			lock.Sources[index].SkillList = []skillSourceSkillSnapshot{}
 		}
+		if lock.Sources[index].ManagedSkills == nil {
+			lock.Sources[index].ManagedSkills = []string{}
+		}
+		sort.Slice(lock.Sources[index].ManagedSkills, func(i, j int) bool {
+			return strings.ToLower(lock.Sources[index].ManagedSkills[i]) < strings.ToLower(lock.Sources[index].ManagedSkills[j])
+		})
 		sort.Slice(lock.Sources[index].SkillList, func(i, j int) bool {
 			return strings.ToLower(lock.Sources[index].SkillList[i].Name) < strings.ToLower(lock.Sources[index].SkillList[j].Name)
 		})
@@ -521,11 +828,21 @@ func sortSkillSourceLock(lock *skillSourceLock) {
 }
 
 func encodeSkillSourceLock(lock skillSourceLock) ([]byte, error) {
+	for index := range lock.Sources {
+		canonicalizeSkillSourceSnapshot(&lock.Sources[index])
+	}
 	if err := validateSkillSourceLock(lock); err != nil {
 		return nil, err
 	}
 	sortSkillSourceLock(&lock)
-	raw, err := json.MarshalIndent(lock, "", "  ")
+	wire := skillSourceLockV3Wire{Version: skillSourceLockVersion, Sources: make([]skillSourceSnapshotV3Wire, 0, len(lock.Sources))}
+	for _, source := range lock.Sources {
+		wire.Sources = append(wire.Sources, skillSourceSnapshotV3Wire{
+			Source: source.Source, SourceKey: source.SourceKey, Branch: source.Branch,
+			Commit: source.Commit, UpdatedAt: source.UpdatedAt, ManagedSkills: append([]string(nil), source.ManagedSkills...),
+		})
+	}
+	raw, err := json.MarshalIndent(wire, "", "  ")
 	if err != nil {
 		return nil, fmt.Errorf("encode skill source lock: %w", err)
 	}

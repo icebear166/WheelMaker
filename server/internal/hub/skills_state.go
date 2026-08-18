@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
 	"os"
 	"path/filepath"
 	"sort"
@@ -63,7 +62,7 @@ type projectSkillsState struct {
 }
 
 func scanProjectSkillsState(ctx context.Context, target projectSkillsTarget) (projectSkillsState, error) {
-	inventory, err := scanSkillsInventory(ctx, target.Agents, target.Path, agent.SkillScanScopeProject)
+	inventory, err := scanSkillsInventory(ctx, []string{"codex", "claude"}, target.Path, agent.SkillScanScopeProject)
 	if err != nil {
 		return projectSkillsState{}, err
 	}
@@ -100,7 +99,7 @@ func scanSkillsInventory(
 	scope agent.SkillScanScope,
 ) (map[string]skillInventoryItem, error) {
 	inventory := map[string]skillInventoryItem{}
-	managed := readManagedSkillNames(cwd)
+	managed := tools.ManagedSkillNamesForScope(cwd, "")
 	descriptors, err := agent.ListSkillsForProviders(ctx, providers, cwd, scope)
 	if err != nil {
 		return nil, err
@@ -179,27 +178,7 @@ func deriveSkillSyncStatus(locations map[string]skillLocation) skillSyncStatus {
 }
 
 func readManagedSkillNames(root string) map[string]bool {
-	out := map[string]bool{}
-	lockPath := managedSkillsLockPath(root)
-	if lockPath == "" {
-		return out
-	}
-	raw, err := os.ReadFile(lockPath)
-	if err != nil {
-		return out
-	}
-	var value struct {
-		Skills map[string]json.RawMessage `json:"skills"`
-	}
-	if json.Unmarshal(raw, &value) != nil {
-		return out
-	}
-	for name := range value.Skills {
-		if name = strings.TrimSpace(name); name != "" {
-			out[strings.ToLower(name)] = true
-		}
-	}
-	return out
+	return tools.ManagedSkillNamesForScope(root, "")
 }
 
 func managedSkillsLockPath(root string) string {

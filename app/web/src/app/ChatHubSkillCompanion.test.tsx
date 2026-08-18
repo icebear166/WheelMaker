@@ -13,41 +13,6 @@ jest.mock('remark-gfm', () => ({
 import {skillDetailCacheKey} from '../settings/skillManagementView';
 import {ChatHubSkillCompanion} from './ChatHubSkillCompanion';
 
-const installHarness = {
-  sourceInput: '',
-  onSourceInputChange: jest.fn(),
-  sourceLoading: false,
-  sourceError: '',
-  preview: null,
-  requestedSkillNames: [],
-  onPreview: jest.fn().mockResolvedValue(undefined),
-  onApply: jest.fn(),
-};
-
-test('renders one Add Skill Source companion with the bound target', async () => {
-  const target = {hubId: 'hub-a', scope: 'project' as const, projectName: 'alpha'};
-  const onClose = jest.fn();
-  let renderer!: TestRenderer.ReactTestRenderer;
-  await act(async () => {
-    renderer = TestRenderer.create(
-      <ChatHubSkillCompanion
-        surface={{kind: 'install', target}}
-        install={installHarness}
-        detail={{entries: {}, pendingKey: '', onUninstall: jest.fn()}}
-        onClose={onClose}
-      />,
-    );
-  });
-
-  expect(renderer.root.findByProps({className: 'chat-hub-skill-companion-title'}).children)
-    .toEqual(['Add Skill Source']);
-  expect(renderer.root.findByProps({className: 'chat-hub-skill-companion-scope'}).children)
-    .toEqual(['Project: alpha']);
-  expect(renderer.root.findAllByProps({className: 'skill-install-marketplace'})).toHaveLength(1);
-  act(() => renderer.root.findByProps({'aria-label': 'Close Add Skill Source'}).props.onClick());
-  expect(onClose).toHaveBeenCalled();
-});
-
 test('renders shared detail content and a managed uninstall footer', async () => {
   const target = {
     hubId: 'hub-a',
@@ -61,7 +26,6 @@ test('renders shared detail content and a managed uninstall footer', async () =>
     renderer = TestRenderer.create(
       <ChatHubSkillCompanion
         surface={{kind: 'detail', target}}
-        install={installHarness}
         detail={{
           entries: {
             [key]: {

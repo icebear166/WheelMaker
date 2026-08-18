@@ -1186,17 +1186,17 @@ func TestHubStateActionValidationMatchesAdapters(t *testing.T) {
 		{section: hubStateSectionWheelmakerUpdate, action: "requestUpdate"},
 		{section: hubStateSectionWheelmakerUpdate, action: "restart"},
 		{section: hubStateSectionGatewayUpdate, action: "requestUpdate"},
-		{section: hubStateSectionSkills, action: "listSource"},
-		{section: hubStateSectionSkills, action: "install"},
-		{section: hubStateSectionSkills, action: "uninstall"},
-		{section: hubStateSectionSkills, action: "update"},
-		{section: hubStateSectionSkills, action: "previewSource"},
-		{section: hubStateSectionSkills, action: "previewInstall"},
-		{section: hubStateSectionSkills, action: "previewUpdate"},
-		{section: hubStateSectionSkills, action: "previewDeleteSource"},
-		{section: hubStateSectionSkills, action: "applyPreview"},
-		{section: hubStateSectionSkills, action: "detail", params: map[string]any{"scope": "hub", "skillName": "debug"}},
 		{section: hubStateSectionSkills, action: "reindex"},
+		{section: hubStateSectionSkills, action: "inspectRepo"},
+		{section: hubStateSectionSkills, action: "addRepo"},
+		{section: hubStateSectionSkills, action: "refreshRepo"},
+		{section: hubStateSectionSkills, action: "updateRepo"},
+		{section: hubStateSectionSkills, action: "install"},
+		{section: hubStateSectionSkills, action: "installAll"},
+		{section: hubStateSectionSkills, action: "uninstall"},
+		{section: hubStateSectionSkills, action: "removeRepo"},
+		{section: hubStateSectionSkills, action: "detail", params: map[string]any{"scope": "hub", "skillName": "debug"}},
+		{section: hubStateSectionSkills, action: "operation"},
 		{section: "flickerBridge", action: "start"},
 		{section: "flickerBridge", action: "stop"},
 		{section: "flickerBridge", action: "restart"},
@@ -1345,7 +1345,7 @@ func TestSkillsStateAggregatesLinkedClaudeSkillDirectory(t *testing.T) {
 	}
 }
 
-func TestSkillsStateScansNativeDiscoveryDirectoriesAndAggregatesSharedSources(t *testing.T) {
+func TestSkillsStateIgnoresUnmanagedProviderSkillDirectories(t *testing.T) {
 	root := t.TempDir()
 	writeCanonicalSkillFixture(t, filepath.Join(root, ".agents", "skills", "shared"), "Shared", "shared description")
 	writeCanonicalSkillFixture(t, filepath.Join(root, ".codebuddy", "skills", "native"), "Native", "native description")
@@ -1353,24 +1353,20 @@ func TestSkillsStateScansNativeDiscoveryDirectoriesAndAggregatesSharedSources(t 
 	state, err := scanProjectSkillsState(context.Background(), projectSkillsTarget{
 		ProjectID: "hub-a:project",
 		Path:      root,
-		Agents:    []string{"codex", "opencode", "codebuddy"},
+		Agents:    []string{"codex", "claude"},
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
 	shared := state.Inventory["shared"]
-	if !containsFold(shared.Agents, "codex") || !containsFold(shared.Agents, "opencode") {
-		t.Fatalf("shared skill agents = %v, want codex and opencode", shared.Agents)
+	if !containsFold(shared.Agents, "codex") || containsFold(shared.Agents, "opencode") {
+		t.Fatalf("shared skill agents = %v, want only codex", shared.Agents)
 	}
 	if _, ok := shared.Locations["agents"]; !ok {
 		t.Fatalf("shared locations = %#v, want agents location", shared.Locations)
 	}
-	native := state.Inventory["native"]
-	if !containsFold(native.Agents, "codebuddy") {
-		t.Fatalf("native skill agents = %v, want codebuddy", native.Agents)
-	}
-	if _, ok := native.Locations["codebuddy"]; !ok {
-		t.Fatalf("native locations = %#v, want codebuddy location", native.Locations)
+	if _, ok := state.Inventory["native"]; ok {
+		t.Fatalf("unmanaged provider skill was scanned: %#v", state.Inventory["native"])
 	}
 }
 
@@ -1384,13 +1380,21 @@ func TestReporterDoesNotRetainSkillsWatcher(t *testing.T) {
 }
 
 func TestReadManagedSkillNamesUsesGlobalAgentsLock(t *testing.T) {
-	stateHome := t.TempDir()
-	t.Setenv("XDG_STATE_HOME", stateHome)
-	lockPath := filepath.Join(stateHome, "skills", ".skill-lock.json")
+	home := t.TempDir()
+	t.Setenv("USERPROFILE", home)
+	t.Setenv("HOME", home)
+	lockPath := filepath.Join(home, ".wheelmaker", "skills", ".skill-source-lock.json")
 	if err := os.MkdirAll(filepath.Dir(lockPath), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(lockPath, []byte(`{"version":1,"skills":{"scope":{"source":"owner/repo"}}}`), 0o644); err != nil {
+	installed := filepath.Join(home, ".agents", "skills", "scope", "SKILL.md")
+	if err := os.MkdirAll(filepath.Dir(installed), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(installed, []byte("---\nname: scope\n---\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(lockPath, []byte(`{"version":3,"sources":[{"source":"https://github.com/owner/repo.git","sourceKey":"github.com/owner/repo","commit":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","updatedAt":"2026-08-18T12:00:00Z","managedSkills":["scope"]}]}`), 0o600); err != nil {
 		t.Fatal(err)
 	}
 
@@ -3000,6 +3004,7 @@ func TestHubStateSkillsActionPublishesRunningOperationWithoutReplacingInventory(
 }
 
 func TestHubStateSkillsFailedPreviewRefreshesPublishedCatalogState(t *testing.T) {
+	t.Skip("preview/apply actions were removed in 2.0")
 	reporter := NewReporter(
 		ReporterConfig{HubID: "hub-skills-preview", StateDir: t.TempDir()},
 		nil,

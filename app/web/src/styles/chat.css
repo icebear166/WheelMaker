@@ -3174,6 +3174,104 @@ button.chat-hub-skill-name:disabled {
   gap: 7px;
 }
 
+.chat-hub-skill-add-repository {
+  border: 1px dashed color-mix(in srgb, var(--border-subtle) 75%, transparent);
+  border-radius: 7px;
+  overflow: hidden;
+}
+
+.chat-hub-skill-add-repository-trigger {
+  width: 100%;
+  min-height: 42px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  border: 0;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.chat-hub-skill-add-repository-trigger:hover:not(:disabled),
+.chat-hub-skill-add-repository-trigger:focus-visible {
+  background: color-mix(in srgb, var(--surface-hover) 65%, transparent);
+  color: var(--text-primary);
+}
+
+.chat-hub-skill-add-repository-form {
+  padding: 10px;
+  display: grid;
+  gap: 8px;
+}
+
+.chat-hub-skill-add-repository-input-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.chat-hub-skill-add-repository-input-row input {
+  min-width: 0;
+  flex: 1;
+}
+
+.chat-hub-skill-add-repository-input-row button,
+.chat-hub-skill-add-repository-preview button {
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  padding: 5px 9px;
+  background: var(--surface-panel);
+  color: var(--text-primary);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.chat-hub-skill-add-repository-input-row button.is-quiet {
+  color: var(--text-secondary);
+}
+
+.chat-hub-skill-add-repository-preview {
+  display: grid;
+  gap: 8px;
+  padding: 8px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--surface-hover) 60%, transparent);
+}
+
+.chat-hub-skill-add-repository-preview-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.chat-hub-skill-add-repository-preview-meta strong {
+  color: var(--text-primary);
+}
+
+.chat-hub-skill-add-repository-preview-skills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.chat-hub-skill-add-repository-preview-skills span {
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: var(--surface-panel);
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+
+.chat-hub-skill-add-repository-preview button.is-primary {
+  justify-self: end;
+  background: var(--accent, #5f8cff);
+  border-color: var(--accent, #5f8cff);
+  color: #fff;
+}
+
 .chat-hub-skill-source {
   min-width: 0;
   overflow: hidden;
@@ -3307,7 +3405,8 @@ button.chat-hub-skill-name:disabled {
 
 .chat-hub-skill-source-status-dot.is-needs-refresh,
 .chat-hub-skill-source-status-dot.is-stale,
-.chat-hub-skill-source-status-dot.is-pending-removal {
+.chat-hub-skill-source-status-dot.is-pending-removal,
+.chat-hub-skill-source-status-dot.is-update-available {
   background: var(--warning, #d8a13b);
 }
 

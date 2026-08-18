@@ -1,8 +1,22 @@
 package shared
 
-import "sync"
+import (
+	"path/filepath"
+	"strings"
+	"sync"
+)
 
-// Windows file locking is not reliably exclusive between handles owned by
-// the same process, so serialize in-process callers in addition to the OS
-// lock used by each platform implementation.
-var configProcessLock sync.Mutex
+var configProcessLocks sync.Map
+
+func configProcessMutex(path string) *sync.Mutex {
+	key := filepath.Clean(path)
+	if filepath.Separator == '\\' {
+		key = strings.ToLower(key)
+	}
+	if value, ok := configProcessLocks.Load(key); ok {
+		return value.(*sync.Mutex)
+	}
+	created := &sync.Mutex{}
+	actual, _ := configProcessLocks.LoadOrStore(key, created)
+	return actual.(*sync.Mutex)
+}

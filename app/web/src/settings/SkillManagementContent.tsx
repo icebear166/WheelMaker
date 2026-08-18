@@ -3,26 +3,12 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 
 import {Icon} from '../common/Icon';
-import {skillSourceDisplayName} from './skillManagementView';
 import type {
   RegistrySkillDetail,
-  RegistrySkillSourcePreview,
   RegistrySkillSupportingFile,
 } from '../registry/registryTypes';
 
-export const SKILLS_MARKETPLACE_URL = 'https://www.skills.sh/';
 const SKILL_MARKDOWN_REMARK_PLUGINS = [remarkGfm];
-
-export type SkillInstallContentProps = {
-  sourceInput: string;
-  onSourceInputChange: (value: string) => void;
-  sourceLoading: boolean;
-  sourceError: string;
-  preview: RegistrySkillSourcePreview | null;
-  requestedSkillNames: string[];
-  onPreview: () => Promise<void>;
-  onApply: (previewId: string) => void;
-};
 
 export type SkillDetailContentProps = {
   loading: boolean;
@@ -53,102 +39,6 @@ function renderSupportingFile(file: RegistrySkillSupportingFile) {
       <Icon name={file.directory ? 'folder' : 'file'} size={13} />
       <span data-tooltip={file.relativePath}>{file.relativePath}</span>
       <span>{file.directory ? 'Folder' : formatSkillFileSize(file.size)}</span>
-    </div>
-  );
-}
-
-export function SkillInstallContent({
-  sourceInput,
-  onSourceInputChange,
-  sourceLoading,
-  sourceError,
-  preview,
-  requestedSkillNames,
-  onPreview,
-  onApply,
-}: SkillInstallContentProps) {
-  const explicitNames = preview?.skills?.length ? preview.skills : requestedSkillNames;
-  const explicit = explicitNames.length > 0 || preview?.kind === 'previewInstall';
-  const previewNames = explicit
-    ? explicitNames
-    : preview?.skillList.map(skill => skill.name) ?? [];
-
-  return (
-    <div className="skill-install-content">
-      <a
-        className="skill-install-marketplace"
-        href={SKILLS_MARKETPLACE_URL}
-        target="_blank"
-        rel="noreferrer"
-      >
-        <span className="settings-skills-marketplace-main">
-          <span className="settings-skills-marketplace-label">Marketplace</span>
-          <span className="settings-skills-marketplace-url">{SKILLS_MARKETPLACE_URL}</span>
-        </span>
-        <Icon name="externalLink" size={13} />
-      </a>
-      <div className="settings-skills-source-row">
-        <input
-          className="settings-skills-source-input"
-          value={sourceInput}
-          onChange={event => onSourceInputChange(event.target.value)}
-          onKeyDown={event => {
-            if (event.key === 'Enter') {
-              onPreview().catch(() => undefined);
-            }
-          }}
-          placeholder="owner/repo, Git URL, or npx skills add --skill name"
-        />
-        <button
-          type="button"
-          className="set-btn"
-          aria-label="Preview skill source"
-          disabled={sourceLoading}
-          onClick={() => onPreview().catch(() => undefined)}
-        >
-          {sourceLoading ? 'Checking...' : 'Preview'}
-        </button>
-      </div>
-      {sourceError ? <div className="set-error">{sourceError}</div> : null}
-      {preview ? (
-        <div className="skill-install-preview-summary">
-          <span className="skill-install-preview-mode">
-            {explicit ? `${explicitNames.length} skill${explicitNames.length === 1 ? '' : 's'}` : 'Source only'}
-          </span>
-          <span className="skill-install-preview-source" data-tooltip={preview.source}>{skillSourceDisplayName(preview.sourceKey)}</span>
-          <span className="skill-install-preview-revision">{preview.resolvedCommit.slice(0, 8)}</span>
-        </div>
-      ) : null}
-      {previewNames.length > 0 ? (
-        <div className="settings-skills-candidates">
-          {previewNames.map(skillName => (
-            <div key={`candidate:${skillName}`} className="settings-skill-row settings-skill-candidate-row">
-              <span className="settings-skill-row-main">
-                <span className="settings-skill-name">{skillName}</span>
-              </span>
-              <span className="settings-skill-meta">{explicit ? 'Install' : 'Available after save'}</span>
-            </div>
-          ))}
-        </div>
-      ) : null}
-      <div className="settings-skills-install-actions">
-        <span className="settings-skill-meta">
-          {preview
-            ? explicit
-              ? `Pinned at ${preview.resolvedCommit.slice(0, 8)}`
-              : `${preview.skillList.length} skills discovered`
-            : 'Preview resolves and pins the source before any write.'}
-        </span>
-        <button
-          type="button"
-          className="set-btn set-btn--primary"
-          aria-label={explicit ? `Install ${explicitNames.length} skills` : 'Save skill source'}
-          disabled={!preview || sourceLoading}
-          onClick={() => preview && onApply(preview.id)}
-        >
-          {explicit ? 'Install' : 'Save source'}
-        </button>
-      </div>
     </div>
   );
 }

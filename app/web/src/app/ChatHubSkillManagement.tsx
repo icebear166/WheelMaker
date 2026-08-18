@@ -4,6 +4,7 @@ import {Icon} from '../common/Icon';
 import type {
   RegistrySkillCatalogItem,
   RegistrySkillOperation,
+  RegistrySkillRepoSnapshot,
   RegistrySkillSourceScopeSnapshot,
   RegistrySkillSourceSnapshot,
 } from '../registry/registryTypes';
@@ -18,7 +19,6 @@ import {
   writeSkillSourceExpanded,
   writeSkillShowUninstalled,
   type SkillDetailTarget,
-  type SkillInstallTarget,
   type SkillScopeTarget,
   type SkillSourceSkillTarget,
   type SkillSourceTarget,
@@ -26,13 +26,14 @@ import {
 } from '../settings/skillManagementView';
 
 export interface ChatHubSkillActions {
-  onAdd: (target: SkillInstallTarget) => void;
+  onInspectRepo: (target: SkillScopeTarget, source: string) => Promise<RegistrySkillRepoSnapshot>;
+  onAddRepo: (target: SkillScopeTarget, source: string) => void;
   onDetail: (target: SkillDetailTarget) => void;
   onRefreshSource: (target: SkillSourceTarget) => void;
+  onUpdateSource: (target: SkillSourceTarget) => void;
+  onInstallAll: (target: SkillSourceTarget) => void;
   onDeleteSource: (target: SkillSourceTarget) => void;
   onInstallSkill: (target: SkillSourceSkillTarget) => void;
-  onUpdateSkill: (target: SkillSourceSkillTarget) => void;
-  onUpdateAll: (target: SkillScopeTarget) => void;
   onUninstall: (target: SkillUninstallTarget) => void;
   onRetry: (hubId: string) => void;
 }
@@ -60,6 +61,7 @@ const STATUS_COPY: Record<string, string> = {
   unmanaged: 'Unmanaged',
   copies_differ: 'Copies differ',
   needs_refresh: 'Needs refresh',
+  needs_clone: 'Needs clone',
 };
 
 const EXCEPTIONAL_SKILL_STATUSES = new Set([
@@ -102,7 +104,6 @@ function SkillCatalogRow({
   const uninstalled = skill.status === 'uninstalled';
   const canOpenDetail = skill.installed && !conflicted;
   const actionTarget = source ? {...sourceTarget(target, source), skillName: skill.name} : null;
-  const sourceUnavailable = source?.status === 'stale' || source?.status === 'needs_refresh';
   const showStatus = EXCEPTIONAL_SKILL_STATUSES.has(skill.status);
   const className = [
     'chat-hub-skill-row',
@@ -143,19 +144,10 @@ function SkillCatalogRow({
             <button
               type="button"
               aria-label={`Download ${skill.name}`}
-              disabled={busy || sourceUnavailable}
+              disabled={busy}
               onClick={() => actions.onInstallSkill(actionTarget)}
             >
               <Icon name="cloudDownload" />
-            </button>
-          ) : actionTarget && !conflicted && skill.canUpdate ? (
-            <button
-              type="button"
-              aria-label={`Update ${skill.name}`}
-              disabled={busy || sourceUnavailable}
-              onClick={() => actions.onUpdateSkill(actionTarget)}
-            >
-              <Icon name="circleArrowUp" />
             </button>
           ) : null}
         </span>
@@ -200,9 +192,9 @@ function SkillSourceLedger({
   const baseTarget = sourceTarget(target, source);
   const sourcePreferenceKey = skillSourceExpandedPreferenceKey(baseTarget);
   const [expanded, setExpanded] = useState(() => readSkillSourceExpanded(baseTarget));
-  const statusCopy = skillStatusCopy(source.status);
-  const sourceStatusClass = source.status.replaceAll('_', '-');
-  const sourceUnavailable = source.status !== 'ready';
+  const sourceHasUpdate = source.status === 'ready' && source.updateAvailable === true;
+  const statusCopy = sourceHasUpdate ? STATUS_COPY.update_available : skillStatusCopy(source.status);
+  const sourceStatusClass = sourceHasUpdate ? 'update-available' : source.status.replaceAll('_', '-');
   const displayName = skillSourceDisplayName(source.sourceKey);
 
   useEffect(() => {
@@ -247,11 +239,19 @@ function SkillSourceLedger({
           </button>
           <button
             type="button"
-            aria-label={`Update all ${displayName} skills`}
-            disabled={busy || sourceUnavailable || source.updateCount === 0}
-            onClick={() => actions.onUpdateAll(baseTarget)}
+            aria-label={`Update ${displayName}`}
+            disabled={busy}
+            onClick={() => actions.onUpdateSource(baseTarget)}
           >
             <Icon name="circleArrowUp" />
+          </button>
+          <button
+            type="button"
+            aria-label={`Install all ${displayName} skills`}
+            disabled={busy}
+            onClick={() => actions.onInstallAll(baseTarget)}
+          >
+            <Icon name="cloudDownload" />
           </button>
           <button
             type="button"
@@ -288,6 +288,106 @@ function SkillSourceLedger({
   );
 }
 
+function InlineAddRepository({
+  target,
+  busy,
+  actions,
+}: {
+  target: SkillScopeTarget;
+  busy: boolean;
+  actions: ChatHubSkillActions;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const [source, setSource] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [repo, setRepo] = useState<RegistrySkillRepoSnapshot | null>(null);
+
+  const inspect = async () => {
+    const value = source.trim();
+    if (!value) {
+      setError('Git repository is required.');
+      return;
+    }
+    setLoading(true);
+    setError('');
+    try {
+      const inspected = await actions.onInspectRepo(target, value);
+      setRepo(inspected);
+    } catch (inspectError) {
+      setRepo(null);
+      setError(inspectError instanceof Error ? inspectError.message : String(inspectError));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const add = () => {
+    const value = source.trim();
+    if (!value || !repo) return;
+    actions.onAddRepo(target, value);
+    setExpanded(false);
+    setSource('');
+    setRepo(null);
+    setError('');
+  };
+
+  return (
+    <section className={`chat-hub-skill-add-repository${expanded ? ' is-expanded' : ''}`}>
+      {!expanded ? (
+        <button
+          type="button"
+          className="chat-hub-skill-add-repository-trigger"
+          disabled={busy}
+          onClick={() => setExpanded(true)}
+        >
+          <Icon name="plus" />
+          <span>Add Git repository</span>
+        </button>
+      ) : (
+        <div className="chat-hub-skill-add-repository-form">
+          <div className="chat-hub-skill-add-repository-input-row">
+            <input
+              autoFocus
+              value={source}
+              aria-label="Git repository URL"
+              placeholder="owner/repo or Git repository URL"
+              onChange={event => {
+                setSource(event.target.value);
+                setRepo(null);
+                setError('');
+              }}
+              onKeyDown={event => {
+                if (event.key === 'Enter') void inspect();
+                if (event.key === 'Escape') setExpanded(false);
+              }}
+            />
+            <button type="button" disabled={busy || loading} onClick={() => void inspect()}>
+              {loading ? 'Checking…' : 'Inspect'}
+            </button>
+            <button type="button" className="is-quiet" disabled={busy || loading} onClick={() => setExpanded(false)}>
+              Cancel
+            </button>
+          </div>
+          {error ? <div className="chat-hub-skill-source-error">{error}</div> : null}
+          {repo ? (
+            <div className="chat-hub-skill-add-repository-preview">
+              <div className="chat-hub-skill-add-repository-preview-meta">
+                <strong>{skillSourceDisplayName(repo.sourceKey)}</strong>
+                <span>{repo.skills.length} skills · {(repo.commit || '').slice(0, 8) || '-'}</span>
+              </div>
+              <div className="chat-hub-skill-add-repository-preview-skills">
+                {repo.skills.map(skill => <span key={skill.name}>{skill.name}</span>)}
+              </div>
+              <button type="button" className="is-primary" disabled={busy} onClick={add}>Add repository</button>
+            </div>
+          ) : null}
+        </div>
+      )}
+    </section>
+  );
+}
+
 export function ChatHubSkillScopeDetail({
   target,
   label,
@@ -311,7 +411,6 @@ export function ChatHubSkillScopeDetail({
   );
   const scopeLabel = target.scope === 'hub' ? 'Hub' : 'Project';
   const busy = loading || operationRunning || isSkillActionPendingForHub(pendingKey, target.hubId);
-  const updateCount = sources.reduce((total, source) => total + source.updateCount, 0);
   const operationInScope = operation?.scope === target.scope
     && (operation.projectName || '') === (target.projectName || '');
 
@@ -336,24 +435,6 @@ export function ChatHubSkillScopeDetail({
             />
             <span>Show all</span>
           </label>
-          <button
-            type="button"
-            className="chat-hub-skill-icon-button"
-            aria-label={`Add ${scopeLabel} skill source`}
-            disabled={busy}
-            onClick={() => actions.onAdd(target)}
-          >
-            <Icon name="plus" />
-          </button>
-          <button
-            type="button"
-            className="chat-hub-skill-update-all"
-            aria-label={`Update all ${scopeLabel} skill sources`}
-            disabled={busy || sources.length === 0 || updateCount === 0}
-            onClick={() => actions.onUpdateAll(target)}
-          >
-            <Icon name={operationRunning ? 'loader' : 'circleArrowUp'} spin={operationRunning} />
-          </button>
         </div>
       </div>
 
@@ -425,6 +506,7 @@ export function ChatHubSkillScopeDetail({
             </div>
           </section>
         ) : null}
+        <InlineAddRepository target={target} busy={busy} actions={actions} />
       </div>
     </section>
   );

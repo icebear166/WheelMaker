@@ -12,7 +12,6 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -31,13 +30,7 @@ var (
 	skillSourceSecretPattern = regexp.MustCompile(`(?i)(token|access_token|auth|password|key)=([^&\s]+)`)
 )
 
-var fixedSkillAgents = []string{"codex", "claude-code", "opencode", "github-copilot"}
-
-const (
-	skillsCLIVersion       = "1.5.18"
-	skillsCLIPackage       = "skills@" + skillsCLIVersion
-	skillsMinimumNodeMajor = 22
-)
+var fixedSkillAgents = []string{"codex", "claude"}
 
 type skillsCommandCall struct {
 	Dir  string
@@ -112,19 +105,14 @@ type SkillsCommand struct {
 	homeDir         string
 	onOperationDone func(scope, projectName string, operation SkillsOperationSnapshot)
 	resolveSource   func(context.Context, skillSourceSnapshot) (skillSourceSnapshot, error)
+	store           *skillSourceStore
 
-	mu                     sync.RWMutex
-	projects               []ProjectInfo
-	operation              *skillsOperationSnapshot
-	previews               map[string]skillsStoredSourcePreview
-	sourceErrors           map[string]map[string]string
-	previewCounter         uint64
-	skillsNodeMu           sync.Mutex
-	skillsNodeChecked      bool
-	skillsNodeError        string
-	skillsInstallMu        sync.Mutex
-	skillsInstallAttempted bool
-	skillsCLIReady         bool
+	mu             sync.RWMutex
+	projects       []ProjectInfo
+	operation      *skillsOperationSnapshot
+	previews       map[string]skillsStoredSourcePreview
+	sourceErrors   map[string]map[string]string
+	previewCounter uint64
 }
 
 func NewSkillsCommand(config skillsCommandConfig) *SkillsCommand {
@@ -151,6 +139,7 @@ func newSkillsCommandWithRunner(runner skillsCommandRunner, config skillsCommand
 		hubID:           strings.TrimSpace(config.HubID),
 		globalLockPath:  strings.TrimSpace(config.GlobalLockPath),
 		homeDir:         strings.TrimSpace(config.HomeDir),
+		store:           newSkillSourceStore(config.HomeDir),
 		onOperationDone: config.OnOperationDone,
 		resolveSource:   config.ResolveSource,
 		previews:        map[string]skillsStoredSourcePreview{},
@@ -242,6 +231,17 @@ type skillsCommandResponse struct {
 	Message      string                     `json:"message,omitempty"`
 	ErrorSummary string                     `json:"errorSummary,omitempty"`
 	Preview      *skillsSourcePreview       `json:"preview,omitempty"`
+	Repo         *skillsRepoSnapshot        `json:"repo,omitempty"`
+}
+
+type skillsRepoSnapshot struct {
+	Source          string                     `json:"source"`
+	SourceKey       string                     `json:"sourceKey"`
+	Branch          string                     `json:"branch,omitempty"`
+	Commit          string                     `json:"commit,omitempty"`
+	RemoteCommit    string                     `json:"remoteCommit,omitempty"`
+	UpdateAvailable bool                       `json:"updateAvailable"`
+	Skills          []skillSourceSkillSnapshot `json:"skills"`
 }
 
 type skillsSourcePreview struct {
@@ -400,26 +400,28 @@ func (c *SkillsCommand) Handle(ctx context.Context, raw json.RawMessage) (any, *
 	}
 
 	switch payload.Action {
-	case "scan":
-		return c.scan(ctx, payload.HubID), nil
-	case "list":
-		return c.listSource(ctx, payload)
+	case "reindex":
+		return c.nativeScan(ctx, payload.HubID), nil
+	case "inspectRepo":
+		return c.inspectNativeRepo(ctx, payload)
+	case "addRepo":
+		return c.startNativeAddRepo(payload)
+	case "refreshRepo":
+		return c.startNativeRefreshRepo(payload)
+	case "updateRepo":
+		return c.startNativeUpdateRepo(payload)
+	case "installAll":
+		return c.startNativeInstall(payload, true)
+	case "removeRepo":
+		return c.startNativeRemoveRepo(payload)
+	case "operation":
+		return skillsCommandResponse{OK: true, HubID: payload.HubID, UpdatedAt: c.now().Format(time.RFC3339), Operation: c.currentOperationSnapshot()}, nil
 	case "detail":
-		return c.detail(ctx, payload)
+		return c.nativeDetail(ctx, payload)
 	case "install":
-		return c.startInstall(payload)
+		return c.startNativeInstall(payload, false)
 	case "uninstall":
-		return c.startUninstall(payload)
-	case "update":
-		return c.startUpdate(payload)
-	case "previewSource", "previewInstall":
-		return c.previewSource(ctx, payload)
-	case "previewUpdate":
-		return c.previewUpdate(ctx, payload)
-	case "previewDeleteSource":
-		return c.previewDeleteSource(payload)
-	case "applyPreview":
-		return c.applySourcePreview(payload)
+		return c.startNativeUninstall(payload)
 	default:
 		return nil, &skillsCommandError{Code: rp.CodeInvalidArgument, Message: "unsupported cmd.skills action"}
 	}
@@ -1100,7 +1102,9 @@ func skillSourceAddress(source skillSourceSnapshot) string {
 }
 
 func sanitizeSkillSourceError(message, source string) string {
-	message = strings.ReplaceAll(message, strings.TrimSpace(source), "[skill source]")
+	if source = strings.TrimSpace(source); source != "" {
+		message = strings.ReplaceAll(message, source, "[skill source]")
+	}
 	message = skillSourceSecretPattern.ReplaceAllString(message, "$1=[redacted]")
 	if len(message) > 500 {
 		message = message[:500]
@@ -1514,13 +1518,9 @@ func (c *SkillsCommand) skillsInstallDirs(target skillsCommandTarget) ([]string,
 		if err != nil {
 			return nil, err
 		}
-		claudeHome := strings.TrimSpace(os.Getenv("CLAUDE_CONFIG_DIR"))
-		if claudeHome == "" {
-			claudeHome = filepath.Join(home, ".claude")
-		}
 		return []string{
 			filepath.Join(home, ".agents", "skills"),
-			filepath.Join(claudeHome, "skills"),
+			filepath.Join(home, ".claude", "skills"),
 		}, nil
 	case "project":
 		if strings.TrimSpace(target.dir) == "" {
@@ -1881,95 +1881,14 @@ func safeSkillRelativePath(root string, path string) (string, bool) {
 }
 
 func (c *SkillsCommand) runSkills(ctx context.Context, dir string, args ...string) skillsCommandResult {
-	if nodeError := c.ensureSkillsNode(ctx); nodeError != "" {
-		return skillsCommandResult{
-			Stderr:   nodeError,
-			ExitCode: 1,
-			Err:      errors.New(nodeError),
-		}
+	_ = ctx
+	_ = dir
+	_ = args
+	return skillsCommandResult{
+		Stderr:   "legacy Skills CLI actions are no longer supported",
+		ExitCode: 1,
+		Err:      errors.New("legacy Skills CLI actions are no longer supported"),
 	}
-	if c.ensureSkillsCLI(ctx) {
-		result := c.runner.Run(ctx, dir, "skills", args...)
-		if !skillsCommandUnavailable(result) {
-			return result
-		}
-	}
-	npxArgs := append([]string{"--yes", skillsCLIPackage}, args...)
-	return c.runner.Run(ctx, dir, "npx", npxArgs...)
-}
-
-func (c *SkillsCommand) ensureSkillsNode(ctx context.Context) string {
-	c.skillsNodeMu.Lock()
-	defer c.skillsNodeMu.Unlock()
-	if c.skillsNodeChecked {
-		return c.skillsNodeError
-	}
-
-	result := c.runner.Run(ctx, "", "node", "--version")
-	if skillsCommandFailed(result) {
-		detail := strings.TrimSpace(skillsResultSummary(result))
-		c.skillsNodeError = fmt.Sprintf("Skills require Node.js %d+, but node --version failed: %s", skillsMinimumNodeMajor, detail)
-		return c.skillsNodeError
-	}
-	version := strings.TrimSpace(result.Stdout)
-	majorText := strings.TrimPrefix(version, "v")
-	if dot := strings.IndexByte(majorText, '.'); dot >= 0 {
-		majorText = majorText[:dot]
-	}
-	major, err := strconv.Atoi(majorText)
-	if err != nil || major < skillsMinimumNodeMajor {
-		if version == "" {
-			version = "unknown version"
-		}
-		c.skillsNodeError = fmt.Sprintf("Skills require Node.js %d+; found %s. Update Node.js and retry.", skillsMinimumNodeMajor, version)
-		return c.skillsNodeError
-	}
-	c.skillsNodeChecked = true
-	c.skillsNodeError = ""
-	return c.skillsNodeError
-}
-
-func (c *SkillsCommand) ensureSkillsCLI(ctx context.Context) bool {
-	c.skillsInstallMu.Lock()
-	defer c.skillsInstallMu.Unlock()
-	if c.skillsCLIReady {
-		return true
-	}
-	if c.skillsCLIAvailable() && c.skillsCLIVersionMatches(ctx) {
-		c.skillsCLIReady = true
-		return true
-	}
-	if c.skillsInstallAttempted {
-		return false
-	}
-	c.skillsInstallAttempted = true
-	result := c.runner.Run(ctx, "", "npm", "install", "-g", skillsCLIPackage)
-	if skillsCommandFailed(result) {
-		return false
-	}
-	c.skillsCLIReady = c.skillsCLIAvailable() && c.skillsCLIVersionMatches(ctx)
-	return c.skillsCLIReady
-}
-
-func (c *SkillsCommand) skillsCLIAvailable() bool {
-	if c.lookPath == nil {
-		return false
-	}
-	_, err := c.lookPath("skills")
-	return err == nil
-}
-
-func (c *SkillsCommand) skillsCLIVersionMatches(ctx context.Context) bool {
-	result := c.runner.Run(ctx, "", "skills", "--version")
-	if skillsCommandFailed(result) {
-		return false
-	}
-	for _, field := range strings.Fields(result.Stdout) {
-		if strings.TrimPrefix(field, "v") == skillsCLIVersion {
-			return true
-		}
-	}
-	return false
 }
 
 func (c *SkillsCommand) projectSnapshot() []ProjectInfo {
@@ -1992,6 +1911,9 @@ func (c *SkillsCommand) findProject(hubID string, nameOrID string) (ProjectInfo,
 func (c *SkillsCommand) globalLockFile() string {
 	if strings.TrimSpace(c.globalLockPath) != "" {
 		return c.globalLockPath
+	}
+	if homeDir := strings.TrimSpace(c.homeDir); homeDir != "" {
+		return filepath.Join(homeDir, ".agents", ".skill-lock.json")
 	}
 	if stateHome := strings.TrimSpace(os.Getenv("XDG_STATE_HOME")); stateHome != "" {
 		return filepath.Join(stateHome, "skills", ".skill-lock.json")

@@ -1104,17 +1104,17 @@ func validateHubStateAction(section string, action string) error {
 			"requestUpdate": {},
 		},
 		hubStateSectionSkills: {
-			"listSource":          {},
-			"install":             {},
-			"uninstall":           {},
-			"update":              {},
-			"detail":              {},
-			"reindex":             {},
-			"previewSource":       {},
-			"previewInstall":      {},
-			"previewUpdate":       {},
-			"previewDeleteSource": {},
-			"applyPreview":        {},
+			"reindex":     {},
+			"inspectRepo": {},
+			"addRepo":     {},
+			"refreshRepo": {},
+			"updateRepo":  {},
+			"install":     {},
+			"installAll":  {},
+			"uninstall":   {},
+			"removeRepo":  {},
+			"detail":      {},
+			"operation":   {},
 		},
 		hubStateSectionFileIndex: {
 			"rebuild": {},
@@ -3202,11 +3202,7 @@ func (r *Reporter) skillsTargets() []projectSkillsTarget {
 }
 
 func (r *Reporter) skillsAgents() []string {
-	var agents []string
-	for _, target := range r.skillsTargets() {
-		agents = appendUniqueFold(agents, target.Agents...)
-	}
-	return agents
+	return []string{"codex", "claude"}
 }
 
 func (r *Reporter) replaceProjects(projects []ProjectInfo) {

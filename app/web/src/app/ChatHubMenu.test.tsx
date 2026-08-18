@@ -41,13 +41,20 @@ function createHarness(overrides: Partial<ChatHubMenuProps> = {}) {
     onRequestGatewayUpdate: jest.fn(),
     onRequestNpmUpdate: jest.fn(),
     onPackageAction: jest.fn(),
-    onRequestSkillInstall: jest.fn(),
+    onInspectSkillRepo: jest.fn().mockResolvedValue({
+      source: 'https://github.com/acme/skills.git',
+      sourceKey: 'github.com/acme/skills',
+      commit: '1234567890abcdef',
+      updateAvailable: false,
+      skills: [],
+    }),
+    onAddSkillRepo: jest.fn(),
     onRequestSkillDetail: jest.fn(),
     onRefreshSkillSource: jest.fn(),
+    onUpdateSkillSource: jest.fn(),
+    onInstallAllSkillSource: jest.fn(),
     onDeleteSkillSource: jest.fn(),
     onInstallSourceSkill: jest.fn(),
-    onUpdateSourceSkill: jest.fn(),
-    onUpdateSkillSources: jest.fn(),
     onRequestSkillUninstall: jest.fn(),
     onRetrySkills: jest.fn(),
     onScanAllIndexes: jest.fn(),
@@ -92,16 +99,6 @@ function createHarness(overrides: Partial<ChatHubMenuProps> = {}) {
     updateAllPending: false,
     skillSurface: null,
     skillSurfaceExiting: false,
-    skillInstall: {
-      sourceInput: '',
-      onSourceInputChange: jest.fn(),
-      sourceLoading: false,
-      sourceError: '',
-      preview: null,
-      requestedSkillNames: [],
-      onPreview: jest.fn().mockResolvedValue(undefined),
-      onApply: jest.fn(),
-    },
     skillDetail: {
       entries: {},
       pendingKey: '',
@@ -452,7 +449,7 @@ test('MCP opens a local inline zero-state without dispatching an operation', asy
   expect(detail.findByProps({className: 'chat-hub-detail-empty'}).children)
     .toEqual(['No MCP servers configured.']);
   expect(callbacks.onRequestNpmUpdate).not.toHaveBeenCalled();
-  expect(callbacks.onUpdateSkillSources).not.toHaveBeenCalled();
+  expect(callbacks.onUpdateSkillSource).not.toHaveBeenCalled();
 });
 
 test('MCP lists runtime state and dispatches enablement changes', async () => {
@@ -860,12 +857,17 @@ test('skills detail shows the Hub-global source catalog with scoped actions', as
     renderer = TestRenderer.create(<ChatHubMenu {...props} />);
   });
 
+  const source = renderer.root.findByProps({'data-source-key': 'github.com/acme/skills'});
+  const disclosure = source.findByProps({className: 'chat-hub-skill-source-disclosure'});
+  if (!disclosure.props['aria-expanded']) {
+    act(() => disclosure.props.onClick());
+  }
   const row = renderer.root.findByProps({'data-skill-name': 'baseline-ui'});
   const managedName = row.findByProps({className: 'chat-hub-skill-name'});
   expect(managedName.children).toEqual(['baseline-ui']);
   const managedActions = row.findByProps({className: 'chat-hub-skill-row-actions'}).findAllByType('button');
   expect(managedActions.map(button => button.props['aria-label']))
-    .toEqual(['Update baseline-ui', 'Uninstall baseline-ui']);
+    .toEqual(['Uninstall baseline-ui']);
   act(() => managedName.props.onClick());
   expect(callbacks.onRequestSkillDetail).toHaveBeenCalledWith({
     hubId: 'hub-a',
@@ -873,25 +875,13 @@ test('skills detail shows the Hub-global source catalog with scoped actions', as
     skillName: 'baseline-ui',
   });
   act(() => managedActions[0].props.onClick());
-  expect(callbacks.onUpdateSourceSkill).toHaveBeenCalledWith({
-    hubId: 'hub-a',
-    scope: 'hub',
-    source: 'https://github.com/acme/skills.git',
-    sourceKey: 'github.com/acme/skills',
-    skillName: 'baseline-ui',
-  });
-  act(() => managedActions[1].props.onClick());
   expect(callbacks.onRequestSkillUninstall).toHaveBeenCalledWith({
     hubId: 'hub-a',
     scope: 'hub',
     skillName: 'baseline-ui',
   });
-  const updateAll = renderer.root.findByProps({'aria-label': 'Update all Hub skill sources'});
-  act(() => updateAll.props.onClick());
-  expect(callbacks.onUpdateSkillSources).toHaveBeenCalledWith({
-    hubId: 'hub-a',
-    scope: 'hub',
-  });
+  act(() => source.findByProps({'aria-label': 'Update acme/skills'}).props.onClick());
+  expect(callbacks.onUpdateSkillSource).toHaveBeenCalledWith(expect.objectContaining({sourceKey: 'github.com/acme/skills'}));
   expect(callbacks.onClose).not.toHaveBeenCalled();
 });
 
@@ -918,6 +908,11 @@ test('skills detail disables row actions while the Hub snapshot refreshes', asyn
     renderer = TestRenderer.create(<ChatHubMenu {...props} />);
   });
 
+  const source = renderer.root.findByProps({'data-source-key': 'github.com/acme/skills'});
+  const disclosure = source.findByProps({className: 'chat-hub-skill-source-disclosure'});
+  if (!disclosure.props['aria-expanded']) {
+    act(() => disclosure.props.onClick());
+  }
   const actions = renderer.root.findByProps({'data-skill-name': 'baseline-ui'})
     .findByProps({className: 'chat-hub-skill-row-actions'})
     .findAllByType('button');
@@ -1083,12 +1078,7 @@ test('Project Skills lists every project and keeps every action in the selected 
   expect(renderer.root.findAllByProps({role: 'option'})).toHaveLength(0);
   expect(renderer.root.findAllByProps({'data-project-name': 'offline'})).toHaveLength(0);
 
-  act(() => renderer.root.findByProps({'aria-label': 'Add Project skill source'}).props.onClick());
-  expect(callbacks.onRequestSkillInstall).toHaveBeenCalledWith({
-    hubId: 'hub-a',
-    scope: 'project',
-    projectName: 'alpha',
-  });
+  expect(renderer.root.findByProps({className: 'chat-hub-skill-add-repository-trigger'})).toBeTruthy();
   act(() => renderer.root.findByProps({'aria-label': 'View one details'}).props.onClick());
   expect(callbacks.onRequestSkillDetail).toHaveBeenCalledWith({
     hubId: 'hub-a',
@@ -1096,15 +1086,7 @@ test('Project Skills lists every project and keeps every action in the selected 
     projectName: 'alpha',
     skillName: 'one',
   });
-  act(() => renderer.root.findByProps({'aria-label': 'Update one'}).props.onClick());
-  expect(callbacks.onUpdateSourceSkill).toHaveBeenCalledWith({
-    hubId: 'hub-a',
-    scope: 'project',
-    projectName: 'alpha',
-    source: 'https://github.com/acme/skills.git',
-    sourceKey: 'github.com/acme/skills',
-    skillName: 'one',
-  });
+  expect(renderer.root.findAllByProps({'aria-label': 'Update one'})).toHaveLength(0);
   act(() => renderer.root.findByProps({'aria-label': 'Uninstall one'}).props.onClick());
   expect(callbacks.onRequestSkillUninstall).toHaveBeenCalledWith({
     hubId: 'hub-a',
@@ -1122,12 +1104,7 @@ test('Project Skills lists every project and keeps every action in the selected 
   expect(selectedBeta.props['aria-expanded']).toBe(false);
   expect(selectedBeta.props['data-selected-project']).toBe('beta-project');
   expect(selectedBeta.props['data-tooltip']).toBe('beta-project');
-  act(() => renderer.root.findByProps({'aria-label': 'Add Project skill source'}).props.onClick());
-  expect(callbacks.onRequestSkillInstall).toHaveBeenLastCalledWith({
-    hubId: 'hub-a',
-    scope: 'project',
-    projectName: 'beta-project',
-  });
+  expect(renderer.root.findByProps({className: 'chat-hub-skill-add-repository-trigger'})).toBeTruthy();
   expect(callbacks.onClose).not.toHaveBeenCalled();
 });
 
@@ -1166,12 +1143,7 @@ test('Project Skills defaults to the active chat project instead of the first pr
 
   expect(renderer.root.findByProps({className: 'chat-hub-project-skill-trigger'})
     .props['data-selected-project']).toBe('zeta');
-  act(() => renderer.root.findByProps({'aria-label': 'Add Project skill source'}).props.onClick());
-  expect(callbacks.onRequestSkillInstall).toHaveBeenCalledWith({
-    hubId: 'hub-a',
-    scope: 'project',
-    projectName: 'zeta',
-  });
+  expect(renderer.root.findByProps({className: 'chat-hub-skill-add-repository-trigger'})).toBeTruthy();
 });
 
 test('visibility detail toggles project visibility', async () => {

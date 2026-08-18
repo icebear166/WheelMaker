@@ -6,21 +6,16 @@ import type {
 } from '../registry/registryTypes';
 import {
   SkillDetailContent,
-  SkillInstallContent,
-  type SkillInstallContentProps,
 } from '../settings/SkillManagementContent';
 import {
   skillActionPendingKey,
   skillDetailCacheKey,
   skillScopeLabel,
   type SkillDetailTarget,
-  type SkillInstallTarget,
   type SkillUninstallTarget,
 } from '../settings/skillManagementView';
 
-export type ChatHubSkillSurface =
-  | {kind: 'install'; target: SkillInstallTarget}
-  | {kind: 'detail'; target: SkillDetailTarget};
+export type ChatHubSkillSurface = {kind: 'detail'; target: SkillDetailTarget};
 
 export type ChatHubSkillDetailEntry = {
   loading: boolean;
@@ -30,7 +25,6 @@ export type ChatHubSkillDetailEntry = {
 
 export type ChatHubSkillCompanionProps = {
   surface: ChatHubSkillSurface;
-  install: SkillInstallContentProps;
   detail: {
     entries: Record<string, ChatHubSkillDetailEntry>;
     pendingKey: string;
@@ -41,21 +35,17 @@ export type ChatHubSkillCompanionProps = {
 
 export function ChatHubSkillCompanion({
   surface,
-  install,
   detail,
   onClose,
 }: ChatHubSkillCompanionProps) {
-  const title = surface.kind === 'install' ? 'Add Skill Source' : surface.target.skillName;
-  const closeLabel = surface.kind === 'install' ? 'Close Add Skill Source' : 'Close Skill details';
-  const detailEntry = surface.kind === 'detail'
-    ? detail.entries[skillDetailCacheKey(surface.target)]
-    : undefined;
+  const title = surface.target.skillName;
+  const closeLabel = 'Close Skill details';
+  const detailEntry = detail.entries[skillDetailCacheKey(surface.target)];
   const managed = detailEntry?.detail?.managed !== false;
-  const uninstallPending = surface.kind === 'detail'
-    && detail.pendingKey === skillActionPendingKey({
-      ...surface.target,
-      action: 'skillUninstall',
-    });
+  const uninstallPending = detail.pendingKey === skillActionPendingKey({
+    ...surface.target,
+    action: 'skillUninstall',
+  });
 
   return (
     <div className="chat-hub-skill-companion-content">
@@ -76,17 +66,13 @@ export function ChatHubSkillCompanion({
         </button>
       </header>
       <div className="chat-hub-skill-companion-body">
-        {surface.kind === 'install' ? (
-          <SkillInstallContent {...install} />
-        ) : (
-          <SkillDetailContent
-            loading={detailEntry?.loading === true}
-            error={detailEntry?.error ?? ''}
-            detail={detailEntry?.detail ?? null}
-          />
-        )}
+        <SkillDetailContent
+          loading={detailEntry?.loading === true}
+          error={detailEntry?.error ?? ''}
+          detail={detailEntry?.detail ?? null}
+        />
       </div>
-      {surface.kind === 'detail' && detailEntry?.detail && managed ? (
+      {detailEntry?.detail && managed ? (
         <footer className="chat-hub-skill-companion-footer">
           <button
             type="button"

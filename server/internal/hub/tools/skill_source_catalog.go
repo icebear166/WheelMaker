@@ -19,15 +19,19 @@ type SkillsSourceScopeSnapshot struct {
 }
 
 type SkillsSourceCatalogSnapshot struct {
-	Source         string                             `json:"source"`
-	SourceKey      string                             `json:"sourceKey"`
-	ResolvedCommit string                             `json:"resolvedCommit,omitempty"`
-	RefreshedAt    string                             `json:"refreshedAt,omitempty"`
-	Status         string                             `json:"status"`
-	Error          string                             `json:"error,omitempty"`
-	InstalledCount int                                `json:"installedCount"`
-	UpdateCount    int                                `json:"updateCount"`
-	Skills         []SkillsSourceCatalogSkillSnapshot `json:"skills"`
+	Source          string                             `json:"source"`
+	SourceKey       string                             `json:"sourceKey"`
+	Branch          string                             `json:"branch,omitempty"`
+	Commit          string                             `json:"commit,omitempty"`
+	RemoteCommit    string                             `json:"remoteCommit,omitempty"`
+	UpdateAvailable bool                               `json:"updateAvailable"`
+	ResolvedCommit  string                             `json:"resolvedCommit,omitempty"`
+	RefreshedAt     string                             `json:"refreshedAt,omitempty"`
+	Status          string                             `json:"status"`
+	Error           string                             `json:"error,omitempty"`
+	InstalledCount  int                                `json:"installedCount"`
+	UpdateCount     int                                `json:"updateCount"`
+	Skills          []SkillsSourceCatalogSkillSnapshot `json:"skills"`
 }
 
 type SkillsSourceCatalogSkillSnapshot struct {
@@ -88,40 +92,59 @@ func ScanSkillsSourceScope(ctx context.Context, input SkillsSourceScopeInput) (S
 	if sourceLockPath == "" {
 		return SkillsSourceScopeSnapshot{}, fmt.Errorf("skill source lock path is unavailable")
 	}
-	reconciliation, err := readSkillSourceReconciliation(input.ReconciliationPath)
+	var migration skillSourceMigrationResult
+	installedNames := map[string]struct{}{}
+	for _, item := range input.Installed {
+		if name := strings.TrimSpace(item.Name); name != "" {
+			installedNames[strings.ToLower(name)] = struct{}{}
+		}
+	}
+	err := withSkillSourceLockFile(sourceLockPath, func() error {
+		var err error
+		migration, err = readOrMigrateSkillSourceLockWithInstalled(nativeLockPath, sourceLockPath, installedNames)
+		return err
+	})
 	if err != nil {
 		return SkillsSourceScopeSnapshot{}, err
 	}
-	var migration skillSourceMigrationResult
-	_, sourceLockStatErr := os.Stat(sourceLockPath)
-	if errors.Is(sourceLockStatErr, os.ErrNotExist) && len(reconciliation.Sources) > 0 {
-		migration = skillSourceMigrationResult{Lock: newSkillSourceLock(), Revision: skillSourceMissingRevision}
-	} else {
-		migration, err = readOrMigrateSkillSourceLock(nativeLockPath, sourceLockPath)
-		if err != nil {
-			return SkillsSourceScopeSnapshot{}, err
-		}
-	}
-	native := readNativeSkillSourceEntries(nativeLockPath)
-	snapshot := composeSkillSourceCatalog(migration.Lock, native, input.Installed, input.StaleErrors)
+	lock := migration.Lock
+	populateSkillSourceWorkingTree(ctx, input.HomeDir, &lock)
+	snapshot := composeSkillSourceCatalog(lock, nil, input.Installed, input.StaleErrors)
 	if len(snapshot.NeedsResolutionSkills) == 0 && len(migration.NeedsResolutionSkills) > 0 {
 		snapshot.NeedsResolutionSkills = append([]string(nil), migration.NeedsResolutionSkills...)
 	}
-	pending := appendPendingSkillSourceRemovals(&snapshot, reconciliation, migration.Lock, native, input.Installed)
-	if strings.TrimSpace(input.ReconciliationPath) != "" {
-		next := skillSourceReconciliation{Version: 2, Sources: make([]skillSourceReconciledItem, 0, len(migration.Lock.Sources)+len(pending))}
-		for _, source := range migration.Lock.Sources {
-			next.Sources = append(next.Sources, skillSourceReconciledItem{Source: source.Source, SourceKey: source.SourceKey})
-		}
-		next.Sources = append(next.Sources, pending...)
-		_, existingErr := os.Stat(input.ReconciliationPath)
-		if len(next.Sources) > 0 || existingErr == nil {
-			if err := writeSkillSourceReconciliation(input.ReconciliationPath, next); err != nil {
-				return SkillsSourceScopeSnapshot{}, err
-			}
-		}
-	}
 	return snapshot, nil
+}
+
+func populateSkillSourceWorkingTree(ctx context.Context, homeDir string, lock *skillSourceLock) {
+	if lock == nil {
+		return
+	}
+	store := newSkillSourceStore(homeDir)
+	for index := range lock.Sources {
+		source := &lock.Sources[index]
+		path := store.repositoryPath(source.SourceKey)
+		if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {
+			source.Status = "needs_clone"
+			continue
+		} else if err != nil {
+			source.Status = "error"
+			source.Error = err.Error()
+			continue
+		}
+		checkout, err := store.readRepo(ctx, *source)
+		if err != nil {
+			source.Status = "stale"
+			source.Error = err.Error()
+			continue
+		}
+		source.Status = "ready"
+		source.Error = ""
+		source.SkillList = append([]skillSourceSkillSnapshot(nil), checkout.Skills...)
+		source.Branch = checkout.Branch
+		source.RemoteCommit = checkout.RemoteCommit
+		source.UpdateAvailable = checkout.RemoteCommit != "" && source.Commit != "" && checkout.RemoteCommit != source.Commit
+	}
 }
 
 func appendPendingSkillSourceRemovals(
@@ -295,11 +318,11 @@ func writeSkillSourceReconciliation(path string, state skillSourceReconciliation
 }
 
 func defaultGlobalSkillsLockPath(homeDir string) string {
-	if stateHome := strings.TrimSpace(os.Getenv("XDG_STATE_HOME")); stateHome != "" {
-		return filepath.Join(stateHome, "skills", ".skill-lock.json")
-	}
 	if homeDir = strings.TrimSpace(homeDir); homeDir != "" {
 		return filepath.Join(homeDir, ".agents", ".skill-lock.json")
+	}
+	if stateHome := strings.TrimSpace(os.Getenv("XDG_STATE_HOME")); stateHome != "" {
+		return filepath.Join(stateHome, "skills", ".skill-lock.json")
 	}
 	home, err := os.UserHomeDir()
 	if err != nil {
@@ -322,22 +345,12 @@ func composeSkillSourceCatalog(
 			installedByName[key] = item
 		}
 	}
-	configured := make(map[string]struct{}, len(lock.Sources))
-	for _, source := range lock.Sources {
-		configured[strings.ToLower(source.SourceKey)] = struct{}{}
-	}
 	ownerByName := map[string]string{}
-	for _, entry := range native {
-		address := entry.SourceURL
-		if address == "" {
-			address = entry.Source
-		}
-		_, sourceKey, err := normalizeSkillGitSource(address)
-		if err != nil {
-			continue
-		}
-		if _, exists := configured[strings.ToLower(sourceKey)]; exists {
-			ownerByName[strings.ToLower(entry.Name)] = strings.ToLower(sourceKey)
+	for _, source := range lock.Sources {
+		for _, name := range source.ManagedSkills {
+			if key := strings.ToLower(strings.TrimSpace(name)); key != "" {
+				ownerByName[key] = strings.ToLower(source.SourceKey)
+			}
 		}
 	}
 
@@ -348,12 +361,20 @@ func composeSkillSourceCatalog(
 	for _, source := range lock.Sources {
 		view := SkillsSourceCatalogSnapshot{
 			Source: source.Source, SourceKey: source.SourceKey,
+			Branch: source.Branch, Commit: source.Commit,
 			ResolvedCommit: source.ResolvedCommit, RefreshedAt: source.RefreshedAt,
-			Status: "ready", Skills: []SkillsSourceCatalogSkillSnapshot{},
+			Status: source.Status, Error: source.Error, Skills: []SkillsSourceCatalogSkillSnapshot{},
 		}
-		if source.ResolvedCommit == "" || source.RefreshedAt == "" {
-			view.Status = "needs_refresh"
+		if view.Status == "" {
+			view.Status = "ready"
 		}
+		if source.Commit == "" || source.UpdatedAt == "" {
+			if view.Status == "ready" {
+				view.Status = "needs_refresh"
+			}
+		}
+		view.RemoteCommit = source.RemoteCommit
+		view.UpdateAvailable = source.UpdateAvailable
 		if message := strings.TrimSpace(staleErrors[strings.ToLower(source.SourceKey)]); message != "" {
 			view.Status = "stale"
 			view.Error = message
@@ -369,7 +390,7 @@ func composeSkillSourceCatalog(
 			local, localExists := installedByName[key]
 			if localExists && ownerByName[key] == strings.ToLower(source.SourceKey) {
 				row.Installed = true
-				row.Managed = local.Managed
+				row.Managed = true
 				row.CanInstall = false
 				row.CanUninstall = true
 				localHash, localErr := hashInstalledSkillCopies(local.Locations)
@@ -377,22 +398,20 @@ func composeSkillSourceCatalog(
 				switch {
 				case errors.Is(localErr, errInstalledSkillCopiesDiffer) && view.Status == "ready":
 					row.Status = "copies_differ"
-					row.CanUpdate = true
 				case localErr != nil && !errors.Is(localErr, errInstalledSkillCopiesDiffer):
 					row.Status = "error"
 					row.Error = localErr.Error()
 				case view.Status != "ready":
 					row.Status = view.Status
-				case localHash == remote.ContentSHA256:
+				case remote.ContentSHA256 != "" && localHash == remote.ContentSHA256:
 					row.Status = "up_to_date"
 				default:
 					row.Status = "update_available"
-					row.CanUpdate = true
 				}
 			}
 			view.Skills = append(view.Skills, row)
 		}
-		if view.Status == "needs_refresh" {
+		if view.Status != "ready" {
 			for nameKey, ownerKey := range ownerByName {
 				if ownerKey != strings.ToLower(source.SourceKey) {
 					continue
@@ -406,8 +425,8 @@ func composeSkillSourceCatalog(
 				}
 				localHash, localErr := hashInstalledSkillCopies(local.Locations)
 				row := SkillsSourceCatalogSkillSnapshot{
-					Name: local.Name, LocalContentSHA256: localHash, Status: "needs_refresh",
-					Installed: true, Managed: local.Managed, CanUninstall: true,
+					Name: local.Name, LocalContentSHA256: localHash, Status: view.Status,
+					Installed: true, Managed: true, CanUninstall: true,
 				}
 				if localErr != nil && !errors.Is(localErr, errInstalledSkillCopiesDiffer) {
 					row.Status = "error"
@@ -548,30 +567,7 @@ func hashInstalledSkillCopies(locations []string) (string, error) {
 }
 
 func applySkillSourceConflicts(scope *SkillsSourceScopeSnapshot) {
-	counts := map[string]int{}
-	unmanaged := map[string]struct{}{}
-	for _, row := range scope.UnmanagedSkills {
-		unmanaged[strings.ToLower(row.Name)] = struct{}{}
-	}
-	for _, source := range scope.Sources {
-		for _, row := range source.Skills {
-			counts[strings.ToLower(row.Name)]++
-		}
-	}
-	for sourceIndex := range scope.Sources {
-		for rowIndex := range scope.Sources[sourceIndex].Skills {
-			row := &scope.Sources[sourceIndex].Skills[rowIndex]
-			key := strings.ToLower(row.Name)
-			_, unmanagedCollision := unmanaged[key]
-			if counts[key] <= 1 && !unmanagedCollision {
-				continue
-			}
-			row.Status = "conflict"
-			row.Conflict = true
-			row.CanInstall = false
-			row.CanUpdate = false
-			row.CanUninstall = false
-			row.Error = "Skill name conflicts with another source or unmanaged installation."
-		}
-	}
+	// Skill ownership is resolved by the last successful installation. A
+	// duplicate name is therefore an overwrite decision, not a persistent
+	// conflict that blocks every source row.
 }
