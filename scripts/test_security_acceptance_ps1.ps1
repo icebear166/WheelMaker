@@ -54,6 +54,7 @@ $orderedPowerShellGates = @(
     'npm audit --audit-level=high --json',
     'gradle test lint',
     'Node release and deployment tests',
+    'Personal Wiki Kit security',
     'Publish and deployment script tests',
     'Forbidden production source gate',
     'git diff --check'
@@ -71,6 +72,7 @@ $orderedShellGates = @(
     'npm audit --audit-level=high --json',
     'gradle test lint',
     'Node release and deployment tests',
+    'Personal Wiki Kit security',
     'Publish and deployment script tests',
     'Forbidden production source gate',
     'git diff --check'
@@ -91,6 +93,7 @@ foreach ($source in @($powershell, $shell)) {
     Assert-Contains 'acceptance entry' $source 'release-server'
     Assert-Contains 'acceptance entry' $source 'remote-install.mjs'
     Assert-Contains 'acceptance entry' $source 'WHEELMAKER_RELEASE_TOKEN'
+    Assert-Contains 'acceptance entry' $source 'personal-wiki-kit'
     Assert-Contains 'acceptance entry' $source '127.0.0.1:9680'
     Assert-Contains 'acceptance entry' $source '$deploy_home/.wheelmaker/release-server'
     Assert-Contains 'acceptance entry' $source 'gateway_config_path="$gateway_home/config.json"'

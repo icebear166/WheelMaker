@@ -16,4 +16,5 @@ WheelMaker/
 - 禁止构建 Web，保持 `app/dist` 为空
 - 未经用户明确同意，禁止修改 protocol version；协议版本变更前必须说明兼容性与发布影响并获得确认
 - 验证只运行与本次改动直接相关的必要测试；Windows 下 Go 测试通过 `go test -exec` 使用 `scripts/run-hidden-go-test.vbs`，避免 `*.test.exe` 弹窗。
+- Personal Wiki Kit 使用 Release Server 的独立版本通道并复用 `WHEELMAKER_RELEASE_TOKEN`；发布流程不得引用、检出或打包任何私人 Wiki 仓库、用户配置、项目路由或凭据。
 

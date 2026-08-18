@@ -111,27 +111,27 @@ Checkpoint deployment templates, renderer, server adjustment, and tests.
 
 **Acceptance:** A dedicated manual workflow builds/tests both Kit platform assets, publishes tag/assets for the exact Kit version, emits a lock descriptor with SHA-256, rejects an existing/mismatched tag, and is separate from normal WheelMaker release publication.
 
-- [ ] **Step 1: Write failing release-orchestration tests**
+- [x] **Step 1: Write failing release-orchestration tests**
 
 Inject command/GitHub adapters and assert version/tag mapping `personal-wiki-kit-v0.1.0`, clean source requirement, exact asset names, duplicate-tag refusal, checksum descriptor, no WheelMaker release-server token dependency, and dry-run behavior.
 
-- [ ] **Step 2: Run tests to verify RED**
+- [x] **Step 2: Run tests to verify RED**
 
 Run: `node --test scripts/personal-wiki-kit-release.test.mjs`
 
 Expected: FAIL because release orchestration is absent.
 
-- [ ] **Step 3: Implement minimal release entry and workflow**
+- [x] **Step 3: Implement minimal release entry and workflow**
 
 Use GitHub Actions `contents: write` only in the dedicated workflow. Build source remains in WheelMaker; private Wiki content is never checked out or referenced. Update security gates to scan Kit source and artifacts.
 
-- [ ] **Step 4: Verify GREEN and workflow syntax contracts**
+- [x] **Step 4: Verify GREEN and workflow syntax contracts**
 
 Run: `node --test scripts/personal-wiki-kit-release.test.mjs && pwsh -File scripts/test_security_hooks.ps1 && pwsh -File scripts/test_security_acceptance_ps1.ps1`
 
 Expected: PASS.
 
-- [ ] **Step 5: Git checkpoint**
+- [x] **Step 5: Git checkpoint**
 
 Checkpoint Kit release entry, workflow, security gates, and release instructions.
 

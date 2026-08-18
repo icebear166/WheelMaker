@@ -1,0 +1,81 @@
+name: Publish Personal Wiki Kit
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - runner: windows-latest
+            platform: windows-x64
+          - runner: ubuntu-latest
+            platform: linux-x64
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: personal-wiki-kit/package-lock.json
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.x'
+          cache-dependency-path: personal-wiki-kit/server/go.sum
+      - name: Test and build Kit
+        working-directory: personal-wiki-kit
+        run: |
+          npm ci --ignore-scripts
+          npm test
+          npm run typecheck
+          npm run build
+          npm run check:public
+          npm run build:release -- --platform ${{ matrix.platform }} --output .wiki-kit-out
+      - name: Test Kit server
+        working-directory: personal-wiki-kit/server
+        run: go test ./...
+      - name: Scan Kit source and staged artifact
+        if: ${{ matrix.platform == 'linux-x64' }}
+        shell: bash
+        run: |
+          stage="$(find personal-wiki-kit/.wiki-kit-out -maxdepth 1 -type d -name 'personal-wiki-kit-v*-linux-x64' -print -quit)"
+          test -n "$stage"
+          for source in personal-wiki-kit/src personal-wiki-kit/skills personal-wiki-kit/templates personal-wiki-kit/deployment "$stage/src" "$stage/skills" "$stage/templates" "$stage/deployment"; do
+            go run github.com/zricethezav/gitleaks/v8@v8.28.0 dir --redact --no-banner "$source"
+          done
+      - uses: actions/upload-artifact@v4
+        with:
+          name: personal-wiki-kit-${{ matrix.platform }}
+          if-no-files-found: error
+          path: |
+            personal-wiki-kit/.wiki-kit-out/personal-wiki-kit-v*-${{ matrix.platform }}.zip
+            personal-wiki-kit/.wiki-kit-out/personal-wiki-kit-v*-${{ matrix.platform }}.tar.gz
+            personal-wiki-kit/.wiki-kit-out/personal-wiki-kit-v*-${{ matrix.platform }}.lock.json
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: personal-wiki-kit-*
+          path: ${{ runner.temp }}/personal-wiki-kit-assets
+          merge-multiple: true
+      - name: Publish exact Kit tag and assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/personal-wiki-kit-release.mjs --assets "${{ runner.temp }}/personal-wiki-kit-assets"

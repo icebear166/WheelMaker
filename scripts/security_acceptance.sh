@@ -5,6 +5,7 @@ repo_root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 server_root="$repo_root/server"
 app_root="$repo_root/app"
 android_root="$repo_root/mobile/android"
+wiki_kit_root="$repo_root/personal-wiki-kit"
 deferred_document="$repo_root/docs/security-dependency-deferred.md"
 audit_production=$(mktemp)
 audit_complete=$(mktemp)
@@ -94,7 +95,18 @@ gate 'Android JVM tests and lint'
 (cd "$android_root" && gradle test lint)
 
 gate 'Node release and deployment tests'
-node --test "$repo_root"/scripts/release-server/*.test.mjs "$repo_root"/scripts/release/*.test.mjs "$repo_root"/scripts/deploy/*.test.mjs "$repo_root"/scripts/disable-nginx.test.mjs
+node --test "$repo_root"/scripts/release-server/*.test.mjs "$repo_root"/scripts/release/*.test.mjs "$repo_root"/scripts/deploy/*.test.mjs "$repo_root"/scripts/disable-nginx.test.mjs "$repo_root"/scripts/personal-wiki-kit-release.test.mjs
+
+gate 'Personal Wiki Kit security'
+(
+  cd "$wiki_kit_root"
+  npm test
+  npm run typecheck
+  npm run build
+  npm run check:public
+  cd server
+  go test ./...
+)
 
 gate 'Publish and deployment script tests'
 for script_test in \

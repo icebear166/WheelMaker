@@ -11,7 +11,7 @@ async function makeFixture(t) {
   t.after(() => rm(root, {recursive: true, force: true}));
   const kit = path.join(root, 'kit');
   const reader = path.join(kit, 'reader-dist');
-  for (const directory of ['src', 'schema', 'skills/lookup-knowledge', 'templates/private-repository', 'runtime']) {
+  for (const directory of ['deployment', 'src', 'schema', 'skills/lookup-knowledge', 'templates/private-repository', 'runtime']) {
     await mkdir(path.join(kit, directory), {recursive: true});
   }
   await mkdir(reader, {recursive: true});
@@ -20,6 +20,7 @@ async function makeFixture(t) {
   await writeFile(path.join(kit, 'package-lock.json'), '{"lockfileVersion":3,"packages":{"":{}}}\n');
   await writeFile(path.join(kit, 'README.md'), 'kit\n');
   await writeFile(path.join(kit, 'runtime', 'README.md'), 'runtime\n');
+  await writeFile(path.join(kit, 'deployment', 'Caddyfile.template'), '{{DOMAIN}}\n');
   await writeFile(path.join(kit, 'src', 'cli.mjs'), 'console.log("ok")\n');
   await writeFile(path.join(kit, 'schema', 'article.schema.json'), '{}\n');
   await writeFile(path.join(kit, 'skills', 'lookup-knowledge', 'SKILL.md'), '# fixture\n');
@@ -40,7 +41,7 @@ test('Windows release tree is complete and its manifest rejects missing or extra
   const destination = path.join(fixture.root, 'stage');
   const result = await stageReleaseTree({kitRoot: fixture.kit, destination, platform: 'windows-x64', runtimeExecutable: fixture.runtime, serverExecutable: fixture.server, readerRoot: fixture.reader, includeProductionDependencies: false});
   assert.equal(result.version, '0.1.0');
-  for (const relative of ['runtime/node.exe', 'bin/wiki-server.exe', 'reader-dist/index.html', 'skills/lookup-knowledge/SKILL.md', 'templates/private-repository/README.md', 'setup-wiki.bat', 'personal-wiki.cmd', 'release-files.json']) {
+  for (const relative of ['runtime/node.exe', 'bin/wiki-server.exe', 'deployment/Caddyfile.template', 'reader-dist/index.html', 'skills/lookup-knowledge/SKILL.md', 'templates/private-repository/README.md', 'setup-wiki.bat', 'personal-wiki.cmd', 'release-files.json']) {
     assert.ok(result.files.includes(relative), `missing ${relative}`);
   }
   assert.equal(result.files.some((relative) => relative.includes('.wiki-kit-out')), false);

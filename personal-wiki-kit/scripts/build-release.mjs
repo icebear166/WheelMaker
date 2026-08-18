@@ -15,7 +15,7 @@ const PLATFORMS = new Map([
   ['linux-arm64', {os: 'linux', goos: 'linux', goarch: 'arm64', runtime: 'runtime/bin/node', server: 'bin/wiki-server', archive: 'tar.gz'}],
 ]);
 const MANIFEST = 'release-files.json';
-const COPY_PATHS = ['README.md', 'kit.json', 'package.json', 'package-lock.json', 'schema', 'skills', 'src', 'templates'];
+const COPY_PATHS = ['README.md', 'deployment', 'kit.json', 'package.json', 'package-lock.json', 'schema', 'skills', 'src', 'templates'];
 
 function compareText(left, right) {
   if (left < right) return -1;

@@ -21,3 +21,39 @@ jobs:
         run: go run github.com/zricethezav/gitleaks/v8@v8.28.0 dir --redact --no-banner .
       - name: Scan Git history
         run: go run github.com/zricethezav/gitleaks/v8@v8.28.0 git --redact --no-banner
+
+  personal-wiki-kit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: personal-wiki-kit/package-lock.json
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.x'
+          cache-dependency-path: personal-wiki-kit/server/go.sum
+      - name: Test Personal Wiki Kit
+        working-directory: personal-wiki-kit
+        run: |
+          npm ci --ignore-scripts
+          npm test
+          npm run typecheck
+          npm run build
+          npm run check:public
+          npm run build:release -- --platform linux-x64 --output .wiki-kit-out
+      - name: Test Personal Wiki server
+        working-directory: personal-wiki-kit/server
+        run: go test ./...
+      - name: Scan Personal Wiki Kit source and staged artifact
+        run: |
+          for source in personal-wiki-kit/src personal-wiki-kit/skills personal-wiki-kit/templates personal-wiki-kit/deployment; do
+            go run github.com/zricethezav/gitleaks/v8@v8.28.0 dir --redact --no-banner "$source"
+          done
+          stage="$(find personal-wiki-kit/.wiki-kit-out -maxdepth 1 -type d -name 'personal-wiki-kit-v*-linux-x64' -print -quit)"
+          test -n "$stage"
+          for source in "$stage/src" "$stage/skills" "$stage/templates" "$stage/deployment"; do
+            go run github.com/zricethezav/gitleaks/v8@v8.28.0 dir --redact --no-banner "$source"
+          done
