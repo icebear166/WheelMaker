@@ -58,10 +58,30 @@ describe('chat session action options', () => {
     expect(options[2].description).toContain('On');
   });
 
-  test('filters one unified list by name and description', () => {
-    const options = buildChatSessionActionOptions(['debug'], capabilities);
-    expect(filterChatSessionActionOptions(options, 'compact this').map(option => option.name)).toEqual(['/compact']);
-    expect(filterChatSessionActionOptions(options, 'debug').map(option => option.name)).toEqual(['/debug']);
+  test('filters by name and ranks exact, prefix, and contains matches', () => {
+    const options = buildChatSessionActionOptions([
+      'do-scoped',
+      'scope-kit',
+      'scope',
+      'scope-alt',
+    ], capabilities);
+    const shuffledOptions = [...options].reverse();
+
+    expect(filterChatSessionActionOptions(shuffledOptions, ' /SCO ').map(option => option.name)).toEqual([
+      '/scope',
+      '/scope-alt',
+      '/scope-kit',
+      '/do-scoped',
+    ]);
+  });
+
+  test('does not use descriptions or option kinds as slash matches', () => {
+    const options = buildChatSessionActionOptions([
+      {name: 'debug', description: 'Scope this workflow'},
+    ], capabilities);
+
+    expect(filterChatSessionActionOptions(options, 'scope this')).toEqual([]);
+    expect(filterChatSessionActionOptions(options, 'skill')).toEqual([]);
   });
 
   test('uses discovered skill descriptions without generic filler', () => {

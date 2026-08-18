@@ -134,13 +134,43 @@ export function filterChatSessionActionOptions(
   query: string | null,
 ): ChatSessionSlashOption[] {
   if (query === null) return [];
-  const normalized = query.trim().replace(/^\/+/, '').toLowerCase();
+  const normalized = normalizeChatSlashOptionName(query);
   if (!normalized) return options;
-  return options.filter(option =>
-    option.name.toLowerCase().includes(normalized) ||
-    option.description.toLowerCase().includes(normalized) ||
-    option.kind.includes(normalized),
-  );
+  return options
+    .map((option, index) => ({
+      option,
+      index,
+      rank: chatSlashOptionMatchRank(option.name, normalized),
+    }))
+    .filter((item): item is {option: ChatSessionSlashOption; index: number; rank: number} => item.rank !== null)
+    .sort((left, right) => {
+      if (left.rank !== right.rank) {
+        return left.rank - right.rank;
+      }
+      const nameOrder = compareChatSlashOptionNames(left.option.name, right.option.name);
+      return nameOrder !== 0 ? nameOrder : left.index - right.index;
+    })
+    .map(item => item.option);
+}
+
+function normalizeChatSlashOptionName(name: string): string {
+  return name.trim().replace(/^\/+/, '').toLowerCase();
+}
+
+function chatSlashOptionMatchRank(name: string, query: string): number | null {
+  const normalizedName = normalizeChatSlashOptionName(name);
+  if (normalizedName === query) return 0;
+  if (normalizedName.startsWith(query)) return 1;
+  if (normalizedName.includes(query)) return 2;
+  return null;
+}
+
+function compareChatSlashOptionNames(left: string, right: string): number {
+  const leftName = normalizeChatSlashOptionName(left);
+  const rightName = normalizeChatSlashOptionName(right);
+  if (leftName < rightName) return -1;
+  if (leftName > rightName) return 1;
+  return 0;
 }
 
 export function resolveStandaloneSessionAction(text: string, attachmentCount: number): StandaloneSessionActionResolution {
