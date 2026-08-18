@@ -32,6 +32,8 @@ personal-wiki route --source <来源绝对路径> [--source <来源绝对路径>
 6. 不从配置读取或写入 `remote`、`defaultBranch`；发布目标由私人 Git 仓库本身推断。
 7. Skill 可以随 Kit 更新而整体替换；用户配置和 `project-routing.json` 位于 Skill 目录之外，更新时必须保留。
 
+初始化器会安装 `%USERPROFILE%/.personal-wiki/bin/personal-wiki.cmd`。下文的 `personal-wiki` 表示调用这个用户级入口；不要假设它已经加入系统 `PATH`，也不要修改入口中锁定的 Kit 位置。
+
 ## 选择可靠候选
 
 只提出同时满足以下条件的内容：

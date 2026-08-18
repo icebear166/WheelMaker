@@ -250,9 +250,9 @@ Run: `rg -n "repositoryPath|project-routing|已提交快照|明确批准" skills
 
 Expected: Both Skills contain the new location and Chinese workflow; no user path is embedded.
 
-- [ ] **Step 5: Git checkpoint**
+- [x] **Step 5: Git checkpoint**
 
-Checkpoint configuration/query/routing modules, Skills, and tests.
+Checkpoint: `6439839d feat(wiki-kit): add user-routed Chinese skills`.
 
 ### Task 6: Implement setup, templates, and one-time legacy migration
 
@@ -270,6 +270,9 @@ Checkpoint configuration/query/routing modules, Skills, and tests.
 - Create: `personal-wiki-kit/templates/private-repository/open-wiki.bat`
 - Create: `personal-wiki-kit/templates/private-repository/publish-wiki.bat`
 - Create: `personal-wiki-kit/templates/private-repository/update-wiki-kit.bat`
+- Create: `personal-wiki-kit/templates/private-repository/.gitignore`
+- Create: `personal-wiki-kit/templates/private-repository/AGENTS.md`
+- Create: `personal-wiki-kit/templates/private-repository/README.md`
 - Create: `personal-wiki-kit/setup-wiki.bat`
 - Create: `personal-wiki-kit/tests/setup.test.mjs`
 - Create: `personal-wiki-kit/tests/migrate-config.test.mjs`
@@ -277,21 +280,21 @@ Checkpoint configuration/query/routing modules, Skills, and tests.
 
 **Acceptance:** Setup creates a new local private Git repository without network writes, optionally creates a GitHub private remote only after confirmation, installs Skills atomically, and migrates old locator/routes with preview, backup, verification, and rollback.
 
-- [ ] **Step 1: Write failing setup/migration fixtures**
+- [x] **Step 1: Write failing setup/migration fixtures**
 
 Use injected command/prompt/filesystem adapters. Assert no `gh` call by default, `gh repo create --private` only after explicit true, refusal to overwrite non-empty targets, exact generated files, atomic Skill directory replacement, old-config preview, backup creation, successful cutover, and rollback after verification failure.
 
-- [ ] **Step 2: Run tests to verify RED**
+- [x] **Step 2: Run tests to verify RED**
 
 Run: `node --test tests/setup.test.mjs tests/migrate-config.test.mjs tests/install-skills.test.mjs`
 
 Expected: FAIL because setup modules are absent.
 
-- [ ] **Step 3: Implement minimal setup and migration transactions**
+- [x] **Step 3: Implement minimal setup and migration transactions**
 
 All destructive-looking replacement occurs in sibling candidate directories and uses rename after validation. Existing user files are never deleted; timestamped backups are retained and reported.
 
-- [ ] **Step 4: Verify GREEN and generated repository content check**
+- [x] **Step 4: Verify GREEN and generated repository content check**
 
 Run: `node --test tests/setup.test.mjs tests/migrate-config.test.mjs tests/install-skills.test.mjs && node src/cli.mjs check --repository templates/private-repository`
 

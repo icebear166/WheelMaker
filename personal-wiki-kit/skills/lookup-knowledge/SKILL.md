@@ -14,6 +14,8 @@ description: 在开始实质性的开发、设计、诊断、研究、评审或�
 3. 不读取 WheelMaker 或其他工程的 `config.json` 来推断归属，不把 `remote`、`defaultBranch`、项目映射或凭据写入用户配置。
 4. Skill 可以随 Kit 更新而整体替换；上述两个用户配置文件位于 Skill 目录之外，更新 Skill 时不得修改或删除。
 
+初始化器会安装 `%USERPROFILE%/.personal-wiki/bin/personal-wiki.cmd`。下文的 `personal-wiki` 表示调用这个用户级入口；不要假设它已经加入系统 `PATH`，也不要改写入口中锁定的 Kit 位置。
+
 ## 解析项目
 
 调用用户级 Personal Wiki 命令：

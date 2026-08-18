@@ -1,0 +1,11 @@
+schema: 1
+sections:
+  - id: general-knowledge
+    title: 通用知识
+    description: 尚未拆分到专门知识类型的可靠内容。
+    order: 10
+    categories:
+      - id: getting-started
+        title: 开始使用
+        description: 个人 Wiki 的基础约定与使用方法。
+        order: 10
