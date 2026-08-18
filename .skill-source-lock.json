@@ -1,29 +1,24 @@
 {
-  "version": 2,
-  "hashAlgorithm": "sha256-v1",
+  "version": 3,
   "sources": [
     {
       "source": "https://github.com/anthropics/skills.git",
       "sourceKey": "github.com/anthropics/skills",
-      "skillList": []
+      "managedSkills": null
     },
     {
       "source": "https://github.com/better-auth/better-icons.git",
       "sourceKey": "github.com/better-auth/better-icons",
-      "resolvedCommit": "033316ecb8f4982235af4111a2257e80231f5ab1",
-      "refreshedAt": "2026-08-13T12:00:29Z",
-      "skillList": [
-        {
-          "name": "better-icons",
-          "skillPath": "skills/SKILL.md",
-          "contentSha256": "b0f8e8740e71afdfc3fb7c361d6b2599b49c26f59ce1d2c7be2936e8b6e80fe1"
-        }
+      "commit": "033316ecb8f4982235af4111a2257e80231f5ab1",
+      "updatedAt": "2026-08-13T12:00:29Z",
+      "managedSkills": [
+        "better-icons"
       ]
     },
     {
       "source": "https://github.com/ibelick/ui-skills.git",
       "sourceKey": "github.com/ibelick/ui-skills",
-      "skillList": []
+      "managedSkills": null
     }
   ]
 }
