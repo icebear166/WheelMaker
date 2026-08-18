@@ -14,6 +14,12 @@ Personal Wiki Kit 是 WheelMaker 仓库内独立版本化的公共工具包。�
 
 当前 Kit 版本由 `kit.json` 唯一声明。私人 Wiki 通过 `wiki-kit.lock.json` 固定精确版本；`latest` 不是合法版本，也不会自动升级。
 
+## 在线仓库生成
+
+本地模式不会生成 GitHub Action。需要在线发布时，用 `setup --non-interactive` 同时提供精确的 Linux Kit 制品 URL、SHA-256，以及 `--deployment-domain`、`--deployment-ssh-user`、`--deployment-ssh-port`、`--deployment-service-user`、`--deployment-install-root`、`--deployment-listen-port`。生成的私人仓库只提交非秘密配置，并在 Action 中下载、校验和运行已锁定 Kit，不执行 `npm install`、webpack 或 Go 编译。
+
+在线仓库需要配置 `WIKI_DEPLOY_KEY`、`WIKI_SSH_KNOWN_HOSTS`、`WIKI_DEPLOY_HOST`，可选配置 `WIKI_DEPLOY_PORT`。这些值只放在 GitHub Secrets；任何密码、私钥或主机指纹都不得写进仓库。
+
 ## 开发检查
 
 ```powershell

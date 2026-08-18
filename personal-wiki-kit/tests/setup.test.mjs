@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import {
+  access,
   mkdir,
   mkdtemp,
   readFile,
@@ -69,6 +70,7 @@ test('setup creates a local private repository, user config, and Chinese Skills 
     JSON.parse(await readFile(join(paths.configDirectory, 'project-routing.json'), 'utf8')),
     { schema: 1, routes: [] },
   );
+  await assert.rejects(() => access(join(paths.repositoryPath, '.github', 'workflows', 'publish.yml')));
   assert.match(await readFile(join(paths.skillsDirectory, 'lookup-knowledge', 'SKILL.md'), 'utf8'), /查询个人 Wiki/);
   assert.match(await readFile(join(paths.skillsDirectory, 'publish-knowledge', 'SKILL.md'), 'utf8'), /明确批准/);
 });

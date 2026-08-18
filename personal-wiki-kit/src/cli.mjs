@@ -289,7 +289,31 @@ async function setupCommand(options, prompt) {
   const siteTitle = options.title
     || (options.noninteractive ? '' : await prompt.text('网站标题（默认 Personal Wiki）：'))
     || 'Personal Wiki';
+  const deploymentFields = [
+    'deploymentDomain',
+    'deploymentSshUser',
+    'deploymentSshPort',
+    'deploymentServiceUser',
+    'deploymentInstallRoot',
+    'deploymentListenPort',
+  ];
+  const hasDeployment = deploymentFields.some((field) => options[field] !== undefined);
+  if (hasDeployment) {
+    for (const field of deploymentFields) {
+      if (options[field] === undefined) throw new Error(`在线初始化缺少 --${field.replace(/[A-Z]/gu, (letter) => `-${letter.toLowerCase()}`)}`);
+    }
+  }
+  const deployment = hasDeployment ? {
+    schema: 1,
+    domain: options.deploymentDomain,
+    sshUser: options.deploymentSshUser,
+    sshPort: Number(options.deploymentSshPort),
+    serviceUser: options.deploymentServiceUser,
+    installRoot: options.deploymentInstallRoot,
+    listenPort: Number(options.deploymentListenPort),
+  } : undefined;
   const publicUrl = options.publicUrl
+    || (deployment ? `https://${deployment.domain}` : '')
     || (options.noninteractive ? '' : await prompt.text('可选网站地址（留空跳过）：'));
   const githubRepository = options.githubRepository
     || (options.noninteractive ? '' : await prompt.text('可选 GitHub owner/name（留空只创建本地仓库）：'));
@@ -308,6 +332,7 @@ async function setupCommand(options, prompt) {
     siteTitle,
     ...(publicUrl ? { publicUrl } : {}),
     ...(githubRepository ? { githubRepository } : {}),
+    ...(deployment ? { deployment } : {}),
   }, {
     confirm: options.yes ? async () => true : prompt.confirm,
   });

@@ -2,6 +2,8 @@ import {readFile} from 'node:fs/promises';
 import {isIP} from 'node:net';
 import path from 'node:path';
 
+import {parseKitLock} from './kit-lock.mjs';
+
 const FIELDS = new Set(['schema', 'domain', 'sshUser', 'sshPort', 'serviceUser', 'installRoot', 'listenPort']);
 const TEMPLATES = new Map([
   ['provision.sh', 'provision.sh'],
@@ -79,11 +81,40 @@ export async function renderDeploymentFiles(value, {templatesRoot} = {}) {
   const files = {};
   for (const [outputName, templateName] of TEMPLATES) {
     let content = await readFile(path.join(root, templateName), 'utf8');
-    content = content.replace(/\{\{([A-Z_]+)\}\}/gu, (match, key) => {
+    content = content.replace(/\{\{([A-Z0-9_]+)\}\}/gu, (match, key) => {
       if (!values.has(key)) throw new Error(`deployment template ${templateName} contains unsupported placeholder ${match}`);
       return values.get(key);
     });
     files[outputName] = content;
   }
   return files;
+}
+
+export async function renderPrivatePublishWorkflow({deployment, kitLock} = {}, {templatePath} = {}) {
+  const config = parseDeploymentConfig(deployment);
+  const lock = parseKitLock(JSON.stringify(kitLock));
+  const expectedArtifact = `personal-wiki-kit-v${lock.version}-linux-x64.tar.gz`;
+  let source;
+  try {
+    source = new URL(lock.source);
+  } catch {
+    throw new Error('online Kit lock source must be an exact HTTPS artifact URL');
+  }
+  if (source.protocol !== 'https:' || source.search || source.hash || !source.pathname.endsWith(`/${expectedArtifact}`)) {
+    throw new Error(`online Kit lock source must end with ${expectedArtifact}`);
+  }
+  const values = new Map([
+    ['KIT_VERSION', lock.version],
+    ['KIT_SOURCE', source.href],
+    ['KIT_SHA256', lock.sha256],
+    ['SSH_USER', config.sshUser],
+    ['SSH_PORT', String(config.sshPort)],
+    ['INSTALL_ROOT', config.installRoot],
+  ]);
+  let workflow = await readFile(path.resolve(templatePath), 'utf8');
+  workflow = workflow.replace(/\{\{([A-Z0-9_]+)\}\}/gu, (match, key) => {
+    if (!values.has(key)) throw new Error(`private publish workflow contains unsupported placeholder ${match}`);
+    return values.get(key);
+  });
+  return workflow;
 }

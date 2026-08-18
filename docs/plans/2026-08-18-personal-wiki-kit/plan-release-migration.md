@@ -147,11 +147,11 @@ Checkpoint Kit release entry, workflow, security gates, and release instructions
 
 **Acceptance:** A generated private repository pins an exact Kit version/artifact digest, downloads and verifies Linux assets in Action, builds only private content, publishes through required secrets, and never runs `npm install` or compiles Kit source.
 
-- [ ] **Step 1: Write failing generated-workflow tests**
+- [x] **Step 1: Write failing generated-workflow tests**
 
 Assert exact-version URL, checksum verification before extraction, no `latest`, no source checkout outside the private repository, no host `npm install`, secret-only SSH identity/known hosts/host/port, and local-only repositories omitting the workflow until online mode is enabled.
 
-- [ ] **Step 2: Run tests to verify RED**
+- [x] **Step 2: Run tests to verify RED**
 
 Run: `node --test tests/generated-workflow.test.mjs tests/setup.test.mjs`
 
@@ -159,17 +159,17 @@ Workdir: `personal-wiki-kit`
 
 Expected: FAIL because the online template is not integrated.
 
-- [ ] **Step 3: Implement minimal workflow generation**
+- [x] **Step 3: Implement minimal workflow generation**
 
 Render only non-secret site data and pinned release metadata. Keep `WIKI_DEPLOY_KEY`, `WIKI_SSH_KNOWN_HOSTS`, `WIKI_DEPLOY_HOST`, and optional port in GitHub Secrets.
 
-- [ ] **Step 4: Verify GREEN**
+- [x] **Step 4: Verify GREEN**
 
 Run: `node --test tests/generated-workflow.test.mjs tests/setup.test.mjs tests/deployment-config.test.mjs`
 
 Expected: PASS.
 
-- [ ] **Step 5: Git checkpoint**
+- [x] **Step 5: Git checkpoint**
 
 Checkpoint setup/deployment integration, workflow template, locks, and tests.
 

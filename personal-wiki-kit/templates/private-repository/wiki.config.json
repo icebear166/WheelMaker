@@ -1,5 +1,6 @@
 {
   "schema": 1,
   "title": "Personal Wiki",
-  "language": "zh-CN"
+  "language": "zh-CN",
+  "online": false
 }

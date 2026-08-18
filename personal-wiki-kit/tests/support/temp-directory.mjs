@@ -10,7 +10,7 @@ export async function createTemporaryDirectory(prefix) {
     cleanup: async () => rm(directory, {
       force: true,
       recursive: true,
-      maxRetries: 5,
+      maxRetries: 20,
       retryDelay: 100,
     }),
   };

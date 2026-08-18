@@ -12,7 +12,9 @@ import {
 import path from 'node:path';
 import process from 'node:process';
 
+import {parseDeploymentConfig, renderPrivatePublishWorkflow} from './deployment-config.mjs';
 import { installSkills } from './install-skills.mjs';
+import {parseKitLock} from './kit-lock.mjs';
 import { parseUserConfig } from './user-config.mjs';
 
 async function pathExists(filename) {
@@ -50,6 +52,22 @@ function validateSetupOptions(options) {
     && !/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/u.test(options.githubRepository)) {
     throw new Error('GitHub 仓库必须使用 owner/name 格式');
   }
+  const kitLock = parseKitLock(JSON.stringify({
+    schema: 1,
+    version: options.kitVersion,
+    source: options.kitSource,
+    sha256: options.kitSha256,
+  }));
+  const deployment = options.deployment === undefined
+    ? undefined
+    : parseDeploymentConfig(options.deployment);
+  if (deployment) {
+    const publicUrl = new URL(options.publicUrl || `https://${deployment.domain}`);
+    if (publicUrl.protocol !== 'https:' || publicUrl.origin !== `https://${deployment.domain}`) {
+      throw new Error('在线 Wiki 的 publicUrl 必须与部署域名一致');
+    }
+  }
+  return {kitLock, deployment};
 }
 
 function defaultTimestamp() {
@@ -91,7 +109,7 @@ export async function setupWiki(options = {}, {
   timestamp = defaultTimestamp(),
   nodeExecutable = process.execPath,
 } = {}) {
-  validateSetupOptions(options);
+  const validated = validateSetupOptions(options);
   const repositoryPath = path.resolve(options.repositoryPath);
   const configDirectory = path.resolve(options.configDirectory);
   const skillsDirectory = path.resolve(options.skillsDirectory);
@@ -108,23 +126,38 @@ export async function setupWiki(options = {}, {
 
   let repositoryReady = false;
   try {
-    await cp(templateRoot, candidate, { recursive: true, errorOnExist: true });
-    await writeFile(path.join(candidate, 'wiki-kit.lock.json'), `${JSON.stringify({
-      schema: 1,
-      version: options.kitVersion,
-      source: options.kitSource,
-      sha256: options.kitSha256,
-    }, null, 2)}\n`, 'utf8');
+    await cp(templateRoot, candidate, {
+      recursive: true,
+      errorOnExist: true,
+      filter: (source) => !path.relative(templateRoot, source).split(path.sep).includes('.wiki-kit-out'),
+    });
+    await writeFile(path.join(candidate, 'wiki-kit.lock.json'), `${JSON.stringify(validated.kitLock, null, 2)}\n`, 'utf8');
     await writeFile(path.join(candidate, 'wiki.config.json'), `${JSON.stringify({
       schema: 1,
       title: options.siteTitle || 'Personal Wiki',
       language: 'zh-CN',
+      online: Boolean(validated.deployment),
+      ...(validated.deployment ? {deployment: validated.deployment} : {}),
     }, null, 2)}\n`, 'utf8');
+    const workflowDirectory = path.join(candidate, '.github');
+    if (validated.deployment) {
+      const workflow = await renderPrivatePublishWorkflow({
+        deployment: validated.deployment,
+        kitLock: validated.kitLock,
+      }, {
+        templatePath: path.join(templateRoot, '.github', 'workflows', 'publish.yml'),
+      });
+      await writeFile(path.join(workflowDirectory, 'workflows', 'publish.yml'), workflow, 'utf8');
+    } else {
+      await rm(workflowDirectory, {force: true, recursive: true});
+    }
 
     await runCommand('git', ['init', '--initial-branch=main'], { cwd: candidate });
     await runCommand('git', ['config', 'user.name', 'Personal Wiki'], { cwd: candidate });
     await runCommand('git', ['config', 'user.email', 'personal-wiki@example.com'], { cwd: candidate });
-    await runCommand('git', ['add', '--', '.gitignore', 'AGENTS.md', 'README.md', 'content', 'wiki-kit.lock.json', 'wiki.config.json', 'open-wiki.bat', 'publish-wiki.bat', 'update-wiki-kit.bat'], { cwd: candidate });
+    const initialPaths = ['.gitignore', 'AGENTS.md', 'README.md', 'content', 'wiki-kit.lock.json', 'wiki.config.json', 'open-wiki.bat', 'publish-wiki.bat', 'update-wiki-kit.bat'];
+    if (validated.deployment) initialPaths.push('.github');
+    await runCommand('git', ['add', '--', ...initialPaths], { cwd: candidate });
     await runCommand('git', ['commit', '-m', 'knowledge: initialize personal wiki'], { cwd: candidate });
     await rename(candidate, repositoryPath);
     repositoryReady = true;
@@ -216,7 +249,7 @@ function defaultRunCommand(executable, args, { cwd } = {}) {
       shell: false,
     });
     child.on('error', reject);
-    child.on('exit', (code) => {
+    child.on('close', (code) => {
       if (code === 0) resolve();
       else reject(new Error(`${executable} 退出码 ${code}`));
     });

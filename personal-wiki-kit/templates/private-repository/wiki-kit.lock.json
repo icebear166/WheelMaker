@@ -1,6 +1,6 @@
 {
   "schema": 1,
   "version": "0.1.0",
-  "source": "wheelmaker-release",
+  "source": "https://example.com/releases/download/personal-wiki-kit-v0.1.0/personal-wiki-kit-v0.1.0-linux-x64.tar.gz",
   "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
 }
