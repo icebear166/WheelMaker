@@ -288,6 +288,6 @@
 
   Expected result: all tests and type checks pass, diff check is clean, and only approved spec/plan/wiki plus implementation files are present.
 
-- [ ] **Step 5: Git checkpoint and finalize**
+- [x] **Step 5: Git checkpoint and finalize**
 
   Checkpoint the wiki update if it is an independent verified work unit. Then run `git-workflow` finalize with the actual completion result, commit hashes, push branch, merge/cleanup state and any pre-existing files left untouched.
