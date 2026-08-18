@@ -318,7 +318,7 @@ func (c *SkillsCommand) nativeAddRepo(ctx context.Context, target skillsCommandT
 		if index >= 0 {
 			return nil
 		}
-		return c.nativeStore().withEnsuredRepo(ctx, skillSourceSnapshot{Source: source, SourceKey: sourceKey}, func(checkout skillSourceCheckout) error {
+		return c.nativeStore().withUpdatedRepo(ctx, skillSourceSnapshot{Source: source, SourceKey: sourceKey}, func(checkout skillSourceCheckout) error {
 			lock.Sources = append(lock.Sources, nativeSnapshotFromCheckout(checkout, c.now(), nil))
 			sortSkillSourceLock(&lock)
 			_, err := writeSkillSourceLockFile(c.sourceLockFile(target), revision, lock)
@@ -382,7 +382,7 @@ func (c *SkillsCommand) nativeInstall(ctx context.Context, target skillsCommandT
 			return errors.New("skill source is not installed in this scope; add the repository first")
 		}
 		sourceSnapshot := lock.Sources[index]
-		return c.nativeStore().withEnsuredRepo(ctx, sourceSnapshot, func(checkout skillSourceCheckout) error {
+		return c.nativeStore().withUpdatedRepo(ctx, sourceSnapshot, func(checkout skillSourceCheckout) error {
 			if err := ensureSkillSourceCheckoutClean(ctx, checkout.Path); err != nil {
 				return err
 			}

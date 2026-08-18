@@ -171,6 +171,45 @@ func (s *skillSourceStore) ensureRepoLocked(ctx context.Context, address, source
 	return s.readCheckout(ctx, path, address, sourceKey)
 }
 
+func (s *skillSourceStore) ensureLatestRepo(ctx context.Context, source skillSourceSnapshot) (skillSourceCheckout, error) {
+	address, sourceKey, err := skillSourceStoreInput(source)
+	if err != nil {
+		return skillSourceCheckout{}, err
+	}
+	return s.withSourceLock(ctx, sourceKey, func() (skillSourceCheckout, error) {
+		return s.ensureLatestRepoLocked(ctx, address, sourceKey)
+	})
+}
+
+func (s *skillSourceStore) ensureLatestRepoLocked(ctx context.Context, address, sourceKey string) (skillSourceCheckout, error) {
+	path, err := s.ensureExistingClone(ctx, sourceKey, address)
+	if err != nil {
+		return skillSourceCheckout{}, err
+	}
+	if err := ensureSkillSourceCheckoutClean(ctx, path); err != nil {
+		return skillSourceCheckout{}, err
+	}
+	if _, err := runSkillSourceGitCommand(ctx, path, "fetch", "--quiet", "--prune", "origin"); err != nil {
+		return skillSourceCheckout{}, fmt.Errorf("fetch skill source: %w", err)
+	}
+	if err := refreshSkillSourceRemoteHead(ctx, path); err != nil {
+		return skillSourceCheckout{}, err
+	}
+	branch, remoteRef, err := resolveSkillSourceDefaultBranch(ctx, path)
+	if err != nil {
+		return skillSourceCheckout{}, err
+	}
+	if _, err := runSkillSourceGitCommand(ctx, path, "checkout", "--quiet", "--detach", remoteRef); err != nil {
+		return skillSourceCheckout{}, fmt.Errorf("checkout skill source default branch: %w", err)
+	}
+	checkout, err := s.readCheckout(ctx, path, address, sourceKey)
+	if err != nil {
+		return skillSourceCheckout{}, err
+	}
+	checkout.Branch = branch
+	return checkout, nil
+}
+
 func (s *skillSourceStore) withEnsuredRepo(ctx context.Context, source skillSourceSnapshot, fn func(skillSourceCheckout) error) error {
 	address, sourceKey, err := skillSourceStoreInput(source)
 	if err != nil {
@@ -192,7 +231,7 @@ func (s *skillSourceStore) withUpdatedRepo(ctx context.Context, source skillSour
 		return err
 	}
 	_, err = s.withSourceLock(ctx, sourceKey, func() (skillSourceCheckout, error) {
-		checkout, err := s.updateRepoLocked(ctx, address, sourceKey)
+		checkout, err := s.ensureLatestRepoLocked(ctx, address, sourceKey)
 		if err != nil {
 			return skillSourceCheckout{}, err
 		}
@@ -227,46 +266,11 @@ func (s *skillSourceStore) withInspectedRepo(ctx context.Context, source skillSo
 }
 
 func (s *skillSourceStore) inspectRepoLocked(ctx context.Context, address, sourceKey string) (skillSourceCheckout, error) {
-	checkout, err := s.ensureRepoLocked(ctx, address, sourceKey)
-	if err != nil {
-		return skillSourceCheckout{}, err
-	}
-	if _, err := runSkillSourceGitCommand(ctx, checkout.Path, "fetch", "--quiet", "--prune", "origin"); err != nil {
-		return skillSourceCheckout{}, fmt.Errorf("fetch skill source: %w", err)
-	}
-	if err := refreshSkillSourceRemoteHead(ctx, checkout.Path); err != nil {
-		return skillSourceCheckout{}, err
-	}
-	return s.readCheckout(ctx, checkout.Path, address, sourceKey)
+	return s.ensureLatestRepoLocked(ctx, address, sourceKey)
 }
 
 func (s *skillSourceStore) updateRepoLocked(ctx context.Context, address, sourceKey string) (skillSourceCheckout, error) {
-	path, err := s.ensureExistingClone(ctx, sourceKey, address)
-	if err != nil {
-		return skillSourceCheckout{}, err
-	}
-	if err := ensureSkillSourceCheckoutClean(ctx, path); err != nil {
-		return skillSourceCheckout{}, err
-	}
-	if _, err := runSkillSourceGitCommand(ctx, path, "fetch", "--quiet", "--prune", "origin"); err != nil {
-		return skillSourceCheckout{}, fmt.Errorf("fetch skill source: %w", err)
-	}
-	if err := refreshSkillSourceRemoteHead(ctx, path); err != nil {
-		return skillSourceCheckout{}, err
-	}
-	branch, remoteRef, err := resolveSkillSourceDefaultBranch(ctx, path)
-	if err != nil {
-		return skillSourceCheckout{}, err
-	}
-	if _, err := runSkillSourceGitCommand(ctx, path, "checkout", "--quiet", "--detach", remoteRef); err != nil {
-		return skillSourceCheckout{}, fmt.Errorf("checkout skill source default branch: %w", err)
-	}
-	checkout, err := s.readCheckout(ctx, path, address, sourceKey)
-	if err != nil {
-		return skillSourceCheckout{}, err
-	}
-	checkout.Branch = branch
-	return checkout, nil
+	return s.ensureLatestRepoLocked(ctx, address, sourceKey)
 }
 
 func (s *skillSourceStore) readRepo(ctx context.Context, source skillSourceSnapshot) (skillSourceCheckout, error) {
@@ -314,7 +318,7 @@ func (s *skillSourceStore) updateRepo(ctx context.Context, source skillSourceSna
 		return skillSourceCheckout{}, err
 	}
 	return s.withSourceLock(ctx, sourceKey, func() (skillSourceCheckout, error) {
-		return s.updateRepoLocked(ctx, address, sourceKey)
+		return s.ensureLatestRepoLocked(ctx, address, sourceKey)
 	})
 }
 

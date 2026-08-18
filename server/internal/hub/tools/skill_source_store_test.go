@@ -129,6 +129,97 @@ func TestNativeSkillSourceStoreRefreshFetchesWithoutChangingCheckout(t *testing.
 	}
 }
 
+func TestNativeSkillSourceStoreEnsureLatestRepoClonesMissingRepository(t *testing.T) {
+	repository := t.TempDir()
+	initSkillSourceGitFixture(t, repository, "alpha")
+	store := newSkillSourceStore(filepath.Join(t.TempDir(), "home"))
+
+	checkout, err := store.ensureLatestRepo(context.Background(), skillSourceSnapshot{
+		Source: repository, SourceKey: "local/example",
+	})
+	if err != nil {
+		t.Fatalf("ensureLatestRepo() error=%v", err)
+	}
+	if checkout.Commit == "" || checkout.Branch != "main" {
+		t.Fatalf("checkout=%#v, want main branch and commit", checkout)
+	}
+	if len(checkout.Skills) != 1 || checkout.Skills[0].Name != "alpha" {
+		t.Fatalf("checkout skills=%#v, want alpha", checkout.Skills)
+	}
+	if _, err := os.Stat(store.repositoryPath("local/example")); err != nil {
+		t.Fatalf("latest clone missing: %v", err)
+	}
+}
+
+func TestNativeSkillSourceStoreEnsureLatestRepoFetchesAndChecksOutRemoteHead(t *testing.T) {
+	repository := t.TempDir()
+	initSkillSourceGitFixture(t, repository, "alpha")
+	store := newSkillSourceStore(filepath.Join(t.TempDir(), "home"))
+	source := skillSourceSnapshot{Source: repository, SourceKey: "local/example"}
+	first, err := store.ensureLatestRepo(context.Background(), source)
+	if err != nil {
+		t.Fatalf("first ensureLatestRepo() error=%v", err)
+	}
+	appendSkillSourceGitCommit(t, repository, "beta")
+
+	latest, err := store.ensureLatestRepo(context.Background(), source)
+	if err != nil {
+		t.Fatalf("second ensureLatestRepo() error=%v", err)
+	}
+	if latest.Commit == first.Commit {
+		t.Fatalf("latest commit=%s, want a new commit after remote advance", latest.Commit)
+	}
+	if latest.Branch != "main" || len(latest.Skills) != 2 {
+		t.Fatalf("latest checkout=%#v, want main with alpha and beta", latest)
+	}
+}
+
+func TestNativeInstallUpdatesRepositoryBeforeInstalling(t *testing.T) {
+	repository := t.TempDir()
+	initSkillSourceGitFixture(t, repository, "alpha")
+	home := t.TempDir()
+	projectRoot := t.TempDir()
+	store := newSkillSourceStore(home)
+	key := "github.com/example/skills"
+	clonePath := store.repositoryPath(key)
+	if err := os.MkdirAll(filepath.Dir(clonePath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	runSkillSourceGit(t, filepath.Dir(clonePath), "clone", "--quiet", repository, clonePath)
+	command := newSkillsCommandWithRunner(newFakeSkillsRunner(), skillsCommandConfig{
+		HubID: "hub-a", HomeDir: home, Projects: []ProjectInfo{{Name: "project", Path: projectRoot}},
+	})
+	target := skillsCommandTarget{scope: "project", projectName: "project", dir: projectRoot}
+	source := "https://github.com/example/skills.git"
+	initial, err := command.nativeStore().ensureRepo(context.Background(), skillSourceSnapshot{Source: source, SourceKey: key})
+	if err != nil {
+		t.Fatalf("ensureRepo() error=%v", err)
+	}
+	if _, err := writeSkillSourceLockFile(command.sourceLockFile(target), skillSourceMissingRevision, skillSourceLock{
+		Version: 3,
+		Sources: []skillSourceSnapshot{{Source: source, SourceKey: key, Commit: initial.Commit, UpdatedAt: "2026-08-18T12:00:00Z"}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	appendSkillSourceGitCommit(t, repository, "beta")
+
+	if err := command.nativeInstall(context.Background(), target, source, []string{"beta"}, false); err != nil {
+		t.Fatalf("nativeInstall() error=%v", err)
+	}
+	lock, _, err := readSkillSourceLockFile(command.sourceLockFile(target))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if lock.Sources[0].Commit == initial.Commit {
+		t.Fatalf("Scope commit=%s, want latest commit instead of %s", lock.Sources[0].Commit, initial.Commit)
+	}
+	for _, root := range []string{".agents/skills/beta", ".claude/skills/beta"} {
+		if _, err := os.Stat(filepath.Join(projectRoot, filepath.FromSlash(root), "SKILL.md")); err != nil {
+			t.Fatalf("latest Skill copy %s missing: %v", root, err)
+		}
+	}
+}
+
 func TestSkillSourceLockOperationsDoNotCreateSidecarLock(t *testing.T) {
 	home := t.TempDir()
 	command := newSkillsCommandWithRunner(newFakeSkillsRunner(), skillsCommandConfig{HubID: "hub-a", HomeDir: home})

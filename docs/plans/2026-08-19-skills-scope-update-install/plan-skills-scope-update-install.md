@@ -24,7 +24,7 @@
 
 **Acceptance:** One store helper handles clone-or-fetch, default-branch checkout, clean-checkout validation and checkout reading; `addRepo`, `inspectRepo`, `Update`, single download and Repo `Install all` use its latest checkout, while uninstall/remove remain local operations.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
   Extend the existing native store tests with these behavior assertions:
 
@@ -33,7 +33,7 @@
   - `TestNativeInstallUpdatesRepositoryBeforeInstalling` seeds a Scope lock at commit A, advances the remote to commit B with a new Skill, invokes native single install or Install all, and asserts the Scope lock records B and the installed content comes from B.
   - Keep the existing dirty-checkout assertion and make it cover the shared helper: a dirty central clone returns an error and does not reset, clean, stash, or install.
 
-- [ ] **Step 2: Run the focused tests to verify RED**
+- [x] **Step 2: Run the focused tests to verify RED**
 
   Run from `server`:
 
@@ -43,7 +43,7 @@
 
   Expected result: the new helper/install tests fail because the helper does not exist and native install still uses the current checkout without updating it.
 
-- [ ] **Step 3: Write the minimal implementation**
+- [x] **Step 3: Write the minimal implementation**
 
   - Add the shared latest-checkout method to `skillSourceStore`, reusing the existing flat repository path, Repo lock, clone validation, remote default-branch resolution and checkout reader.
   - Make existing-clone operations fetch/prune and checkout the remote default branch; reject dirty central clones before changing the checkout.
@@ -51,11 +51,11 @@
   - Ensure install selects available Skills only after the latest checkout is read, then applies the existing Global link/Project copy transaction and writes the latest Scope commit.
   - Leave native uninstall and Repo removal independent of the latest-checkout helper.
 
-- [ ] **Step 4: Run the focused tests to verify GREEN**
+- [x] **Step 4: Run the focused tests to verify GREEN**
 
   Run the same focused Go command. Expected result: all helper, install-first-update and dirty-checkout tests pass.
 
-- [ ] **Step 5: Run focused regression checks**
+- [x] **Step 5: Run focused regression checks**
 
   Run:
 
