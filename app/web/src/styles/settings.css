@@ -2334,7 +2334,9 @@ textarea,
     box-shadow var(--motion-fast) var(--ease-standard);
 }
 
-.settings-switch:checked {
+/* state rules mirror the base selector's specificity so they win inside .settings-workbench-panel */
+.settings-switch:checked,
+.settings-workbench-panel input[type='checkbox'].settings-switch:checked {
   border-color: var(--accent-primary);
   background: var(--accent-primary);
   box-shadow: none;
@@ -2344,12 +2346,14 @@ textarea,
   transform: translateX(16px);
 }
 
-.settings-switch:disabled {
+.settings-switch:disabled,
+.settings-workbench-panel input[type='checkbox'].settings-switch:disabled {
   opacity: 0.55;
   cursor: default;
 }
 
-.settings-switch:focus-visible {
+.settings-switch:focus-visible,
+.settings-workbench-panel input[type='checkbox'].settings-switch:focus-visible {
   outline: none;
   border-color: color-mix(in srgb, var(--accent-primary) 60%, var(--border-subtle));
   box-shadow: 0 0 0 2px var(--focus-ring-color);
