@@ -67,6 +67,25 @@ OpenCode、Copilot、Mimo、CodeBuddy、Qoder 和其他 Provider 不参与 2.0 �
 - 中央 clone 不因 Scope 删除而自动删除；后续如需回收，使用独立清理动作。
 - source URL 统一规范化为 sourceKey，避免 shorthand、HTTPS 和 SSH 别名造成重复 clone。
 
+## Repo Skill 发现边界
+
+Repo 发现只扫描 clone 根目录下的 skills/ 子树：
+
+~~~text
+<clone>/skills/
+├─ tdd/SKILL.md
+└─ groups/deep/diagnose/SKILL.md
+~~~
+
+skills/ 内可以递归任意深度；某个目录自身出现 SKILL.md 后，该目录就是一个完整 Skill，子目录不再拆分为独立 Skill。以下位置不参与 Repo Skill 发现：
+
+- Repo 根目录的 SKILL.md
+- .agents/skills/
+- .claude/skills/
+- 任意其他自定义目录
+
+本规则只针对 Git Repo 的可安装 Skill 发现。本机已安装 Skill 仍只从 Global 的 .agents/skills、.claude/skills 和 Project 对应目录扫描。
+
 ## Scope lock
 
 WheelMaker 继续使用现有 .skill-source-lock.json，不新建 skill.json。

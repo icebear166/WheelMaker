@@ -24,6 +24,7 @@
 - OpenCode、Copilot、Mimo、CodeBuddy、Qoder 及其他 Provider 不纳入 2.0。
 - 只支持远端 Git Repo，默认跟随远端默认分支。
 - 不支持 Tag、Commit、Local path、Skill 子路径或逻辑 ref。
+- Repo Skill 发现只扫描 clone 根目录下的 skills/ 子树；不扫描 Repo 根目录、.agents/skills、.claude/skills 或其他自定义目录。
 - Repo 是刷新、更新和删除的一级对象。
 - Skill 仍可选择安装，但不支持 Skill 级更新。
 
@@ -108,6 +109,8 @@ Project：
 6. 将 Repo 写入当前 Scope 的 .skill-source-lock.json，初始 managedSkills 可以为空。
 
 添加 Repo 不自动安装 Skill。
+
+Repo 的发现规则固定为：skills/ 内递归查找 SKILL.md；某个目录自身存在 SKILL.md 后，该目录作为完整 Skill 根目录，其子目录不再作为独立 Skill。Repo 根目录或其他目录中的 SKILL.md 不参与发现。
 
 ### Refresh
 
