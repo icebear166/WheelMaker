@@ -65,7 +65,9 @@ OpenCode、Copilot、Mimo、CodeBuddy、Qoder 和其他 Provider 不参与 2.0 �
 - 不维护 snapshots 或额外 checkout 层。
 - Repo 默认跟随远端默认分支。
 - 中央 clone 不因 Scope 删除而自动删除；后续如需回收，使用独立清理动作。
-- source URL 统一规范化为 sourceKey，避免 shorthand、HTTPS 和 SSH 别名造成重复 clone。
+- source URL 统一规范化为 sourceKey，避免 shorthand、HTTPS 和 SSH 别名造成重复 clone；sourceKey 由 host、仓库路径和 port 构成，默认 SSH 用户 `git` 不参与区分，非默认用户或端口参与区分。
+- clone 的 origin 使用第一次成功 clone 的地址；后续等价地址复用同一 working clone。
+- 中央 clone 是 WheelMaker 管理的工作目录，不支持保留用户修改；中央目录不因 Scope 操作自动删除。
 
 ## Repo Skill 发现边界
 
@@ -128,6 +130,8 @@ Project 文件随项目 Git 版本管理。每个 Scope 有独立文件，互相
 
 现有 version 2 source lock 直接原地升级为 version 3：source、sourceKey、resolvedCommit 和 refreshedAt 映射到新字段；远端目录 skillList 与内容 hash 不再作为当前状态字段，managedSkills 根据当前 Scope 的受管安装重建。
 
+迁移是惰性的：任何读写 `.skill-source-lock.json` 时，先把旧位置内容迁移到 canonical 位置；迁移成功后只读写 canonical 文件。旧 `skillList` 仅作为迁移目录的候选集合，并与当前目标目录的实际存在项取交集；旧文件没有记录但当前已安装的项全部视为 external，旧文件记录但当前不存在的项不自动安装。迁移失败时 canonical lock 和目标目录保持不变，且迁移可重复执行。
+
 ## Repo 操作
 
 ### Refresh
@@ -135,6 +139,8 @@ Project 文件随项目 Git 版本管理。每个 Scope 有独立文件，互相
 Refresh 只执行 git fetch，不改变中央 working tree，也不改变任何 Scope 的安装内容或 commit。
 
 页面用 Scope lock 的 commit 和中央 Repo 的最新远端 SHA 比较，显示是否有更新。远端 SHA 不写入 .skill-source-lock.json；重启后需要通过 Repo 的 fetch 状态重新判断。
+
+如果本机没有中央 clone，被动扫描或重建索引不联网；Refresh、Repo 检查、Update、Install 和 Install all 才会按需 clone 默认分支最新版本。中央 clone 缺失时不会回放旧 commit。
 
 ### Update
 
@@ -146,6 +152,7 @@ Update 先更新中央 Repo，再更新当前 Scope：
 - 上游已经删除的 managed skill 自动删除。
 - 同一个 Scope 内同名安装以最后一次安装为准。
 - 其他外部 Skill 保留。
+- Update 和 Install 遇到中央 clone dirty/untracked 时直接失败，不 reset、clean 或 stash；Refresh 仍可只 fetch。
 
 同名 Repo 不进入旧的冲突封锁流程；新的安装覆盖目标目录并更新该 Skill 的 source 归属。source 不再提供该 Skill 时，当前 Scope 在 Repo 更新中报告 missing 并按已确认的自动删除规则清理。
 
@@ -155,9 +162,10 @@ Hub 和 Project 的 Scope 独立执行。某个 Project 更新中央 clone 后�
 
 - Install 安装 Repo 中选择的 Skill，并写入当前 Scope 的 managedSkills。
 - Install all 显式安装该 Repo 当前发现的全部 Skill。
-- Global 在两个目标目录创建链接。
+- 若当前 Scope lock 的 commit 落后于中央 working tree，Install/Install all 先把当前 Scope 已管理 Skills 同步到中央当前 commit，再安装所选项，保证一次操作不混用两个 Repo commit；Install 本身不触发 fetch/checkout。
+- Global 在 `.agents/skills` 和 `.claude/skills` 下创建目录链接：Windows 使用 Junction，Unix/macOS 使用目录 Symlink。任一链接失败都直接报错，不降级为复制。
 - Project 在两个目标目录复制完整 Skill 目录；复制内容和 .skill-source-lock.json 一起提交到项目 Git。
-- 链接创建失败直接提示用户并终止，不降级为复制。
+- Project 两个目标目录的复制是一个事务；任一目标失败时回滚两个目标，Scope lock 不更新，中央 clone 不回滚。
 
 ### Uninstall 和删除 Repo
 
@@ -198,8 +206,8 @@ Hub 和 Project 的 Scope 独立执行。某个 Project 更新中央 clone 后�
 
 ## 状态、失败与安全边界
 
-- Scope lock 写入采用同目录临时文件、关闭后原子替换，并检查磁盘版本，避免并发写覆盖。
-- 每个中央 Repo 的 fetch、checkout 和目录更新受文件锁保护。
+- Scope lock 写入采用同目录临时文件、关闭后原子替换，并检查磁盘版本，避免并发写覆盖；整个读改写过程还受 Scope 跨进程文件锁保护。
+- 每个中央 Repo 的 fetch、checkout 和目录更新受 source 文件锁保护。
 - Git 认证只复用 Hub 进程可用的 credential/SSH 环境，凭据不写入 lock、state、operation 或日志。
 - Git fetch、checkout、复制或链接失败时保留旧 Scope lock，返回可重试错误。
 - Project 复制失败不会伪造新 commit；中央 Repo 可以保持已更新状态，Scope 下次单独重试。
