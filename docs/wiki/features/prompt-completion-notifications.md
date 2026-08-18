@@ -35,6 +35,6 @@ Prompt 完成通知在 agent 结束一轮 prompt 时提醒用户，覆盖 PWA（
 
 - **PWA**：service worker `showNotification`；图标与 badge 使用 PNG 位图（Chromium 桌面通知不支持 SVG），正文带状态符号前缀。
 - **APK**：`NotificationCompat`，渠道 `chat_prompt_completion`；smallIcon 为透明底单色 `ic_notification`（状态栏按 alpha 掩码渲染，不可用不透明底启动图标）；Android 13+ 走运行时权限申请。
-- **exe**：真 WinRT 系统 Toast（ToastGeneric，无大头像），header 的图标与应用名来自启动时的 HKCU 自注册（`AppUserModelId\WheelMaker.Desktop` 的 DisplayName / IconUri / CustomActivator + CLSID `LocalServer32`，全部 HKCU 无需管理员，不依赖安装脚本；IconUri 指向释放到 `~/.wheelmaker/desktop/` 的内嵌图标 PNG）；发送走手写 WinRT 互操作（`RoGetActivationFactory` + `XmlDocument.LoadXml` + `put_Tag`），无第三方依赖；不经过 WebView2 通知管道（其权限请求在无宿主处理时被静默拒绝，且 toast 点击不回传），因此不需要系统通知授权，desktop provider 权限恒为 granted。托盘图标常驻但与通知解耦：单击还原并聚焦主窗口，无右键菜单，关窗即退出的生命周期不变。
+- **exe**：真 WinRT 系统 Toast（ToastGeneric，无大头像），header 的图标与应用名来自启动时的 HKCU 自注册（`AppUserModelId\WheelMaker.Desktop` 的 DisplayName / IconUri / CustomActivator + CLSID `LocalServer32`，全部 HKCU 无需管理员，不依赖安装脚本；IconUri 指向释放到 `~/.wheelmaker/desktop/` 的内嵌图标 PNG）；dev 构建与正式构建共用同一 AUMID/CLSID，注册表指向最后运行的 exe（last-run-wins）；发送走手写 WinRT 互操作（`RoGetActivationFactory` + `XmlDocument.LoadXml` + `put_Tag`），无第三方依赖；不经过 WebView2 通知管道（其权限请求在无宿主处理时被静默拒绝，且 toast 点击不回传），因此不需要系统通知授权，desktop provider 权限恒为 granted。托盘图标常驻但与通知解耦：单击还原并聚焦主窗口，无右键菜单，关窗即退出的生命周期不变。
 
 来源：`docs/scope/2026-08-17-prompt-completion-notifications.md`；exe 端 WinRT Toast 与托盘图标约定见 `docs/scope/2026-08-18-desktop-winrt-toast-notifications.md`。
