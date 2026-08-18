@@ -239,6 +239,8 @@ Use the locally built, checksum-verified Kit candidate. Run the private reposito
 
 If deployment credentials and a published Kit asset are available, push the private migration branch, run/observe its candidate Action, authenticate to the protected URL, and verify health/catalog/article reads. If release authority or credentials are unavailable, stop before merge/legacy removal and report the exact external blocker; do not claim migration complete.
 
+Blocked after local equivalence verification: the current development remote is private, so its Release assets cannot serve as the unauthenticated public Kit source. Publishing requires an approved public distribution target and license before the private Wiki workflow can be switched safely.
+
 - [ ] **Step 5: Switch the private default branch only after candidate success**
 
 Merge using that repository's Git preferences, push, verify the active release and current symlink/health, then remove only the legacy program files already classified by the migration report.
@@ -284,7 +286,7 @@ Run: `rg -n -i '\b[A-Z]:[\\/]Users[\\/][A-Za-z0-9._-]+|/home/[A-Za-z0-9._-]+/|--
 
 Expected: Exit 1 with no matches.
 
-- [ ] **Step 4: Audit spec coverage and Git state**
+- [x] **Step 4: Audit spec coverage and Git state**
 
 Compare every acceptance bullet in `docs/scope/2026-08-18-personal-wiki-kit.md` to recorded test/manual evidence. Inspect `git status -sb` and diff in both repositories and distinguish task files from pre-existing files.
 
