@@ -175,7 +175,7 @@
 
   Expected result: the new action unions, payloads and callback props type-check across WorkspaceApp and ChatHubMenu.
 
-- [ ] **Step 6: Git checkpoint**
+- [x] **Step 6: Git checkpoint**
 
   After tests and type checking pass, checkpoint only the Task 3 frontend transport/callback files and record the commit hash and subject.
 
@@ -190,7 +190,7 @@
 
 **Acceptance:** Scope toolbar buttons invoke batch actions, Repo headers retain Update/Install all/delete, Refresh disappears from the visible UI, and each Skill row exposes only aligned download/uninstall controls.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
   Update `ChatHubSkillManagement.test.tsx` assertions:
 
@@ -200,7 +200,7 @@
   - `disables Scope actions while the operation is running` renders a running operation and asserts both Scope buttons and Repo buttons are disabled.
   - `renders per-Repo partial operation results` uses source-level result names and asserts failed/succeeded source results remain visible after a batch operation.
 
-- [ ] **Step 2: Run the focused tests to verify RED**
+- [x] **Step 2: Run the focused tests to verify RED**
 
   Run from `app`:
 
@@ -210,7 +210,7 @@
 
   Expected result: the current Refresh button is still rendered and Scope buttons/callbacks are absent, so the new expectations fail.
 
-- [ ] **Step 3: Write the minimal implementation**
+- [x] **Step 3: Write the minimal implementation**
 
   - Extend `ChatHubSkillActions` with Scope Update and Scope Install all callbacks.
   - Add the two buttons to the Scope toolbar and wire them to the current Scope target.
@@ -219,11 +219,11 @@
   - Update accessible labels and existing CSS selectors without changing the source-first hierarchy or inline Add repository row.
   - Render batch operation results by source while preserving existing loading, error, unmanaged and conflict states.
 
-- [ ] **Step 4: Run the focused tests to verify GREEN**
+- [x] **Step 4: Run the focused tests to verify GREEN**
 
   Run the same component test command. Expected result: all updated UI assertions and existing component tests pass.
 
-- [ ] **Step 5: Run frontend regression checks**
+- [x] **Step 5: Run frontend regression checks**
 
   Run:
 
@@ -234,7 +234,7 @@
 
   Expected result: focused UI/Registry tests and TypeScript checks pass without unrelated snapshots or layout regressions.
 
-- [ ] **Step 6: Git checkpoint**
+- [x] **Step 6: Git checkpoint**
 
   After verification passes, checkpoint only the Task 4 UI and test files and record the commit hash and subject.
 

@@ -233,14 +233,6 @@ function SkillSourceLedger({
         <span className="chat-hub-skill-source-actions">
           <button
             type="button"
-            aria-label={`Refresh ${displayName}`}
-            disabled={busy}
-            onClick={() => actions.onRefreshSource(baseTarget)}
-          >
-            <Icon name="refreshCw" />
-          </button>
-          <button
-            type="button"
             aria-label={`Update ${displayName}`}
             disabled={busy}
             onClick={() => actions.onUpdateSource(baseTarget)}
@@ -447,6 +439,24 @@ export function ChatHubSkillScopeDetail({
       <div className="chat-hub-skill-toolbar">
         <strong className="chat-hub-skill-toolbar-label">{label}</strong>
         <div className="chat-hub-skill-toolbar-actions">
+          <button
+            type="button"
+            className="chat-hub-skill-toolbar-button"
+            aria-label={`Update ${scopeLabel} skills`}
+            disabled={busy}
+            onClick={() => actions.onUpdateScope(target)}
+          >
+            <Icon name="circleArrowUp" />
+          </button>
+          <button
+            type="button"
+            className="chat-hub-skill-toolbar-button"
+            aria-label={`Install all ${scopeLabel} skills`}
+            disabled={busy}
+            onClick={() => actions.onInstallAllScope(target)}
+          >
+            <Icon name="cloudDownload" />
+          </button>
           <label className="chat-hub-skill-uninstalled-toggle">
             <input
               type="checkbox"

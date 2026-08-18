@@ -104,6 +104,25 @@ test('renders source-first hierarchy and hides uninstalled skills by default per
   expect(renderer.root.findByProps({'data-skill-name': 'local-only'})).toBeTruthy();
 });
 
+test('renders scope Update and Install all controls', async () => {
+  const {renderer, actions} = await renderScope({target: projectTarget});
+
+  act(() => renderer.root.findByProps({'aria-label': 'Update Project skills'}).props.onClick());
+  act(() => renderer.root.findByProps({'aria-label': 'Install all Project skills'}).props.onClick());
+
+  expect(actions.onUpdateScope).toHaveBeenCalledWith(projectTarget);
+  expect(actions.onInstallAllScope).toHaveBeenCalledWith(projectTarget);
+});
+
+test('disables scope and repository actions while a skill operation is running', async () => {
+  const {renderer} = await renderScope({operationRunning: true});
+
+  expect(renderer.root.findByProps({'aria-label': 'Update Hub skills'}).props.disabled).toBe(true);
+  expect(renderer.root.findByProps({'aria-label': 'Install all Hub skills'}).props.disabled).toBe(true);
+  expect(renderer.root.findByProps({'aria-label': 'Update acme/skills'}).props.disabled).toBe(true);
+  expect(renderer.root.findByProps({'aria-label': 'Install all acme/skills skills'}).props.disabled).toBe(true);
+});
+
 test('treats nullable source skills from the registry as an empty catalog', async () => {
   const nullableCatalog = {
     ...catalog,
@@ -163,16 +182,11 @@ test('disables every skill action for same-name conflicts', async () => {
   expect(conflict.findByProps({className: 'chat-hub-skill-status'}).children.join('')).toContain('Conflict');
 });
 
-test('routes source refresh, repo update, install-all, and delete through source actions', async () => {
+test('routes repository update, install-all, and delete through source actions', async () => {
   const {renderer, actions} = await renderScope();
   const source = renderer.root.findByProps({'data-source-key': 'github.com/acme/skills'});
 
-  act(() => source.findByProps({'aria-label': 'Refresh acme/skills'}).props.onClick());
-  expect(actions.onRefreshSource).toHaveBeenCalledWith({
-    ...hubTarget,
-    source: 'https://github.com/acme/skills.git',
-    sourceKey: 'github.com/acme/skills',
-  });
+  expect(source.findAllByProps({'aria-label': 'Refresh acme/skills'})).toHaveLength(0);
   act(() => source.findByProps({'aria-label': 'Update acme/skills'}).props.onClick());
   expect(actions.onUpdateSource).toHaveBeenCalledWith(expect.objectContaining({sourceKey: 'github.com/acme/skills'}));
   act(() => source.findByProps({'aria-label': 'Install all acme/skills skills'}).props.onClick());
@@ -221,10 +235,10 @@ test('keeps stale catalog visible while allowing explicit recovery operations', 
   act(() => renderer.root.findByProps({'aria-label': 'Show all Hub skills'}).props.onChange({target: {checked: true}}));
   expect(renderer.root.findByProps({'aria-label': 'Download new-skill'}).props.disabled).toBe(false);
   expect(renderer.root.findByProps({'aria-label': 'Update acme/skills'}).props.disabled).toBe(false);
-  expect(renderer.root.findByProps({'aria-label': 'Refresh acme/skills'}).props.disabled).toBe(false);
+  expect(renderer.root.findAllByProps({'aria-label': 'Refresh acme/skills'})).toHaveLength(0);
 });
 
-test('keeps itemized partial results visible for targeted retry feedback', async () => {
+test('keeps itemized per-repository partial results visible after a batch operation', async () => {
   const actions = createActions();
   let renderer!: TestRenderer.ReactTestRenderer;
   await act(async () => {
@@ -238,16 +252,16 @@ test('keeps itemized partial results visible for targeted retry feedback', async
         operationRunning={false}
         operation={{
           running: false,
-          action: 'update',
+          action: 'updateScope',
           scope: 'hub',
           status: 'partial',
           startedAt: '2026-08-12T10:00:00Z',
           finishedAt: '2026-08-12T10:00:02Z',
           exitCode: 1,
-          errorSummary: '1 skill operation(s) failed',
+          errorSummary: '1 repository operation(s) failed',
           results: [
-            {skill: 'installed', action: 'update', status: 'succeeded'},
-            {skill: 'changed', action: 'update', status: 'failed', errorSummary: 'command failed'},
+            {skill: 'github.com/acme/skills', action: 'update', status: 'succeeded'},
+            {skill: 'github.com/other/skills', action: 'update', status: 'failed', errorSummary: 'command failed'},
           ],
         }}
         pendingKey=""
@@ -258,9 +272,9 @@ test('keeps itemized partial results visible for targeted retry feedback', async
 
   const resultRows = renderer.root.findAllByProps({className: 'chat-hub-skill-operation-result'});
   expect(resultRows).toHaveLength(2);
-  expect(resultRows[0].findAllByType('span').map(node => node.children.join(''))).toContain('installed');
+  expect(resultRows[0].findAllByType('span').map(node => node.children.join(''))).toContain('github.com/acme/skills');
   expect(resultRows[0].findByType('strong').children.join('')).toBe('Succeeded');
-  expect(resultRows[1].findAllByType('span').map(node => node.children.join(''))).toContain('changed');
+  expect(resultRows[1].findAllByType('span').map(node => node.children.join(''))).toContain('github.com/other/skills');
   expect(resultRows[1].findByType('strong').children.join('')).toBe('Failed');
   expect(resultRows[1].props['data-tooltip']).toBe('command failed');
 });
@@ -272,7 +286,7 @@ test('renders a compact source header with fixed source actions', async () => {
 
   expect(disclosure.props['aria-expanded']).toBe(true);
   expect(source.findAllByProps({className: 'chat-hub-skill-source-meta'})).toHaveLength(0);
-  expect(source.findByProps({'aria-label': 'Refresh acme/skills'})).toBeTruthy();
+  expect(source.findAllByProps({'aria-label': 'Refresh acme/skills'})).toHaveLength(0);
   expect(source.findByProps({'aria-label': 'Update acme/skills'})).toBeTruthy();
   expect(source.findByProps({'aria-label': 'Install all acme/skills skills'})).toBeTruthy();
   expect(source.findByProps({'aria-label': 'Delete acme/skills source'})).toBeTruthy();
@@ -290,6 +304,12 @@ test('uses a two-slot skill action column and suppresses ordinary status copy', 
   expect(installed.findByProps({className: 'chat-hub-skill-action-slot chat-hub-skill-uninstall-action-slot'})).toBeTruthy();
   expect(changed.findAllByProps({'aria-label': 'Update changed'})).toHaveLength(0);
   expect(removed.findByProps({className: 'chat-hub-skill-status'}).children.join('')).toBe('Removed upstream');
+  expect(installed.findByProps({className: 'chat-hub-skill-row-actions'}).findAllByType('button')
+    .map(button => button.props['aria-label'])).toEqual(['Uninstall installed']);
+  expect(changed.findByProps({className: 'chat-hub-skill-row-actions'}).findAllByType('button')
+    .map(button => button.props['aria-label'])).toEqual(['Uninstall changed']);
+  expect(removed.findByProps({className: 'chat-hub-skill-row-actions'}).findAllByType('button')
+    .map(button => button.props['aria-label'])).toEqual(['Uninstall gone']);
 });
 
 test('collapsing a source hides its list but keeps the error visible', async () => {
