@@ -265,6 +265,218 @@ func TestNativeAddRepoDoesNotAdvanceProjectLockWithoutSynchronizingCopies(t *tes
 	}
 }
 
+func TestSkillsCommandScopeUpdateProcessesEveryRepository(t *testing.T) {
+	firstRepository := t.TempDir()
+	secondRepository := t.TempDir()
+	initSkillSourceGitFixture(t, firstRepository, "alpha")
+	initSkillSourceGitFixture(t, secondRepository, "beta")
+	home := t.TempDir()
+	command := newSkillsCommandWithRunner(newFakeSkillsRunner(), skillsCommandConfig{HubID: "hub-a", HomeDir: home})
+	target := skillsCommandTarget{scope: "hub"}
+	firstSource := "https://github.com/example/first.git"
+	secondSource := "https://github.com/example/second.git"
+	seedNativeSkillSourceClone(t, command, firstRepository, firstSource, "github.com/example/first")
+	seedNativeSkillSourceClone(t, command, secondRepository, secondSource, "github.com/example/second")
+	appendSkillSourceGitCommit(t, firstRepository, "alpha-new")
+	appendSkillSourceGitCommit(t, secondRepository, "beta-new")
+	lock := skillSourceLock{Version: 3, Sources: []skillSourceSnapshot{
+		{Source: firstSource, SourceKey: "github.com/example/first", ManagedSkills: []string{}},
+		{Source: secondSource, SourceKey: "github.com/example/second", ManagedSkills: []string{}},
+	}}
+	if _, err := writeSkillSourceLockFile(command.sourceLockFile(target), skillSourceMissingRevision, lock); err != nil {
+		t.Fatal(err)
+	}
+
+	response, cmdErr := command.Handle(context.Background(), rawSkillsCommandPayload(t, map[string]any{
+		"action": "updateScope",
+		"hubId":  "hub-a",
+		"scope":  "hub",
+	}))
+	if cmdErr != nil {
+		t.Fatalf("scope update error: %#v", cmdErr)
+	}
+	if body := response.(skillsCommandResponse); !body.OK || !body.Accepted {
+		t.Fatalf("response=%#v, want accepted scope update", body)
+	}
+	operation := waitForSkillsOperationDone(t, command)
+	if operation.Status != "succeeded" || len(operation.Results) != 2 {
+		t.Fatalf("operation=%#v, want two successful source results", operation)
+	}
+	for _, result := range operation.Results {
+		if result.Status != "succeeded" || result.Action != "update" {
+			t.Fatalf("source result=%#v, want successful update", result)
+		}
+	}
+	updated, _, err := readSkillSourceLockFile(command.sourceLockFile(target))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, source := range updated.Sources {
+		if source.Commit == "" {
+			t.Fatalf("source=%#v has no updated commit", source)
+		}
+	}
+}
+
+func TestSkillsCommandScopeUpdateContinuesAfterSourceFailure(t *testing.T) {
+	workingRepository := t.TempDir()
+	initSkillSourceGitFixture(t, workingRepository, "alpha")
+	home := t.TempDir()
+	command := newSkillsCommandWithRunner(newFakeSkillsRunner(), skillsCommandConfig{HubID: "hub-a", HomeDir: home})
+	target := skillsCommandTarget{scope: "hub"}
+	workingSource := "https://github.com/example/working.git"
+	missingSource := "https://github.com/example/missing.git"
+	seedNativeSkillSourceClone(t, command, workingRepository, workingSource, "github.com/example/working")
+	if err := os.MkdirAll(command.nativeStore().repositoryPath("github.com/example/missing"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := writeSkillSourceLockFile(command.sourceLockFile(target), skillSourceMissingRevision, skillSourceLock{
+		Version: 3,
+		Sources: []skillSourceSnapshot{
+			{Source: workingSource, SourceKey: "github.com/example/working"},
+			{Source: missingSource, SourceKey: "github.com/example/missing"},
+		},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	response, cmdErr := command.Handle(context.Background(), rawSkillsCommandPayload(t, map[string]any{
+		"action": "updateScope",
+		"hubId":  "hub-a",
+		"scope":  "hub",
+	}))
+	if cmdErr != nil {
+		t.Fatalf("scope update error: %#v", cmdErr)
+	}
+	if body := response.(skillsCommandResponse); !body.OK || !body.Accepted {
+		t.Fatalf("response=%#v, want accepted scope update", body)
+	}
+	operation := waitForSkillsOperationDone(t, command)
+	if operation.Status != "partial" || len(operation.Results) != 2 {
+		t.Fatalf("operation=%#v, want partial results for both sources", operation)
+	}
+	statuses := map[string]string{}
+	for _, result := range operation.Results {
+		statuses[result.Skill] = result.Status
+	}
+	if statuses["github.com/example/working"] != "succeeded" || statuses["github.com/example/missing"] != "failed" {
+		t.Fatalf("source statuses=%#v, want working succeeded and missing failed", statuses)
+	}
+	if _, err := os.Stat(command.nativeStore().repositoryPath("github.com/example/working")); err != nil {
+		t.Fatalf("successful source was not processed: %v", err)
+	}
+}
+
+func TestSkillsCommandScopeInstallAllUpdatesBeforeInstalling(t *testing.T) {
+	firstRepository := t.TempDir()
+	secondRepository := t.TempDir()
+	initSkillSourceGitFixture(t, firstRepository, "alpha")
+	initSkillSourceGitFixture(t, secondRepository, "beta")
+	projectRoot := t.TempDir()
+	command := newSkillsCommandWithRunner(newFakeSkillsRunner(), skillsCommandConfig{
+		HubID: "hub-a", HomeDir: t.TempDir(), Projects: []ProjectInfo{{Name: "project", Path: projectRoot}},
+	})
+	target := skillsCommandTarget{scope: "project", projectName: "project", dir: projectRoot}
+	firstSource := "https://github.com/example/first.git"
+	secondSource := "https://github.com/example/second.git"
+	firstInitial := seedNativeSkillSourceClone(t, command, firstRepository, firstSource, "github.com/example/first")
+	secondInitial := seedNativeSkillSourceClone(t, command, secondRepository, secondSource, "github.com/example/second")
+	if _, err := writeSkillSourceLockFile(command.sourceLockFile(target), skillSourceMissingRevision, skillSourceLock{
+		Version: 3,
+		Sources: []skillSourceSnapshot{
+			{Source: firstSource, SourceKey: "github.com/example/first", Commit: firstInitial, UpdatedAt: "2026-08-19T00:00:00Z"},
+			{Source: secondSource, SourceKey: "github.com/example/second", Commit: secondInitial, UpdatedAt: "2026-08-19T00:00:00Z"},
+		},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	appendSkillSourceGitCommit(t, firstRepository, "new-alpha")
+	appendSkillSourceGitCommit(t, secondRepository, "new-beta")
+
+	response, cmdErr := command.Handle(context.Background(), rawSkillsCommandPayload(t, map[string]any{
+		"action":      "installAllScope",
+		"hubId":       "hub-a",
+		"scope":       "project",
+		"projectName": "project",
+	}))
+	if cmdErr != nil {
+		t.Fatalf("scope install all error: %#v", cmdErr)
+	}
+	if body := response.(skillsCommandResponse); !body.OK || !body.Accepted {
+		t.Fatalf("response=%#v, want accepted scope install all", body)
+	}
+	operation := waitForSkillsOperationDone(t, command)
+	if operation.Status != "succeeded" || len(operation.Results) != 2 {
+		t.Fatalf("operation=%#v, want two successful install results", operation)
+	}
+	lock, _, err := readSkillSourceLockFile(command.sourceLockFile(target))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, source := range lock.Sources {
+		if source.Commit == firstInitial || source.Commit == secondInitial {
+			t.Fatalf("source=%#v did not advance before install", source)
+		}
+	}
+	for _, root := range []string{".agents/skills/new-alpha", ".claude/skills/new-alpha", ".agents/skills/new-beta", ".claude/skills/new-beta"} {
+		if _, err := os.Stat(filepath.Join(projectRoot, filepath.FromSlash(root), "SKILL.md")); err != nil {
+			t.Fatalf("latest Skill copy %s missing: %v", root, err)
+		}
+	}
+}
+
+func TestSkillsCommandScopeInstallAllSkipsFailedSource(t *testing.T) {
+	workingRepository := t.TempDir()
+	initSkillSourceGitFixture(t, workingRepository, "alpha")
+	projectRoot := t.TempDir()
+	command := newSkillsCommandWithRunner(newFakeSkillsRunner(), skillsCommandConfig{
+		HubID: "hub-a", HomeDir: t.TempDir(), Projects: []ProjectInfo{{Name: "project", Path: projectRoot}},
+	})
+	target := skillsCommandTarget{scope: "project", projectName: "project", dir: projectRoot}
+	workingSource := "https://github.com/example/working.git"
+	missingSource := "https://github.com/example/missing.git"
+	seedNativeSkillSourceClone(t, command, workingRepository, workingSource, "github.com/example/working")
+	if err := os.MkdirAll(command.nativeStore().repositoryPath("github.com/example/missing"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := writeSkillSourceLockFile(command.sourceLockFile(target), skillSourceMissingRevision, skillSourceLock{
+		Version: 3,
+		Sources: []skillSourceSnapshot{
+			{Source: workingSource, SourceKey: "github.com/example/working"},
+			{Source: missingSource, SourceKey: "github.com/example/missing"},
+		},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	response, cmdErr := command.Handle(context.Background(), rawSkillsCommandPayload(t, map[string]any{
+		"action":      "installAllScope",
+		"hubId":       "hub-a",
+		"scope":       "project",
+		"projectName": "project",
+	}))
+	if cmdErr != nil {
+		t.Fatalf("scope install all error: %#v", cmdErr)
+	}
+	if body := response.(skillsCommandResponse); !body.OK || !body.Accepted {
+		t.Fatalf("response=%#v, want accepted scope install all", body)
+	}
+	operation := waitForSkillsOperationDone(t, command)
+	if operation.Status != "partial" || len(operation.Results) != 2 {
+		t.Fatalf("operation=%#v, want partial results for both sources", operation)
+	}
+	statuses := map[string]string{}
+	for _, result := range operation.Results {
+		statuses[result.Skill] = result.Status
+	}
+	if statuses["github.com/example/working"] != "succeeded" || statuses["github.com/example/missing"] != "failed" {
+		t.Fatalf("source statuses=%#v, want working succeeded and missing failed", statuses)
+	}
+	if _, err := os.Stat(filepath.Join(projectRoot, ".agents", "skills", "alpha", "SKILL.md")); err != nil {
+		t.Fatalf("successful source was not installed: %v", err)
+	}
+}
+
 func TestSkillsOperationsHaveUniqueIDsAtSecondResolution(t *testing.T) {
 	command := newSkillsCommandWithRunner(newFakeSkillsRunner(), skillsCommandConfig{HubID: "hub-a"})
 	fixed := time.Date(2026, 8, 18, 12, 0, 0, 0, time.UTC)
@@ -315,4 +527,18 @@ func writeLegacySkillSourceLock(t *testing.T, path, source, sourceKey, skillName
 	if err := os.WriteFile(path, append(raw, '\n'), 0o600); err != nil {
 		t.Fatal(err)
 	}
+}
+
+func seedNativeSkillSourceClone(t *testing.T, command *SkillsCommand, repository, source, sourceKey string) string {
+	t.Helper()
+	clonePath := command.nativeStore().repositoryPath(sourceKey)
+	if err := os.MkdirAll(filepath.Dir(clonePath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	runSkillSourceGit(t, filepath.Dir(clonePath), "clone", "--quiet", repository, clonePath)
+	checkout, err := command.nativeStore().ensureRepo(context.Background(), skillSourceSnapshot{Source: source, SourceKey: sourceKey})
+	if err != nil {
+		t.Fatalf("seed source %s: %v", source, err)
+	}
+	return checkout.Commit
 }

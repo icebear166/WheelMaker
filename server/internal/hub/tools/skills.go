@@ -412,8 +412,12 @@ func (c *SkillsCommand) Handle(ctx context.Context, raw json.RawMessage) (any, *
 		return c.startNativeRefreshRepo(payload)
 	case "updateRepo":
 		return c.startNativeUpdateRepo(payload)
+	case "updateScope":
+		return c.startNativeScopeOperation(payload, false)
 	case "installAll":
 		return c.startNativeInstall(payload, true)
+	case "installAllScope":
+		return c.startNativeScopeOperation(payload, true)
 	case "removeRepo":
 		return c.startNativeRemoveRepo(payload)
 	case "operation":

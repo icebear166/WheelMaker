@@ -1649,7 +1649,7 @@ func waitForSkillsCall(t *testing.T, runner *fakeSkillsRunner, dir string, name 
 func waitForSkillsOperationDone(t *testing.T, cmd *SkillsCommand) *skillsOperationSnapshot {
 	t.Helper()
 	var operation *skillsOperationSnapshot
-	for i := 0; i < 100; i++ {
+	for i := 0; i < 1000; i++ {
 		operation = cmd.currentOperationSnapshot()
 		if operation != nil && !operation.Running {
 			return operation

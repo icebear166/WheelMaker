@@ -162,25 +162,103 @@ func (c *SkillsCommand) materializeNativeMigration(ctx context.Context, target s
 	}, nil
 }
 
+type nativeOperationOutcome struct {
+	status       string
+	exitCode     *int
+	errorSummary string
+	message      string
+}
+
 func (c *SkillsCommand) startNativeOperation(payload skillsCommandPayload, work func() error) (any, *skillsCommandError) {
+	return c.startNativeOperationWithOutcome(payload, func(*skillsOperationSnapshot) nativeOperationOutcome {
+		if err := work(); err != nil {
+			code := -1
+			return nativeOperationOutcome{
+				status:       "failed",
+				exitCode:     &code,
+				errorSummary: sanitizeSkillSourceError(err.Error(), payload.Source),
+			}
+		}
+		return nativeOperationOutcome{status: "succeeded", message: "Skills operation completed."}
+	})
+}
+
+func (c *SkillsCommand) startNativeOperationWithOutcome(payload skillsCommandPayload, work func(*skillsOperationSnapshot) nativeOperationOutcome) (any, *skillsCommandError) {
 	operation, cmdErr := c.acceptOperation(payload)
 	if cmdErr != nil {
 		return nil, cmdErr
 	}
 	accepted := cloneSkillsOperation(operation)
 	go func() {
-		if err := work(); err != nil {
-			code := -1
-			c.finishOperation(operation, "failed", &code, sanitizeSkillSourceError(err.Error(), payload.Source), "")
-			return
-		}
-		c.finishOperation(operation, "succeeded", nil, "", "Skills operation completed.")
+		outcome := work(operation)
+		c.finishOperation(operation, outcome.status, outcome.exitCode, outcome.errorSummary, outcome.message)
 	}()
 	return skillsCommandResponse{
 		OK: true, Accepted: true, HubID: payload.HubID, UpdatedAt: operation.StartedAt,
 		Source: payload.Source, Scope: payload.Scope, ProjectName: payload.ProjectName,
 		Operation: accepted,
 	}, nil
+}
+
+func (c *SkillsCommand) startNativeScopeOperation(payload skillsCommandPayload, installAll bool) (any, *skillsCommandError) {
+	target, cmdErr := c.resolveTarget(payload)
+	if cmdErr != nil {
+		return nil, cmdErr
+	}
+	if installAll {
+		payload.Action = "installAllScope"
+	} else {
+		payload.Action = "updateScope"
+	}
+	return c.startNativeOperationWithOutcome(payload, func(operation *skillsOperationSnapshot) nativeOperationOutcome {
+		return c.nativeScopeOperation(context.Background(), target, operation, installAll)
+	})
+}
+
+func (c *SkillsCommand) nativeScopeOperation(ctx context.Context, target skillsCommandTarget, operation *skillsOperationSnapshot, installAll bool) nativeOperationOutcome {
+	lock, _, err := c.readNativeScopeLock(ctx, target)
+	if err != nil {
+		code := -1
+		return nativeOperationOutcome{
+			status:       "failed",
+			exitCode:     &code,
+			errorSummary: sanitizeSkillSourceError(err.Error(), ""),
+		}
+	}
+	action := "update"
+	if installAll {
+		action = "installAll"
+	}
+	failures := 0
+	for _, source := range lock.Sources {
+		var sourceErr error
+		if installAll {
+			sourceErr = c.nativeInstall(ctx, target, source.Source, nil, true)
+		} else {
+			sourceErr = c.nativeUpdateRepo(ctx, target, source.Source)
+		}
+		result := skillsOperationItemResult{Skill: source.SourceKey, Action: action, Status: "succeeded"}
+		if sourceErr != nil {
+			failures++
+			result.Status = "failed"
+			result.ErrorSummary = sanitizeSkillSourceError(sourceErr.Error(), source.Source)
+		}
+		c.appendSkillsOperationResult(operation, result)
+	}
+	if failures == 0 {
+		return nativeOperationOutcome{status: "succeeded", message: "Skills operation completed."}
+	}
+	code := -1
+	status := "partial"
+	if failures == len(lock.Sources) {
+		status = "failed"
+	}
+	return nativeOperationOutcome{
+		status:       status,
+		exitCode:     &code,
+		errorSummary: fmt.Sprintf("%d of %d skill source operation(s) failed", failures, len(lock.Sources)),
+		message:      "Skills operation completed with source failures.",
+	}
 }
 
 func (c *SkillsCommand) inspectNativeRepo(ctx context.Context, payload skillsCommandPayload) (any, *skillsCommandError) {

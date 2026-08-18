@@ -79,7 +79,7 @@
 
 **Acceptance:** `cmd.skills` accepts source-less current-Scope Update and Install all actions, processes every locked Repo sequentially, continues after a Repo failure, records per-Repo results and refreshes the catalog after completion.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
   Add native command tests with concrete assertions:
 
@@ -88,7 +88,7 @@
   - `TestSkillsCommandScopeInstallAllUpdatesBeforeInstalling` seeds an old commit and an uninstalled Skill available only in the new remote commit, invokes Scope Install all, and asserts the new Skill is installed from the new commit for each successful source.
   - `TestSkillsCommandScopeInstallAllSkipsInstallationForFailedSource` makes one source fail before checkout and asserts that source has no new installation while another source still installs successfully.
 
-- [ ] **Step 2: Run the focused tests to verify RED**
+- [x] **Step 2: Run the focused tests to verify RED**
 
   Run from `server`:
 
@@ -98,7 +98,7 @@
 
   Expected result: the command action is rejected or no Scope operation exists, so the new tests fail for the missing source-less batch behavior.
 
-- [ ] **Step 3: Write the minimal implementation**
+- [x] **Step 3: Write the minimal implementation**
 
   - Add source-less Scope action routing while keeping Repo-level Update and Install all actions.
   - Resolve the current Scope lock once, process its sources in stable order, and reuse the latest Repo helper plus existing managed-skill reconciliation for each source.
@@ -106,11 +106,11 @@
   - On a source failure, do not install from its old checkout; continue with remaining sources. Preserve the existing Project transaction and Global central-link semantics.
   - Trigger the existing operation-done/catalog refresh callback after the batch finishes so the UI no longer shows stale source state after a successful Update or Install.
 
-- [ ] **Step 4: Run the focused tests to verify GREEN**
+- [x] **Step 4: Run the focused tests to verify GREEN**
 
   Run the same Scope operation test command. Expected result: all batch success, partial failure and skip-on-failure assertions pass.
 
-- [ ] **Step 5: Run focused regression checks**
+- [x] **Step 5: Run focused regression checks**
 
   Run:
 
