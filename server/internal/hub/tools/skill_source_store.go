@@ -41,6 +41,10 @@ func newSkillSourceStore(homeDir string) *skillSourceStore {
 }
 
 func (s *skillSourceStore) repositoryPath(sourceKey string) string {
+	return filepath.Join(s.root, flatSkillSourceName(sourceKey))
+}
+
+func (s *skillSourceStore) nestedRepositoryPath(sourceKey string) string {
 	components := skillSourcePathComponents(sourceKey)
 	return filepath.Join(append([]string{s.root}, components...)...)
 }
@@ -51,6 +55,10 @@ func (s *skillSourceStore) legacyRepositoryPath(sourceKey string) string {
 }
 
 func (s *skillSourceStore) lockPath(sourceKey string) string {
+	return filepath.Join(s.root, ".locks", flatSkillSourceName(sourceKey)+".lock")
+}
+
+func (s *skillSourceStore) nestedLockPath(sourceKey string) string {
 	components := skillSourcePathComponents(sourceKey)
 	if len(components) > 0 {
 		components[len(components)-1] += ".lock"
@@ -83,10 +91,17 @@ func (s *skillSourceStore) acquireSourceLock(ctx context.Context, sourceKey stri
 		return nil, errors.New("skill source key is required")
 	}
 	lockPaths := []string{s.lockPath(sourceKey)}
-	legacyRepositoryPath := s.legacyRepositoryPath(sourceKey)
-	legacyLockPath := s.legacyLockPath(sourceKey)
-	if pathExists(legacyRepositoryPath) || pathExists(legacyLockPath) {
-		lockPaths = append(lockPaths, legacyLockPath)
+	legacyPaths := []struct {
+		repository string
+		lock       string
+	}{
+		{repository: s.nestedRepositoryPath(sourceKey), lock: s.nestedLockPath(sourceKey)},
+		{repository: s.legacyRepositoryPath(sourceKey), lock: s.legacyLockPath(sourceKey)},
+	}
+	for _, legacy := range legacyPaths {
+		if pathExists(legacy.repository) || pathExists(legacy.lock) {
+			lockPaths = appendUniquePath(lockPaths, legacy.lock)
+		}
 	}
 	releases := make([]func(), 0, len(lockPaths))
 	for _, lockPath := range lockPaths {
@@ -113,25 +128,57 @@ func (s *skillSourceStore) acquireSourceLock(ctx context.Context, sourceKey stri
 }
 
 func (s *skillSourceStore) migrateLegacyRepository(sourceKey string) error {
-	readablePath := s.repositoryPath(sourceKey)
-	if _, err := os.Stat(readablePath); err == nil {
+	flatPath := s.repositoryPath(sourceKey)
+	if _, err := os.Stat(flatPath); err == nil {
 		return nil
 	} else if !errors.Is(err, os.ErrNotExist) {
 		return fmt.Errorf("inspect skill source store: %w", err)
 	}
-	legacyPath := s.legacyRepositoryPath(sourceKey)
-	if _, err := os.Stat(legacyPath); errors.Is(err, os.ErrNotExist) {
+	legacyPaths := []string{s.nestedRepositoryPath(sourceKey), s.legacyRepositoryPath(sourceKey)}
+	for _, legacyPath := range legacyPaths {
+		if legacyPath == flatPath {
+			continue
+		}
+		if _, err := os.Stat(legacyPath); errors.Is(err, os.ErrNotExist) {
+			continue
+		} else if err != nil {
+			return fmt.Errorf("inspect legacy skill source store: %w", err)
+		}
+		if err := os.MkdirAll(filepath.Dir(flatPath), 0o755); err != nil {
+			return fmt.Errorf("create readable skill source store: %w", err)
+		}
+		if err := os.Rename(legacyPath, flatPath); err != nil {
+			return fmt.Errorf("migrate legacy skill source store: %w", err)
+		}
 		return nil
-	} else if err != nil {
-		return fmt.Errorf("inspect legacy skill source store: %w", err)
-	}
-	if err := os.MkdirAll(filepath.Dir(readablePath), 0o755); err != nil {
-		return fmt.Errorf("create readable skill source store: %w", err)
-	}
-	if err := os.Rename(legacyPath, readablePath); err != nil {
-		return fmt.Errorf("migrate legacy skill source store: %w", err)
 	}
 	return nil
+}
+
+func (s *skillSourceStore) repositoryPathForRead(sourceKey string) (string, error) {
+	paths := []string{s.repositoryPath(sourceKey), s.nestedRepositoryPath(sourceKey), s.legacyRepositoryPath(sourceKey)}
+	seen := make(map[string]struct{}, len(paths))
+	for _, path := range paths {
+		if _, exists := seen[path]; exists {
+			continue
+		}
+		seen[path] = struct{}{}
+		if _, err := os.Stat(path); err == nil {
+			return path, nil
+		} else if !errors.Is(err, os.ErrNotExist) {
+			return "", err
+		}
+	}
+	return "", os.ErrNotExist
+}
+
+func appendUniquePath(paths []string, path string) []string {
+	for _, existing := range paths {
+		if existing == path {
+			return paths
+		}
+	}
+	return append(paths, path)
 }
 
 func pathExists(path string) bool {
@@ -140,17 +187,29 @@ func pathExists(path string) bool {
 }
 
 func skillSourcePathComponents(sourceKey string) []string {
+	return skillSourcePathComponentsWithDash(sourceKey, true)
+}
+
+func flatSkillSourceName(sourceKey string) string {
+	components := skillSourcePathComponentsWithDash(sourceKey, false)
+	if len(components) == 0 {
+		return "~00"
+	}
+	return strings.Join(components, "--")
+}
+
+func skillSourcePathComponentsWithDash(sourceKey string, allowDash bool) []string {
 	parts := strings.FieldsFunc(strings.ToLower(strings.TrimSpace(sourceKey)), func(r rune) bool {
 		return r == '/' || r == '\\'
 	})
 	components := make([]string, 0, len(parts))
 	for _, part := range parts {
-		components = append(components, escapeSkillSourcePathComponent(part))
+		components = append(components, escapeSkillSourcePathComponent(part, allowDash))
 	}
 	return components
 }
 
-func escapeSkillSourcePathComponent(value string) string {
+func escapeSkillSourcePathComponent(value string, allowDash bool) string {
 	if value == "." || value == ".." {
 		return "~" + value
 	}
@@ -159,7 +218,7 @@ func escapeSkillSourcePathComponent(value string) string {
 		char := value[index]
 		allowed := (char >= 'a' && char <= 'z') ||
 			(char >= '0' && char <= '9') ||
-			char == '.' || char == '-' || char == '_' || char == '@'
+			char == '.' || char == '_' || char == '@' || (allowDash && char == '-')
 		if index == len(value)-1 && (char == '.' || char == ' ') {
 			allowed = false
 		}
