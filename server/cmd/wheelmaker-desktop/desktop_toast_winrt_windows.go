@@ -84,6 +84,7 @@ func mustParseGUID(s string) winrtGUID {
 
 var (
 	iidIUnknown                        = winrtGUID{data4: [8]byte{0xC0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x46}}
+	iidIClassFactory                   = winrtGUID{data1: 0x1, data4: [8]byte{0xC0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x46}}
 	iidIXmlDocument                    = mustParseGUID("{f7f3a506-1e87-42d6-bcfb-b8c809fa5494}")
 	iidIXmlDocumentIO                  = mustParseGUID("{6cd0e74e-ee65-4489-9ebf-ca43e87ba637}")
 	iidIToastNotificationManagerStats  = mustParseGUID("{50ac103f-d235-4598-bbef-98fe4d1a3ad4}")
@@ -189,6 +190,18 @@ func releaseDesktopToastIcon(home string) (string, error) {
 	return path, nil
 }
 
+// desktopToastAUMIDValues are the registry values written under the AUMID
+// key. IconBackgroundColor tints the plate behind the toast header icon with
+// the WheelMaker brand navy.
+func desktopToastAUMIDValues(iconPath string) [][2]string {
+	return [][2]string{
+		{"DisplayName", "WheelMaker"},
+		{"IconUri", iconPath},
+		{"IconBackgroundColor", "FF0A1E44"},
+		{"CustomActivator", desktopToastActivatorCLSID},
+	}
+}
+
 // writeDesktopToastRegistry (re)registers the toast identity under HKCU so the
 // toast header shows the WheelMaker name and icon and clicks reach our COM
 // activator. All values follow the current exe, so dev and release builds
@@ -199,11 +212,7 @@ func writeDesktopToastRegistry(exePath, iconPath string) error {
 		return fmt.Errorf("open AUMID key: %w", err)
 	}
 	defer aumidKey.Close()
-	for _, value := range [][2]string{
-		{"DisplayName", "WheelMaker"},
-		{"IconUri", iconPath},
-		{"CustomActivator", desktopToastActivatorCLSID},
-	} {
+	for _, value := range desktopToastAUMIDValues(iconPath) {
 		if err := aumidKey.SetStringValue(value[0], value[1]); err != nil {
 			return fmt.Errorf("set %s: %w", value[0], err)
 		}
@@ -298,6 +307,59 @@ func desktopToastActivatorActivate(this, app, args, data, count uintptr) uintptr
 	return 0
 }
 
+// The shell reaches the activator through standard COM local-server
+// activation: it queries the registered class object for IClassFactory and
+// calls CreateInstance. The class object must therefore implement
+// IClassFactory; without it activation fails with E_NOINTERFACE and toast
+// clicks are silently dropped.
+type desktopToastClassFactoryVtbl struct {
+	queryInterface uintptr
+	addRef         uintptr
+	release        uintptr
+	createInstance uintptr
+	lockServer     uintptr
+}
+
+type desktopToastClassFactory struct {
+	vtable *desktopToastClassFactoryVtbl
+}
+
+var desktopToastClassFactoryInstance = &desktopToastClassFactory{
+	vtable: &desktopToastClassFactoryVtbl{
+		queryInterface: windows.NewCallback(desktopToastFactoryQueryInterface),
+		addRef:         windows.NewCallback(desktopToastFactoryAddRef),
+		release:        windows.NewCallback(desktopToastFactoryRelease),
+		createInstance: windows.NewCallback(desktopToastFactoryCreateInstance),
+		lockServer:     windows.NewCallback(desktopToastFactoryLockServer),
+	},
+}
+
+func desktopToastFactoryQueryInterface(this uintptr, riid *winrtGUID, out *uintptr) uintptr {
+	*out = 0
+	if *riid == iidIUnknown || *riid == iidIClassFactory {
+		*out = this
+		return 0
+	}
+	return eNoInterface
+}
+
+func desktopToastFactoryAddRef(this uintptr) uintptr  { return 1 }
+func desktopToastFactoryRelease(this uintptr) uintptr { return 1 }
+
+func desktopToastFactoryLockServer(this, lock uintptr) uintptr { return 0 }
+
+func desktopToastFactoryCreateInstance(this, outer uintptr, riid *winrtGUID, out *uintptr) uintptr {
+	*out = 0
+	if outer != 0 {
+		return 0x80040110 // CLASS_E_NOAGGREGATION
+	}
+	if *riid == iidIUnknown || *riid == iidINotificationActivationCallback {
+		*out = uintptr(unsafe.Pointer(desktopToastActivatorInstance))
+		return 0
+	}
+	return eNoInterface
+}
+
 // --- WinRT toast delivery ---
 
 type win32DesktopToastOps struct {
@@ -348,7 +410,7 @@ func (o *win32DesktopToastOps) registerActivator() error {
 	}
 	ret, _, _ = procCoRegisterClassObject.Call(
 		uintptr(unsafe.Pointer(&clsidDesktopToastActivator)),
-		uintptr(unsafe.Pointer(desktopToastActivatorInstance)),
+		uintptr(unsafe.Pointer(desktopToastClassFactoryInstance)),
 		clsctxLocalServer,
 		regclsMultipleUse,
 		uintptr(unsafe.Pointer(&o.classCookie)),

@@ -271,3 +271,20 @@ func TestDesktopToastIconReleaseWritesEmbeddedPNG(t *testing.T) {
 		t.Fatalf("icon rewritten unnecessarily")
 	}
 }
+
+func TestDesktopToastAUMIDValues(t *testing.T) {
+	got := map[string]string{}
+	for _, v := range desktopToastAUMIDValues(`C:\icon.png`) {
+		got[v[0]] = v[1]
+	}
+	for want, value := range map[string]string{
+		"DisplayName":         "WheelMaker",
+		"IconUri":             `C:\icon.png`,
+		"IconBackgroundColor": "FF0A1E44",
+		"CustomActivator":     desktopToastActivatorCLSID,
+	} {
+		if got[want] != value {
+			t.Fatalf("%s = %q, want %q", want, got[want], value)
+		}
+	}
+}
