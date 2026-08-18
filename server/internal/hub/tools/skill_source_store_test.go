@@ -3,6 +3,8 @@ package tools
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -124,6 +126,47 @@ func TestNativeSkillSourceStoreRefreshFetchesWithoutChangingCheckout(t *testing.
 	}
 	if updated.Commit != refreshed.RemoteCommit {
 		t.Fatalf("updated commit=%s, want remote %s", updated.Commit, refreshed.RemoteCommit)
+	}
+}
+
+func TestNativeSkillSourceStoreUsesReadableSourceKeyPaths(t *testing.T) {
+	home := t.TempDir()
+	store := newSkillSourceStore(home)
+
+	if got, want := filepath.ToSlash(store.repositoryPath("github.com/owner/repo")), filepath.ToSlash(filepath.Join(home, ".wheelmaker", "skills", "github.com", "owner", "repo")); got != want {
+		t.Fatalf("repositoryPath()=%q, want %q", got, want)
+	}
+	if got, want := filepath.ToSlash(store.repositoryPath("github.com:8443/owner/repo")), filepath.ToSlash(filepath.Join(home, ".wheelmaker", "skills", "github.com~3A8443", "owner", "repo")); got != want {
+		t.Fatalf("repositoryPath(port)=%q, want %q", got, want)
+	}
+	if got, want := filepath.ToSlash(store.lockPath("github.com/owner/repo")), filepath.ToSlash(filepath.Join(home, ".wheelmaker", "skills", ".locks", "github.com", "owner", "repo.lock")); got != want {
+		t.Fatalf("lockPath()=%q, want %q", got, want)
+	}
+}
+
+func TestNativeSkillSourceStoreMigratesLegacyHashedRepository(t *testing.T) {
+	repository := t.TempDir()
+	initSkillSourceGitFixture(t, repository, "alpha")
+	home := t.TempDir()
+	key := "github.com/example/skills"
+	digest := sha256.Sum256([]byte(strings.ToLower(strings.TrimSpace(key))))
+	legacyPath := filepath.Join(home, ".wheelmaker", "skills", hex.EncodeToString(digest[:]))
+	if err := os.MkdirAll(filepath.Dir(legacyPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	runSkillSourceGit(t, filepath.Dir(legacyPath), "clone", "--quiet", repository, legacyPath)
+
+	store := newSkillSourceStore(home)
+	checkout, err := store.ensureRepo(context.Background(), skillSourceSnapshot{Source: repository, SourceKey: key})
+	if err != nil {
+		t.Fatalf("ensureRepo() error=%v", err)
+	}
+	wantPath := filepath.Join(home, ".wheelmaker", "skills", "github.com", "example", "skills")
+	if checkout.Path != wantPath {
+		t.Fatalf("checkout.Path=%q, want %q", checkout.Path, wantPath)
+	}
+	if _, err := os.Stat(legacyPath); !os.IsNotExist(err) {
+		t.Fatalf("legacy repository still exists: %v", err)
 	}
 }
 

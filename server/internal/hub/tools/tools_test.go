@@ -3911,6 +3911,36 @@ func TestSkillSourceCatalogDistinguishesCopiesDifferAndNeedsRefresh(t *testing.T
 	}
 }
 
+func TestSkillSourceCatalogAllowsInstallingCachedUninstalledSkillsWhileNeedsRefresh(t *testing.T) {
+	installedPath := filepath.Join(t.TempDir(), "installed")
+	writeSkillSourceFixture(t, installedPath, "# installed\n", nil)
+	lock := skillSourceLock{
+		Version: skillSourceLockVersion,
+		Sources: []skillSourceSnapshot{{
+			Source:        "https://github.com/example/catalog.git",
+			SourceKey:     "github.com/example/catalog",
+			ManagedSkills: []string{"installed"},
+			SkillList: []skillSourceSkillSnapshot{
+				{Name: "installed", SkillPath: "skills/installed/SKILL.md"},
+				{Name: "cached-new", SkillPath: "skills/cached-new/SKILL.md"},
+			},
+		}},
+	}
+	catalog := composeSkillSourceCatalog(lock, nil, []skillSourceInstalledSnapshot{{
+		Name: "installed", Managed: true, Locations: []string{filepath.Join(installedPath, "SKILL.md")},
+	}}, nil)
+	if catalog.Sources[0].Status != "needs_refresh" {
+		t.Fatalf("source status=%q, want needs_refresh", catalog.Sources[0].Status)
+	}
+	rows := skillSourceRowsByName(catalog.Sources[0].Skills)
+	if rows["cached-new"].Status != "uninstalled" || !rows["cached-new"].CanInstall {
+		t.Fatalf("cached uninstalled row=%#v, want installable", rows["cached-new"])
+	}
+	if rows["installed"].CanInstall {
+		t.Fatalf("installed row=%#v, want non-installable", rows["installed"])
+	}
+}
+
 func TestSkillSourceCatalogTreatsSymlinkedCopiesAsSameContent(t *testing.T) {
 	root := t.TempDir()
 	first := filepath.Join(root, "agents", "alpha")

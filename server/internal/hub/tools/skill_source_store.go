@@ -41,11 +41,24 @@ func newSkillSourceStore(homeDir string) *skillSourceStore {
 }
 
 func (s *skillSourceStore) repositoryPath(sourceKey string) string {
+	components := skillSourcePathComponents(sourceKey)
+	return filepath.Join(append([]string{s.root}, components...)...)
+}
+
+func (s *skillSourceStore) legacyRepositoryPath(sourceKey string) string {
 	digest := sha256.Sum256([]byte(strings.ToLower(strings.TrimSpace(sourceKey))))
 	return filepath.Join(s.root, hex.EncodeToString(digest[:]))
 }
 
 func (s *skillSourceStore) lockPath(sourceKey string) string {
+	components := skillSourcePathComponents(sourceKey)
+	if len(components) > 0 {
+		components[len(components)-1] += ".lock"
+	}
+	return filepath.Join(append([]string{s.root, ".locks"}, components...)...)
+}
+
+func (s *skillSourceStore) legacyLockPath(sourceKey string) string {
 	digest := sha256.Sum256([]byte(strings.ToLower(strings.TrimSpace(sourceKey))))
 	return filepath.Join(s.root, ".locks", hex.EncodeToString(digest[:])+".lock")
 }
@@ -56,6 +69,9 @@ func (s *skillSourceStore) withSourceLock(ctx context.Context, sourceKey string,
 		return skillSourceCheckout{}, err
 	}
 	defer release()
+	if err := s.migrateLegacyRepository(sourceKey); err != nil {
+		return skillSourceCheckout{}, err
+	}
 	return fn()
 }
 
@@ -66,14 +82,113 @@ func (s *skillSourceStore) acquireSourceLock(ctx context.Context, sourceKey stri
 	if strings.TrimSpace(sourceKey) == "" {
 		return nil, errors.New("skill source key is required")
 	}
-	if err := os.MkdirAll(filepath.Dir(s.lockPath(sourceKey)), 0o755); err != nil {
-		return nil, fmt.Errorf("create skill source lock directory: %w", err)
+	lockPaths := []string{s.lockPath(sourceKey)}
+	legacyRepositoryPath := s.legacyRepositoryPath(sourceKey)
+	legacyLockPath := s.legacyLockPath(sourceKey)
+	if pathExists(legacyRepositoryPath) || pathExists(legacyLockPath) {
+		lockPaths = append(lockPaths, legacyLockPath)
 	}
-	release, err := shared.AcquireFileLock(s.lockPath(sourceKey))
-	if err != nil {
-		return nil, fmt.Errorf("lock skill source %s: %w", sourceKey, err)
+	releases := make([]func(), 0, len(lockPaths))
+	for _, lockPath := range lockPaths {
+		if err := os.MkdirAll(filepath.Dir(lockPath), 0o755); err != nil {
+			for index := len(releases) - 1; index >= 0; index-- {
+				releases[index]()
+			}
+			return nil, fmt.Errorf("create skill source lock directory: %w", err)
+		}
+		release, err := shared.AcquireFileLock(lockPath)
+		if err != nil {
+			for index := len(releases) - 1; index >= 0; index-- {
+				releases[index]()
+			}
+			return nil, fmt.Errorf("lock skill source %s: %w", sourceKey, err)
+		}
+		releases = append(releases, release)
 	}
-	return release, nil
+	return func() {
+		for index := len(releases) - 1; index >= 0; index-- {
+			releases[index]()
+		}
+	}, nil
+}
+
+func (s *skillSourceStore) migrateLegacyRepository(sourceKey string) error {
+	readablePath := s.repositoryPath(sourceKey)
+	if _, err := os.Stat(readablePath); err == nil {
+		return nil
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return fmt.Errorf("inspect skill source store: %w", err)
+	}
+	legacyPath := s.legacyRepositoryPath(sourceKey)
+	if _, err := os.Stat(legacyPath); errors.Is(err, os.ErrNotExist) {
+		return nil
+	} else if err != nil {
+		return fmt.Errorf("inspect legacy skill source store: %w", err)
+	}
+	if err := os.MkdirAll(filepath.Dir(readablePath), 0o755); err != nil {
+		return fmt.Errorf("create readable skill source store: %w", err)
+	}
+	if err := os.Rename(legacyPath, readablePath); err != nil {
+		return fmt.Errorf("migrate legacy skill source store: %w", err)
+	}
+	return nil
+}
+
+func pathExists(path string) bool {
+	_, err := os.Stat(path)
+	return err == nil || !errors.Is(err, os.ErrNotExist)
+}
+
+func skillSourcePathComponents(sourceKey string) []string {
+	parts := strings.FieldsFunc(strings.ToLower(strings.TrimSpace(sourceKey)), func(r rune) bool {
+		return r == '/' || r == '\\'
+	})
+	components := make([]string, 0, len(parts))
+	for _, part := range parts {
+		components = append(components, escapeSkillSourcePathComponent(part))
+	}
+	return components
+}
+
+func escapeSkillSourcePathComponent(value string) string {
+	if value == "." || value == ".." {
+		return "~" + value
+	}
+	var escaped strings.Builder
+	for index := 0; index < len(value); index++ {
+		char := value[index]
+		allowed := (char >= 'a' && char <= 'z') ||
+			(char >= '0' && char <= '9') ||
+			char == '.' || char == '-' || char == '_' || char == '@'
+		if index == len(value)-1 && (char == '.' || char == ' ') {
+			allowed = false
+		}
+		if allowed {
+			escaped.WriteByte(char)
+			continue
+		}
+		fmt.Fprintf(&escaped, "~%02X", char)
+	}
+	if escaped.Len() == 0 {
+		return "~00"
+	}
+	component := escaped.String()
+	if isWindowsReservedSkillPathComponent(component) {
+		return "~" + component
+	}
+	return component
+}
+
+func isWindowsReservedSkillPathComponent(value string) bool {
+	upper := strings.ToUpper(value)
+	switch upper {
+	case "CON", "PRN", "AUX", "NUL":
+		return true
+	}
+	if len(upper) == 4 && (strings.HasPrefix(upper, "COM") || strings.HasPrefix(upper, "LPT")) {
+		return upper[3] >= '1' && upper[3] <= '9'
+	}
+	return false
 }
 
 func (s *skillSourceStore) ensureRepo(ctx context.Context, source skillSourceSnapshot) (skillSourceCheckout, error) {

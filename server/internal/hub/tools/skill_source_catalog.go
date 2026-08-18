@@ -137,6 +137,12 @@ func populateSkillSourceWorkingTree(ctx context.Context, homeDir string, lock *s
 		source := &lock.Sources[index]
 		path := store.repositoryPath(source.SourceKey)
 		if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {
+			legacyPath := store.legacyRepositoryPath(source.SourceKey)
+			if _, legacyErr := os.Stat(legacyPath); legacyErr == nil {
+				path = legacyPath
+			}
+		}
+		if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {
 			source.Status = "needs_clone"
 			continue
 		} else if err != nil {
@@ -397,7 +403,7 @@ func composeSkillSourceCatalog(
 			remoteNames[key] = struct{}{}
 			row := SkillsSourceCatalogSkillSnapshot{
 				Name: remote.Name, SkillPath: remote.SkillPath, RemoteContentSHA256: remote.ContentSHA256,
-				Status: "uninstalled", CanInstall: view.Status == "ready",
+				Status: "uninstalled", CanInstall: true,
 			}
 			local, localExists := installedByName[key]
 			if localExists && ownerByName[key] == strings.ToLower(source.SourceKey) {
