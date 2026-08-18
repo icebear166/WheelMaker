@@ -219,11 +219,11 @@ Checkpoint repository migrator, equivalence tests, CLI integration, and document
 
 **Acceptance:** The existing private Wiki runs from the same Kit as new users, preserves article IDs/URLs/catalog/search/attachments, and keeps the current online release active until a new authenticated candidate passes.
 
-- [ ] **Step 1: Establish a separate private-repository Git worktree and recovery point**
+- [x] **Step 1: Establish a separate private-repository Git worktree and recovery point**
 
 Read its own instructions and status, fetch its remote, create a migration branch/worktree from the latest approved private feature branch, and record all pre-existing modifications. Do not mutate the currently checked-out private worktree.
 
-- [ ] **Step 2: Run migration dry-run and equivalence report**
+- [x] **Step 2: Run migration dry-run and equivalence report**
 
 Run: `node personal-wiki-kit/src/cli.mjs migrate-repository --config "$env:USERPROFILE/.personal-wiki/config.json" --dry-run --report .wiki-kit-out/private-migration-report.json`
 
@@ -254,7 +254,7 @@ Record private branch/worktree, commit hashes, push/merge status, and cleanup se
 
 **Acceptance:** Public Kit, WheelMaker entry, generated private repository, and migrated existing Wiki satisfy every spec acceptance item with evidence or are reported as externally blocked without unsafe partial cutover.
 
-- [ ] **Step 1: Run Kit full validation**
+- [x] **Step 1: Run Kit full validation**
 
 Run: `npm test && npm run typecheck && npm run build && npm run check:public && npm run smoke:windows-local`
 
@@ -262,7 +262,7 @@ Workdir: `personal-wiki-kit`
 
 Expected: PASS.
 
-- [ ] **Step 2: Run WheelMaker focused validation**
+- [x] **Step 2: Run WheelMaker focused validation**
 
 Run: `go test ./internal/shared ./internal/registry ./internal/protocol ./cmd/wheelmaker`
 
@@ -274,13 +274,13 @@ Workdir: `app`
 
 Expected: PASS.
 
-- [ ] **Step 3: Run security and privacy gates**
+- [x] **Step 3: Run security and privacy gates**
 
 Run: `pwsh -File scripts/test_security_hooks.ps1; pwsh -File scripts/test_security_acceptance_ps1.ps1`
 
 Expected: PASS.
 
-Run: `rg -n -i "[A-Z]:/Users/|/home/[^/]+|BEGIN .*PRIVATE KEY|github_pat_|gh[pousr]_" personal-wiki-kit`
+Run: `rg -n -i '\b[A-Z]:[\\/]Users[\\/][A-Za-z0-9._-]+|/home/[A-Za-z0-9._-]+/|-----BEGIN (RSA |EC |OPENSSH |DSA )?PRIVATE KEY-----|github_pat_[A-Za-z0-9_]{20,}|gh[pousr]_[A-Za-z0-9_]{20,}' personal-wiki-kit`
 
 Expected: Exit 1 with no matches.
 
