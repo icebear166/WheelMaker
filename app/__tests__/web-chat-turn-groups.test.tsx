@@ -140,11 +140,13 @@ describe('chat turn groups', () => {
     expect(header).toContain('height: 28px;');
     expect(header).toContain('background: transparent;');
     expect(header).toContain('border-radius: 6px;');
+    expect(header).toContain('border-bottom: 1px solid var(--border-subtle);');
     expect(header).toContain('padding: 0 6px;');
     expect(header).toContain('font: inherit;');
     expect(group).not.toContain('accent-primary');
     expect(chevron).toContain('color: var(--text-tertiary);');
     expect(label).toContain('font-weight: 500;');
+    expect(label).toContain('font-size: 13px;');
     expect(label).toContain('font-variant-numeric: tabular-nums;');
     expect(styles).toMatch(
       /\.chat-work-group-header:hover,[\s\S]*?\.chat-work-group-header:focus-visible\s*\{[^}]*background:\s*color-mix\(in srgb, var\(--hover\) 78%, transparent\);/,
@@ -167,6 +169,19 @@ describe('chat turn groups', () => {
     expect(styles).toMatch(
       /\.chat-view-width-fixed-800 \.chat-work-group \.chat-view-content,\s*\n\s*\.chat-view-width-fixed-800-edge-surfaces \.chat-work-group \.chat-view-content\s*\{[^}]*width:\s*100%;[^}]*margin-left:\s*0;[^}]*margin-right:\s*0;/,
     );
+  });
+
+  test('styles chat Markdown blockquotes as compact quote surfaces', () => {
+    const styles = fs.readFileSync(
+      path.join(__dirname, '..', 'web', 'src', 'styles', 'chat.css'),
+      'utf8',
+    );
+    const quote = styles.match(/\.chat-main-message blockquote \{([\s\S]*?)\}/)?.[1] ?? '';
+
+    expect(quote).toContain('border-left: 3px solid');
+    expect(quote).toContain('padding: 8px 14px;');
+    expect(quote).toContain('border-radius: 0 6px 6px 0;');
+    expect(quote).toContain('background:');
   });
 
   test('highlights matching characters inside structured prompt text', async () => {

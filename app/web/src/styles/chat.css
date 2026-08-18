@@ -4370,6 +4370,7 @@ button.chat-hub-skill-name:disabled {
   gap: 6px;
   padding: 0 6px;
   border: 0;
+  border-bottom: 1px solid var(--border-subtle);
   border-radius: 6px;
   background: transparent;
   color: inherit;
@@ -4417,7 +4418,7 @@ button.chat-hub-skill-name:disabled {
   min-width: 0;
   overflow: hidden;
   color: var(--text-secondary);
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 500;
   font-variant-numeric: tabular-nums;
   text-overflow: ellipsis;
@@ -5471,6 +5472,22 @@ button.chat-hub-skill-name:disabled {
   margin: 0 0 10px 0;
 }
 
+.chat-main-message blockquote {
+  padding: 8px 14px;
+  border-left: 3px solid color-mix(in srgb, var(--text-tertiary) 55%, transparent);
+  border-radius: 0 6px 6px 0;
+  background: color-mix(in srgb, var(--surface-panel) 76%, transparent);
+  color: color-mix(in srgb, var(--chat-message-text, var(--text-primary)) 86%, var(--text-secondary));
+}
+
+.chat-main-message blockquote > :first-child {
+  margin-top: 0;
+}
+
+.chat-main-message blockquote > :last-child {
+  margin-bottom: 0;
+}
+
 .chat-main-message ul,
 .chat-main-message ol {
   padding-left: 1.5em;
@@ -5783,6 +5800,36 @@ li.chat-reply-target::marker {
   gap: 1px;
   margin-top: 3px;
   padding-left: 21px;
+}
+
+.chat-prompt-artifact-files-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin: 4px 0 0 21px;
+  border: 0;
+  padding: 4px 6px 4px 0;
+  background: transparent;
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 11px;
+  line-height: 1.2;
+  cursor: pointer;
+}
+
+.chat-prompt-artifact-files-toggle:hover,
+.chat-prompt-artifact-files-toggle:focus-visible {
+  color: var(--text-primary);
+}
+
+.chat-prompt-artifact-files-toggle:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent-primary) 58%, transparent);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+.chat-prompt-artifact-files-toggle .sl-icon {
+  color: var(--text-tertiary);
 }
 
 .chat-prompt-artifact-file {

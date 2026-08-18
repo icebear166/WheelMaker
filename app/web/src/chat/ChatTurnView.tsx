@@ -195,6 +195,8 @@ function promptArtifactViewKey(message: RegistryChatMessage, artifact: RegistryS
   return `${message.sessionId}:${artifact.artifactId}`;
 }
 
+const PROMPT_ARTIFACT_VISIBLE_FILE_LIMIT = 3;
+
 const CollapsibleThought = React.memo(function CollapsibleThought({
   text,
   finished,
@@ -246,6 +248,84 @@ const CollapsibleThought = React.memo(function CollapsibleThought({
         </div>
       ) : null}
     </div>
+  );
+});
+
+const PromptArtifactFileList = React.memo(function PromptArtifactFileList({
+  artifact,
+  message,
+  onOpenPromptArtifact,
+  onOpenPromptArtifactFileContextMenu,
+}: {
+  artifact: RegistrySessionPromptArtifact;
+  message: RegistryChatMessage;
+  onOpenPromptArtifact?: (artifact: RegistrySessionPromptArtifact, message: RegistryChatMessage, filePath?: string) => void;
+  onOpenPromptArtifactFileContextMenu?: (
+    artifact: RegistrySessionPromptArtifact,
+    message: RegistryChatMessage,
+    file: RegistrySessionPromptArtifactFile,
+    position: {x: number; y: number},
+  ) => void;
+}) {
+  const [expanded, setExpanded] = React.useState(false);
+  const bindFileContextMenu = useContextMenuTargetGesture<{
+    artifact: RegistrySessionPromptArtifact;
+    message: RegistryChatMessage;
+    file: RegistrySessionPromptArtifactFile;
+  }>((target, position) => {
+    onOpenPromptArtifactFileContextMenu?.(
+      target.artifact,
+      target.message,
+      target.file,
+      position,
+    );
+  });
+  const files = artifact.files ?? [];
+  const hasMoreFiles = files.length > PROMPT_ARTIFACT_VISIBLE_FILE_LIMIT;
+  const visibleFiles = hasMoreFiles && !expanded
+    ? files.slice(0, PROMPT_ARTIFACT_VISIBLE_FILE_LIMIT)
+    : files;
+  const toggleLabel = expanded
+    ? 'Show fewer files'
+    : `Show ${files.length - PROMPT_ARTIFACT_VISIBLE_FILE_LIMIT} more files`;
+
+  return (
+    <>
+      <div className="chat-prompt-artifact-files">
+        {visibleFiles.map(file => (
+          <button
+            key={`${artifact.artifactId}:${file.path}`}
+            type="button"
+            className="chat-prompt-artifact-file"
+            onClick={() => onOpenPromptArtifact?.(artifact, message, file.path)}
+            {...(onOpenPromptArtifactFileContextMenu
+              ? bindFileContextMenu({artifact, message, file})
+              : {})}
+          >
+            <span className={`chat-prompt-artifact-file-status status-${file.status.toLowerCase()}`}>
+              {file.status}
+            </span>
+            <span className="chat-prompt-artifact-file-path">{file.path}</span>
+            <span className="chat-prompt-artifact-file-counts">
+              {file.additions > 0 ? <span className="additions">+{file.additions}</span> : null}
+              {file.deletions > 0 ? <span className="deletions">-{file.deletions}</span> : null}
+            </span>
+          </button>
+        ))}
+      </div>
+      {hasMoreFiles ? (
+        <button
+          type="button"
+          className="chat-prompt-artifact-files-toggle"
+          aria-expanded={expanded}
+          aria-label={toggleLabel}
+          onClick={() => setExpanded(current => !current)}
+        >
+          <span className="chat-prompt-artifact-files-toggle-label">{toggleLabel}</span>
+          <ChatIcon name={expanded ? 'chevronUp' : 'chevronDown'} size={13} />
+        </button>
+      ) : null}
+    </>
   );
 });
 
@@ -529,18 +609,6 @@ export const ChatTurnView = React.memo(function ChatTurnView({
   promptArtifactErrors = {},
   highlightQuery,
 }: ChatTurnViewProps) {
-  const bindPromptArtifactFileContextMenu = useContextMenuTargetGesture<{
-    artifact: RegistrySessionPromptArtifact;
-    message: RegistryChatMessage;
-    file: RegistrySessionPromptArtifactFile;
-  }>((target, position) => {
-    onOpenPromptArtifactFileContextMenu?.(
-      target.artifact,
-      target.message,
-      target.file,
-      position,
-    );
-  });
   const text = msgText(message.method, message.param).trim();
   const kind = msgKind(message.method);
   const markdownCapabilities = useMarkdownCapabilityPlugins(text);
@@ -922,28 +990,12 @@ export const ChatTurnView = React.memo(function ChatTurnView({
                     <span>{promptArtifactCountLabel(artifact.fileCount || artifact.files?.length || 0)}</span>
                   </button>
                   {artifact.files && artifact.files.length > 0 ? (
-                    <div className="chat-prompt-artifact-files">
-                      {artifact.files.map(file => (
-                        <button
-                          key={`${artifact.artifactId}:${file.path}`}
-                          type="button"
-                          className="chat-prompt-artifact-file"
-                          onClick={() => onOpenPromptArtifact?.(artifact, message, file.path)}
-                          {...(onOpenPromptArtifactFileContextMenu
-                            ? bindPromptArtifactFileContextMenu({artifact, message, file})
-                            : {})}
-                        >
-                          <span className={`chat-prompt-artifact-file-status status-${file.status.toLowerCase()}`}>
-                            {file.status}
-                          </span>
-                          <span className="chat-prompt-artifact-file-path">{file.path}</span>
-                          <span className="chat-prompt-artifact-file-counts">
-                            {file.additions > 0 ? <span className="additions">+{file.additions}</span> : null}
-                            {file.deletions > 0 ? <span className="deletions">-{file.deletions}</span> : null}
-                          </span>
-                        </button>
-                      ))}
-                    </div>
+                    <PromptArtifactFileList
+                      artifact={artifact}
+                      message={message}
+                      onOpenPromptArtifact={onOpenPromptArtifact}
+                      onOpenPromptArtifactFileContextMenu={onOpenPromptArtifactFileContextMenu}
+                    />
                   ) : null}
                   {error ? <div className="chat-prompt-artifact-error">{error}</div> : null}
                 </div>

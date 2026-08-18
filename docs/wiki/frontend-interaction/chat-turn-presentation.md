@@ -37,6 +37,12 @@ Chat 对话以 raw turns 为源数据，Display Index 负责生成适合 `react-
 - 旧历史没有 phase 时，`prompt_done` 前最后一条 assistant message 视为 final answer；此前工作折叠。若最后一条明确为 commentary，则没有 final answer。
 - 展开后复用原有 turn 与 tool group 组件及顺序，只新增顶部折叠栏。展开状态仅属于当前渲染生命周期；重载或切换 session 后默认折叠。
 
+## Completed Work 与 Changed Files
+
+- Completed Work 使用中性、轻量的单行折叠栏：显示耗时标签和右向 chevron，使用底部分隔线与后续回答内容建立层级；点击后展开原有工作内容。
+- Prompt 完成产生 Changed Files 时，列表默认只展示前 3 个文件；剩余文件通过 `Show N more files` 操作展开，再次操作可收起。文件行仍可单独打开对应 diff，摘要操作仍打开完整 diff。
+- 聊天 Markdown 的 blockquote 使用左侧竖线、低对比度底色、内边距和轻微圆角表达引用层级，不改变 Markdown 源文本或复制内容。
+
 ## 搜索与折叠工作组
 
 > 来源：当前产品确认（2026-08-12）

@@ -196,6 +196,39 @@ describe('ChatTurnView option replies', () => {
 });
 
 describe('ChatTurnView Changed Files interactions', () => {
+  it('collapses long Changed Files lists and expands them on demand', async () => {
+    const files = Array.from({length: 5}, (_, index) => ({
+      path: `src/file-${index + 1}.ts`,
+      status: 'M',
+      additions: index + 1,
+      deletions: 0,
+    }));
+    const tree = await renderTurn(message('prompt_done', {
+      artifacts: [{
+        artifactId: 'artifact-1',
+        type: 'diff',
+        format: 'unified-diff',
+        fileCount: files.length,
+        files,
+      }],
+    }));
+
+    expect(tree.root.findAllByProps({className: 'chat-prompt-artifact-file'})).toHaveLength(3);
+    const toggle = tree.root.findByProps({className: 'chat-prompt-artifact-files-toggle'});
+    expect(toggle.props['aria-expanded']).toBe(false);
+    expect(toggle.findByProps({className: 'chat-prompt-artifact-files-toggle-label'}).children)
+      .toEqual(['Show 2 more files']);
+
+    await act(async () => toggle.props.onClick());
+
+    expect(tree.root.findAllByProps({className: 'chat-prompt-artifact-file'})).toHaveLength(files.length);
+    expect(tree.root.findByProps({className: 'chat-prompt-artifact-files-toggle'}).props['aria-expanded'])
+      .toBe(true);
+    expect(tree.root.findByProps({className: 'chat-prompt-artifact-files-toggle'})
+      .findByProps({className: 'chat-prompt-artifact-files-toggle-label'}).children)
+      .toEqual(['Show fewer files']);
+  });
+
   it('keeps left-click diff behavior and forwards only file-row context menus', async () => {
     const onOpenPromptArtifact = jest.fn();
     const onOpenPromptArtifactFileContextMenu = jest.fn();
