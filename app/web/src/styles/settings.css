@@ -2307,9 +2307,9 @@ textarea,
   width: 38px;
   height: 22px;
   margin: 0;
-  border: 1px solid color-mix(in srgb, var(--text-tertiary) 38%, var(--border-subtle));
+  border: 1px solid color-mix(in srgb, var(--text-tertiary) 45%, var(--border-subtle));
   border-radius: 999px;
-  background: color-mix(in srgb, var(--surface-active) 62%, var(--surface-raised));
+  background: color-mix(in srgb, var(--text-tertiary) 38%, var(--surface-raised));
   box-shadow: inset 0 1px 2px color-mix(in srgb, #000 22%, transparent);
   cursor: pointer;
   transition:
@@ -2326,7 +2326,7 @@ textarea,
   width: 16px;
   height: 16px;
   border-radius: 999px;
-  background: var(--text-tertiary);
+  background: #fff;
   box-shadow: 0 1px 2px color-mix(in srgb, #000 40%, transparent);
   transition:
     transform var(--motion-fast) var(--ease-standard),
@@ -2336,14 +2336,12 @@ textarea,
 
 .settings-switch:checked {
   border-color: var(--accent-primary);
-  background: color-mix(in srgb, var(--accent-primary) 62%, var(--surface-raised));
-  box-shadow: inset 0 1px 2px color-mix(in srgb, #000 18%, transparent);
+  background: var(--accent-primary);
+  box-shadow: none;
 }
 
 .settings-switch:checked::after {
   transform: translateX(16px);
-  background: #fff;
-  box-shadow: 0 1px 2px color-mix(in srgb, #000 35%, transparent);
 }
 
 .settings-switch:disabled {
