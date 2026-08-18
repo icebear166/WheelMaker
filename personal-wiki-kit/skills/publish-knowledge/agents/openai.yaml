@@ -1,0 +1,4 @@
+interface:
+  display_name: "发布可靠知识"
+  short_description: "经当前对话明确批准后把可靠长期知识安全发布到私人个人 Wiki"
+  default_prompt: "使用 $publish-knowledge 提议并在我明确批准后发布可靠长期知识。"

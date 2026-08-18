@@ -1,0 +1,4 @@
+interface:
+  display_name: "查询个人 Wiki"
+  short_description: "从已提交的私人个人 Wiki 快照中查询并复用可靠项目知识"
+  default_prompt: "使用 $lookup-knowledge 查询与当前任务相关的已提交个人 Wiki 知识。"

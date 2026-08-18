@@ -203,9 +203,9 @@ Run: `npm run typecheck && npm run build:reader && node --test tests/site-builde
 
 Expected: PASS; production Reader output contains no content article markdown or real infrastructure values.
 
-- [ ] **Step 5: Git checkpoint**
+- [x] **Step 5: Git checkpoint**
 
-Checkpoint Reader, assembler, configuration, and tests.
+Checkpoint: `502bf742 feat(wiki-kit): build sealed reader sites`.
 
 ### Task 5: Move lookup, routing, and publication Skills onto user-level configuration
 
@@ -226,21 +226,21 @@ Checkpoint Reader, assembler, configuration, and tests.
 
 **Acceptance:** Both Skills are fully Chinese, read only `~/.personal-wiki/config.json` and `project-routing.json`, default queries to Git HEAD, preserve multi-root/longest-root/unassigned semantics, and infer Git remote/default branch from the private repository.
 
-- [ ] **Step 1: Write failing configuration, route, query, and Git tests**
+- [x] **Step 1: Write failing configuration, route, query, and Git tests**
 
 Tests assert strict schema/unknown-field rejection, canonical path handling, multiple roots to one project, nested longest root, merged sources, no-match empty IDs, HEAD vs working-tree labels, and remote/default branch inference without committed remote fields.
 
-- [ ] **Step 2: Run tests to verify RED**
+- [x] **Step 2: Run tests to verify RED**
 
 Run: `node --test tests/user-config.test.mjs tests/project-routing.test.mjs tests/query-knowledge.test.mjs tests/git-target.test.mjs`
 
 Expected: FAIL because the modules are absent.
 
-- [ ] **Step 3: Implement minimal modules and Chinese Skills**
+- [x] **Step 3: Implement minimal modules and Chinese Skills**
 
 All scripts accept explicit paths for testing; production defaults resolve `%USERPROFILE%/.personal-wiki`. Skill update instructions must state that Skill code is replaceable while user configuration is outside the Skill tree.
 
-- [ ] **Step 4: Verify GREEN and Skill language contract**
+- [x] **Step 4: Verify GREEN and Skill language contract**
 
 Run: `node --test tests/user-config.test.mjs tests/project-routing.test.mjs tests/query-knowledge.test.mjs tests/git-target.test.mjs`
 
