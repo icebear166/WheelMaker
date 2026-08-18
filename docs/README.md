@@ -13,6 +13,10 @@
 - [`scope/`](scope/)：按需求组织的规格与实施计划。
 - [`plans/`](plans/)：没有独立 scope 的实施计划。
 
+## 外部依赖记录
+
+- [`changelog/`](changelog/)：WheelMaker 关注的 agent runtime npm 版本变更与接入注意事项。
+
 ## 资源
 
 - [`readme-assets/`](readme-assets/)：README 和安装文档使用的图示资源。

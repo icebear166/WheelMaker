@@ -10,7 +10,7 @@
 
 **Tech Stack:** Markdown, YAML, Python 3 standard library, npm registry/tarball commands, Git/web research.
 
-**Verification:** `python -m unittest discover -s .agents/skills/npm-changelog/scripts/tests -v`; skill `quick_validate.py`; `inspect_npm_policy.py`; `validate_changelog.py`; `git diff --check`.
+**Verification:** `python -B -m unittest discover -s .agents/skills/npm-changelog/scripts/tests -v`; skill `quick_validate.py`; `inspect_npm_policy.py`; `validate_changelog.py`; `git diff --check`.
 
 ---
 
@@ -41,7 +41,7 @@ Expected: exit code 0 and no example placeholder files.
 Run:
 
 ```powershell
-python -m unittest discover -s .agents/skills/npm-changelog/scripts/tests -v
+python -B -m unittest discover -s .agents/skills/npm-changelog/scripts/tests -v
 ```
 
 Expected: tests fail through assertions because the helper command files do not yet exist; this confirms the tests exercise the intended CLI contract.
@@ -71,7 +71,7 @@ Expected: tests fail through assertions because the helper command files do not 
 Run:
 
 ```powershell
-python -m unittest discover -s .agents/skills/npm-changelog/scripts/tests -v
+python -B -m unittest discover -s .agents/skills/npm-changelog/scripts/tests -v
 ```
 
 Expected: all helper tests pass.
@@ -85,8 +85,8 @@ Expected: all helper tests pass.
 Run:
 
 ```powershell
-python -X utf8 C:\Users\suweimin\.codex\skills\.system\skill-creator\scripts\quick_validate.py .agents/skills/npm-changelog
-python .agents/skills/npm-changelog/scripts/inspect_npm_policy.py .
+python -B -X utf8 C:\Users\suweimin\.codex\skills\.system\skill-creator\scripts\quick_validate.py .agents/skills/npm-changelog
+python -B .agents/skills/npm-changelog/scripts/inspect_npm_policy.py .
 ```
 
 Expected: skill validator reports valid；policy JSON contains exactly the 9 active package names from `npm.go`.
@@ -99,16 +99,16 @@ Expected: skill validator reports valid；policy JSON contains exactly the 9 act
 
 **Acceptance:** `docs/README.md` lists `changelog/` as external dependency version history, and the directory is ready to contain one file per active package.
 
-- [ ] **Step 1: Add the documentation entry**
+- [x] **Step 1: Add the documentation entry**
 
 在 `docs/README.md` 的文档分区中增加 `changelog/` 入口，说明内容为 WheelMaker 关注的 agent npm 版本变更与接入注意事项。
 
-- [ ] **Step 2: Run the helper structure check before data import**
+- [x] **Step 2: Run the helper structure check before data import**
 
 Run:
 
 ```powershell
-python .agents/skills/npm-changelog/scripts/validate_changelog.py .
+python -B .agents/skills/npm-changelog/scripts/validate_changelog.py .
 ```
 
 Expected: it reports the expected missing package files without modifying any file.
@@ -158,10 +158,10 @@ Expected: it reports the expected missing package files without modifying any fi
 - [ ] **Step 1: Run focused verification**
 
 ```powershell
-python -m unittest discover -s .agents/skills/npm-changelog/scripts/tests -v
-python -X utf8 C:\Users\suweimin\.codex\skills\.system\skill-creator\scripts\quick_validate.py .agents/skills/npm-changelog
-python .agents/skills/npm-changelog/scripts/inspect_npm_policy.py .
-python .agents/skills/npm-changelog/scripts/validate_changelog.py .
+python -B -m unittest discover -s .agents/skills/npm-changelog/scripts/tests -v
+python -B -X utf8 C:\Users\suweimin\.codex\skills\.system\skill-creator\scripts\quick_validate.py .agents/skills/npm-changelog
+python -B .agents/skills/npm-changelog/scripts/inspect_npm_policy.py .
+python -B .agents/skills/npm-changelog/scripts/validate_changelog.py .
 git diff --check
 ```
 
