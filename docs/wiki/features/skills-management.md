@@ -1,62 +1,201 @@
-> 摘要：本页维护 WheelMaker 以 Git source 为一级对象的 Skills 目录、刷新、安装状态合成和安全操作边界。
+> 摘要：本页维护 WheelMaker Skills Manager 2.0 的 Git Repo 中央维护、Scope lock、Global 链接、Project 副本、Repo 级更新和迁移边界。
 
 # Skills Management
 
-> 来源：[`Skill Source Management spec`](../../scope/2026-08-12-skill-source-management.md)、[`Skill Sources Follow the Default Branch spec`](../../scope/2026-08-12-skill-sources-default-branch.md)。
+> 设计 spec：[Skills Manager 2.0 Native Management](../../scope/2026-08-18-skills-manager-2.0-native.md)。
 
-WheelMaker 按 Hub-global 和每个 Project scope 分别管理 Skills。页面的一级对象是远端 Git source；每个 source 始终代表一个规范化仓库的远端默认分支 `HEAD`，以及最近一次成功刷新得到的完整 skill 目录。无法唯一归属到 source 的本地安装归入 `Unmanaged Skills`。
+WheelMaker 以远端 Git Repo 为 Skills 的一级管理对象。每个 Hub-global scope 和 Project scope 独立记录自己的 Repo commit 与 managed skills；中央 Repo clone 只维护一份，Global 通过链接使用，Project 通过复制获得可提交到项目 Git 的副本。
 
-## Source 目录
+## 上游 npx skills 功能推断
 
-WheelMaker 使用独立的 version 2 `.skill-source-lock.json` 保存远端目录快照，不向上游 `.skill-lock.json` 或 `skills-lock.json` 添加字段：
+WheelMaker 当前固定依赖过 skills@1.5.18。npx 只是 Node 包执行入口，核心能力来自 skills CLI；2.0 保留需要的行为语义，但不再运行 Node、npm、npx 或该 CLI。
 
-- Hub-global：默认 `~/.agents/.skill-source-lock.json`；设置 `XDG_STATE_HOME` 时使用 `$XDG_STATE_HOME/skills/.skill-source-lock.json`。
-- Project：`<project>/.skill-source-lock.json`，可随项目 Git 共享。
+参考上游 v1.5.18：
 
-每个 source 保存创建后不可原地修改的安装地址、用于同 scope 去重的 `sourceKey`、固定的 `resolvedCommit`、最后成功刷新时间和完整 `skillList`。每个目录项保存仓库内 `SKILL.md` 路径和整个 skill 目录的确定性 SHA-256；source lock 不保存本机安装状态或本地 hash。
+- [源码目录](https://github.com/vercel-labs/skills/tree/v1.5.18/src)
+- [add.ts](https://raw.githubusercontent.com/vercel-labs/skills/v1.5.18/src/add.ts)
+- [installer.ts](https://raw.githubusercontent.com/vercel-labs/skills/v1.5.18/src/installer.ts)
+- [list.ts](https://raw.githubusercontent.com/vercel-labs/skills/v1.5.18/src/list.ts)
+- [remove.ts](https://raw.githubusercontent.com/vercel-labs/skills/v1.5.18/src/remove.ts)
+- [update.ts](https://raw.githubusercontent.com/vercel-labs/skills/v1.5.18/src/update.ts)
 
-同一 scope 的同一规范化仓库只能有一个 source。更换仓库需要新增 source 并删除旧 source。HTTP(S) 地址不得包含 userinfo、token query 或其他内嵌凭据；认证只复用 Hub 进程可用的 Git credential 或 SSH 环境。
+### 上游能力
 
-source lock 缺失且本机没有该 scope 的历史 reconciliation 时，WheelMaker 从原生 lock 中可规范化的远端仓库直接构造 V2。发现 V1 时不迁移其 source、ref、commit 和 skillList，而是丢弃 V1 payload 并以相同规则重建 V2；仅存在于 V1 且原生 lock 无法还原的 source 会丢失。原生 lock 中的 ref 始终被忽略，不参与 source 归属或分组。
+- add 从 GitHub shorthand、GitHub/GitLab URL、普通 Git URL、本地路径和部分带路径的来源解析 source。
+- Repo 中通过 SKILL.md frontmatter 发现 skill；安装器支持 symlink 和 copy。
+- Global 安装通常维护用户级 .skill-lock.json；Project 安装维护 skills-lock.json。
+- list --json 扫描已安装目录并输出 Skill、路径、scope 和 agent 信息。
+- update 根据 source、skill path 和目录 hash 判断远端变化，部分公开 GitHub source 使用 Trees API。
+- remove 处理多个 Agent 目录，并在仍有其他 Agent 使用时保留 canonical 副本。
+- find、use、init 等命令不属于 WheelMaker 2.0 范围。
 
-## 刷新与展示
+### WheelMaker 当前实际使用
 
-页面打开只读取已保存目录和本机安装状态，不访问远端。`Refresh` 会在临时 Git checkout 中把远端广告的默认 `HEAD` 解析为完整 commit，发现全部有效 skill 并计算目录 hash；无法解析 `HEAD` 时不猜测 `main` 或 `master`。只有完整解析、校验和 hash 都成功后，才以 compare-and-swap 原子替换该 source 的快照。
+当前实现是混合架构：
 
-Git source 的公开目录固定为仓库根目录下的 `skills/` 子树。WheelMaker 不扫描仓库根目录、`.agents/`、`.claude/`、`.github/skills/`、备份目录、翻译目录、Claude plugin 声明路径或其他位置，也不在 `skills/` 缺失或没有有效 skill 时退回全仓库扫描。`skills/` 内按任意深度递归；某个目录包含 `SKILL.md` 后，该目录成为完整 skill 根目录，其子目录不再作为独立 skill 搜索。`skills/SKILL.md` 表示以 `skills/` 本身为根的单个 skill。
+- source 解析、Git checkout、目录发现、source catalog、详情读取和安全路径检查由 WheelMaker 自己实现。
+- 扫描、安装和部分更新仍通过固定版本的 skills CLI。
+- 卸载已经由 WheelMaker 直接删除目录和原生 lock 条目。
+- HubState 已经拥有 Skills section、异步 operation、source 状态和 Project scope。
 
-发现到的名称按大小写不敏感判重。`skills/` 内存在同名 skill 时整个刷新失败，错误列出冲突的仓库相对路径；已有成功快照继续以 `Stale` 展示，首次刷新失败则保持 unresolved。整个 skill 根目录继续参与确定性 SHA-256，且任何逃出临时 checkout 的符号链接都会拒绝本次刷新。
+2.0 将保留现有 HubState 和 source-first 信息架构，把 CLI 依赖替换为 native Git/filesystem manager。
 
-刷新失败保留上次成功目录并显示 `Stale` 与错误。Stale 快照不能用于 Install、Update 或远端删除推断。刷新成功后：
+## 管理范围
 
-- 新出现的远端项成为未安装 skill。
-- 本地仍安装但目录中已不存在的项成为 `Removed upstream`。
-- 本地内容与远端 hash 相同为 `Up to date`；本地预期副本缺失或彼此内容不同为 `Copies differ`，在快照有效时可更新对齐。
+2.0 只管理 Codex 和 Claude：
 
-每个 scope 独立保存客户端本地的 `Show all` 开关，默认关闭。关闭只隐藏普通未安装项；已安装、冲突、Removed upstream、错误和 Pending removal 始终可见。该偏好不写入 source lock，也不随 Project Git 共享。
+- Global：~/.agents/skills、~/.claude/skills
+- Project：<project>/.agents/skills、<project>/.claude/skills
 
-### UI ledger 交互
+OpenCode、Copilot、Mimo、CodeBuddy、Qoder 和其他 Provider 不参与 2.0 的安装、更新、卸载和归属判断。其他目录中的内容不主动删除。
 
-Skills 页面以 Source 为一级可折叠 ledger。Source header 固定为单行，显示展开 chevron、状态色点、source 名称及 Refresh、Update all、Delete 三个图标动作；source 名称显示为去掉 host 的 `owner/repo` 路径，完整 URL 保留在 tooltip 中；不在 header 中重复展示 commit、刷新时间和数量元数据。Source 默认展开，点击 header 的非操作区域收起或展开；展开状态只存在当前页面会话，按 Hub、scope、Project 和 `sourceKey` 隔离，应用重新打开后恢复展开。Refresh 始终保留，Update all 没有可更新项、没有有效快照或操作繁忙时固定占位并置灰，刷新错误在收起时仍保持可见。
+## 中央 Repo store
 
-Skill 行使用两个固定动作槽：第一槽按 capability 显示安装（产品文案为 Download）或 Update，第二槽显示 Uninstall。普通 `Not installed`、`Up to date` 和 `Update available` 不再重复显示行内状态文字；`Copies differ`、`Conflict`、`Removed upstream`、`Error`、`Pending removal` 和 `Unmanaged` 等异常继续显示文字与状态色。图标按钮使用统一的 Lucide stroke 语义：Download 为 `cloudDownload`，Update 为 `circleArrowUp`，Refresh 为 `refreshCw`，删除/卸载为 `trash`，并且必须提供 tooltip、aria-label、键盘焦点和 disabled/pending 状态。
+中央目录位于：
 
-## 安装状态与冲突
+~~~text
+~/.wheelmaker/skills/
+├─ .skill-source-lock.json
+└─ <source-key>/
+   ├─ .git/
+   └─ skills/
+~~~
 
-上游原生 lock 和 agent-visible 目录是本机安装事实的所有者。WheelMaker 扫描时实时计算整个本地 skill 目录的 hash，不持久化安装基线，也不判断差异来自本地修改、远端修改还是两者同时发生。
+- 每个规范化 Git source 只保留一份 working clone。
+- 不维护 snapshots 或额外 checkout 层。
+- Repo 默认跟随远端默认分支。
+- 中央 clone 不因 Scope 删除而自动删除；后续如需回收，使用独立清理动作。
+- source URL 统一规范化为 sourceKey，避免 shorthand、HTTPS 和 SSH 别名造成重复 clone。
 
-同一 scope 内，一个名称只要同时出现在多个 sources，或与 unmanaged 本地 skill 同名，所有对应 source 行都进入大小写不敏感的冲突状态。冲突行不允许安装、更新、覆盖或逐项卸载；source 级删除仍可用来解除 source-source 冲突。
+## Scope lock
 
-由原生 lock 重建的 source 在首次成功 Refresh 前显示 `Needs refresh`，不得据此推断远端删除或开放 Install/Update。原生 lock 的等价仓库地址和历史不同 ref 都按 `sourceKey` 合并；本地目录、`node_modules` 和不可验证远端来源保持 unmanaged。无快照为 `Needs refresh`，旧快照刷新失败为 `Stale`，副本不一致为 `Copies differ`；只有无法读取或 hash 等不可建立状态的情况为 `Error`。
+WheelMaker 继续使用现有 .skill-source-lock.json，不新建 skill.json。
 
-## 显式操作
+Global：
 
-裸 Git 地址只创建并刷新 source，不自动安装。不带 ref 且包含 `--skill` 的受支持输入会合并到相同 source，并在确认中单独列出将安装的明确名称。`#branch`、`#tag`、GitHub `/tree/<ref>/...` 或结构化 `ref` 输入都在 preview 前明确拒绝，不会静默忽略后继续。
+~~~text
+~/.wheelmaker/skills/.skill-source-lock.json
+~~~
 
-Install、Update 和 Update All 在执行前强制刷新并展示基于新 commit 的预览。确认后，安装适配器使用该 `resolvedCommit`、固定 agents、scope、Project `--copy` 和 `-y` 调用固定版本的上游 `skills` CLI。Update 的确认始终说明会覆盖当前本地目录。
+Project：
 
-Update All 只处理已经安装、远端仍存在、hash 不同且无冲突的项；不会安装新增项，也不会卸载 Removed upstream。批量操作顺序执行并 best-effort 汇总成功、失败、跳过和冲突，不回滚已经成功的项。Removed upstream 只有用户显式 Uninstall 才会删除。
+~~~text
+<project>/.skill-source-lock.json
+~~~
 
-删除 source 前必须列出并确认其拥有的本地安装。所有卸载成功后才移除 source；失败时保留 source 和逐项结果以便重试。Project source 从 Git 外部删除时不会自动修改本机安装：仍有本地安装的机器显示 `Pending removal`，确认后才执行 best-effort 卸载。
+Project 文件随项目 Git 版本管理。每个 Scope 有独立文件，互相不 Link，也不自动同步。
 
-所有会写 source lock、上游 lock 或 agent 目录的动作都进入当前 Hub 唯一的 Skills 异步 operation 生命周期。普通页面 scan 是同步只读操作；Registry protocol version 保持不变。
+当前版本只记录 source、当前 commit、更新时间、可选 branch 和该 Repo 在 Scope 中维护的 Skill：
+
+~~~json
+{
+  "version": 3,
+  "sources": [
+    {
+      "source": "https://github.com/example/skills",
+      "sourceKey": "example-skills",
+      "branch": "main",
+      "commit": "abc123",
+      "updatedAt": "2026-08-18T12:00:00Z",
+      "managedSkills": ["skill-a", "skill-b"]
+    }
+  ]
+}
+~~~
+
+文件不记录远端最新 commit、本地修改 hash 或 npx lock 字段。远端最新 SHA 由中央 clone 的 fetched remote ref 临时比较得到。
+
+旧的 skills-lock.json 和 .skill-lock.json 只用于一次性迁移。迁移后保留文件，但 2.0 不再读取或双写。
+
+现有 version 2 source lock 直接原地升级为 version 3：source、sourceKey、resolvedCommit 和 refreshedAt 映射到新字段；远端目录 skillList 与内容 hash 不再作为当前状态字段，managedSkills 根据当前 Scope 的受管安装重建。
+
+## Repo 操作
+
+### Refresh
+
+Refresh 只执行 git fetch，不改变中央 working tree，也不改变任何 Scope 的安装内容或 commit。
+
+页面用 Scope lock 的 commit 和中央 Repo 的最新远端 SHA 比较，显示是否有更新。远端 SHA 不写入 .skill-source-lock.json；重启后需要通过 Repo 的 fetch 状态重新判断。
+
+### Update
+
+Update 先更新中央 Repo，再更新当前 Scope：
+
+- Global 不复制文件，链接直接看到中央 Repo 的新内容。
+- Project 复制该 Scope 已维护的 Skill。
+- 上游新增 Skill 不自动加入 managedSkills。
+- 上游已经删除的 managed skill 自动删除。
+- 同一个 Scope 内同名安装以最后一次安装为准。
+- 其他外部 Skill 保留。
+
+同名 Repo 不进入旧的冲突封锁流程；新的安装覆盖目标目录并更新该 Skill 的 source 归属。source 不再提供该 Skill 时，当前 Scope 在 Repo 更新中报告 missing 并按已确认的自动删除规则清理。
+
+Hub 和 Project 的 Scope 独立执行。某个 Project 更新中央 clone 后，Global 链接可能立即看到新内容；其他 Project 的副本和 lock 不自动改变，直到各自执行流程。
+
+### Install
+
+- Install 安装 Repo 中选择的 Skill，并写入当前 Scope 的 managedSkills。
+- Install all 显式安装该 Repo 当前发现的全部 Skill。
+- Global 在两个目标目录创建链接。
+- Project 在两个目标目录复制完整 Skill 目录；复制内容和 .skill-source-lock.json 一起提交到项目 Git。
+- 链接创建失败直接提示用户并终止，不降级为复制。
+
+### Uninstall 和删除 Repo
+
+- Uninstall 只删除当前 Scope 的链接或副本，并从 managedSkills 移除。
+- 删除 Repo 只移除当前 Scope 的 source、链接和 Project 副本。
+- 中央 clone 永不自动删除。
+- 上游删除项在 Repo Update 时自动清理，不维护本地修改状态。
+
+## UI 交互
+
+保留当前 source-first ledger 和 Skill 列表展示，不进行大范围布局重排。
+
+- Repo/source 是更新、刷新和删除的操作单位。
+- Skill 行保留安装、卸载和详情，不提供 Skill 级更新。
+- 列表底部增加一整行 Add Git repository。
+- 点击后在当前列表内原地展开 Git 输入、Repo 检查和 Skill 预览。
+- 不通过加号打开新页面。
+- Repo 行提供 Refresh、Update、Install all 和删除操作。
+- Skill 行继续显示安装状态、外部项和异常信息。
+
+## 服务端 action
+
+保留 cmd.skills 作为传输入口，但重新设计 action，不再依赖 CLI 时代的 preview/apply action：
+
+- reindex
+- inspectRepo
+- addRepo
+- refreshRepo
+- updateRepo
+- install
+- installAll
+- uninstall
+- removeRepo
+- detail
+- operation
+
+普通 scan 只读；会写 source lock、中央 clone、Global 链接或 Project 副本的动作进入 Hub 单一异步 operation。Registry protocol version 保持不变。
+
+## 状态、失败与安全边界
+
+- Scope lock 写入采用同目录临时文件、关闭后原子替换，并检查磁盘版本，避免并发写覆盖。
+- 每个中央 Repo 的 fetch、checkout 和目录更新受文件锁保护。
+- Git 认证只复用 Hub 进程可用的 credential/SSH 环境，凭据不写入 lock、state、operation 或日志。
+- Git fetch、checkout、复制或链接失败时保留旧 Scope lock，返回可重试错误。
+- Project 复制失败不会伪造新 commit；中央 Repo 可以保持已更新状态，Scope 下次单独重试。
+- 已存在的 Skill 目录允许被新的 managed 安装覆盖；不属于 WheelMaker 管理的其他 Skill 不主动清理。
+- 所有复制、链接和删除路径必须验证仍在 .agents/skills、.claude/skills 或中央 Repo 目录内。
+
+## 测试边界
+
+服务端测试使用本地 Git fixture 覆盖：
+
+- clone、fetch-only、默认分支 checkout 和 commit 比较
+- Global 链接、Project 复制和链接失败
+- Repo 级更新、新增不自动安装、删除自动清理
+- 同名覆盖和外部 Skill 保留
+- Scope lock v3、旧 lock 一次性迁移、原子写和并发冲突
+- 多 Scope 独立更新和失败重试
+
+Web 测试覆盖底部添加 Repo 行、inline 输入、Repo 级操作、Skill 行无更新按钮和 operation 状态。
