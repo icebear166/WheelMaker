@@ -186,6 +186,6 @@ Expected: all commands exit 0；policy contains 9 packages；changelog validator
 
 使用 Task 5 的命令和最终 `git status -sb`/diff 检查，确认没有任务外文件被 stage。
 
-- [ ] **Step 2: Invoke `git-workflow` finalize**
+- [x] **Step 2: Invoke `git-workflow` finalize**
 
 传入 `complete` 及逐项验收证据，继承 `spec/npm-changelog-0818` 的 prepared Git 上下文，按偏好 push 当前分支，条件满足时合入 `main` 并清理 worktree/分支。
