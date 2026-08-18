@@ -288,3 +288,11 @@ func TestDesktopToastAUMIDValues(t *testing.T) {
 		}
 	}
 }
+
+func TestDesktopToastShortcutPath(t *testing.T) {
+	got := desktopToastShortcutPath(`C:\Users\u\AppData\Roaming`)
+	want := `C:\Users\u\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\WheelMaker.lnk`
+	if got != want {
+		t.Fatalf("shortcut path = %q, want %q", got, want)
+	}
+}

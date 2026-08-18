@@ -5,9 +5,12 @@ package main
 import (
 	"bytes"
 	_ "embed"
+	"encoding/binary"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -362,6 +365,110 @@ func desktopToastFactoryCreateInstance(this, outer uintptr, riid *winrtGUID, out
 
 // --- WinRT toast delivery ---
 
+// --- Start menu shortcut (toast icon identity) ---
+//
+// The notification platform ignores the registry IconUri on recent Windows 11
+// builds; it resolves the toast header icon from a Start menu shortcut stamped
+// with our AUMID, using the shortcut target's embedded icon.
+const clsctxInprocServer = 0x1
+
+var (
+	clsidShellLink     = mustParseGUID("{00021401-0000-0000-C000-000000000046}")
+	iidIShellLinkW     = mustParseGUID("{000214F9-0000-0000-C000-000000000046}")
+	iidIPersistFile    = mustParseGUID("{0000010B-0000-0000-C000-000000000046}")
+	iidIPropertyStore  = mustParseGUID("{886D8EEB-8CF2-4446-8D02-CDBA1DBDCF99}")
+	pkeyAppUserModelID = struct {
+		fmtid winrtGUID
+		pid   uint32
+	}{mustParseGUID("{9F4C2855-9F79-4B39-A8D0-E1D42DE1D5F3}"), 5}
+	procCoCreateInstance = desktopOle32.NewProc("CoCreateInstance")
+)
+
+const vtLPWSTR = 31
+
+func desktopToastShortcutPath(appData string) string {
+	return filepath.Join(appData, `Microsoft\Windows\Start Menu\Programs`, "WheelMaker.lnk")
+}
+
+func comSetWideString(obj uintptr, index int, value string) error {
+	ptr, err := windows.UTF16PtrFromString(value)
+	if err != nil {
+		return err
+	}
+	return comCall(obj, index, uintptr(unsafe.Pointer(ptr))).err("comSetWideString")
+}
+
+// installDesktopToastShortcut creates or updates the Start menu shortcut that
+// carries our AUMID so the toast header shows the exe's embedded icon.
+func installDesktopToastShortcut(appData, exePath string) error {
+	var link uintptr
+	ret, _, _ := procCoCreateInstance.Call(
+		uintptr(unsafe.Pointer(&clsidShellLink)),
+		0,
+		clsctxInprocServer,
+		uintptr(unsafe.Pointer(&iidIShellLinkW)),
+		uintptr(unsafe.Pointer(&link)),
+	)
+	if err := comHRESULT(uint32(ret)).err("CoCreateInstance ShellLink"); err != nil {
+		return err
+	}
+	defer comRelease(link)
+
+	if err := comSetWideString(link, 20 /* IShellLinkW::SetPath */, exePath); err != nil {
+		return err
+	}
+	if err := comSetWideString(link, 9 /* IShellLinkW::SetWorkingDirectory */, filepath.Dir(exePath)); err != nil {
+		return err
+	}
+	iconLocation, err := windows.UTF16PtrFromString(exePath + ",0")
+	if err != nil {
+		return err
+	}
+	if err := comCall(link, 17 /* IShellLinkW::SetIconLocation */, uintptr(unsafe.Pointer(iconLocation)), 0).err("SetIconLocation"); err != nil {
+		return err
+	}
+
+	var store uintptr
+	if err := comQueryInterface(link, &iidIPropertyStore, &store).err("QI IPropertyStore"); err != nil {
+		return err
+	}
+	defer comRelease(store)
+	aumid, err := windows.UTF16PtrFromString(desktopToastAUMID)
+	if err != nil {
+		return err
+	}
+	var propVariant [32]byte // PROPVARIANT, zero-initialized
+	binary.LittleEndian.PutUint16(propVariant[0:], vtLPWSTR)
+	*(*uintptr)(unsafe.Pointer(&propVariant[8])) = uintptr(unsafe.Pointer(aumid))
+	if err := comCall(store, 6, /* IPropertyStore::SetValue */
+		uintptr(unsafe.Pointer(&pkeyAppUserModelID)),
+		uintptr(unsafe.Pointer(&propVariant[0])),
+	).err("IPropertyStore.SetValue"); err != nil {
+		return err
+	}
+	if err := comCall(store, 7 /* IPropertyStore::Commit */).err("IPropertyStore.Commit"); err != nil {
+		return err
+	}
+	runtime.KeepAlive(aumid)
+
+	var persist uintptr
+	if err := comQueryInterface(link, &iidIPersistFile, &persist).err("QI IPersistFile"); err != nil {
+		return err
+	}
+	defer comRelease(persist)
+	shortcut, err := windows.UTF16PtrFromString(desktopToastShortcutPath(appData))
+	if err != nil {
+		return err
+	}
+	if err := comCall(persist, 6 /* IPersistFile::Save */, uintptr(unsafe.Pointer(shortcut)), 1).err("IPersistFile.Save"); err != nil {
+		return err
+	}
+	runtime.KeepAlive(shortcut)
+	return nil
+}
+
+// --- WinRT toast delivery ---
+
 type win32DesktopToastOps struct {
 	mainHwnd    uintptr
 	classCookie uintptr
@@ -386,6 +493,11 @@ func (o *win32DesktopToastOps) registerIdentity() error {
 	}
 	if err := writeDesktopToastRegistry(exePath, iconPath); err != nil {
 		return err
+	}
+	// Best effort: the shortcut only provides the toast header icon; the
+	// registry CustomActivator keeps click activation working without it.
+	if err := installDesktopToastShortcut(os.Getenv("APPDATA"), exePath); err != nil {
+		log.Printf("[Desktop] toast shortcut registration failed, icon falls back: %v", err)
 	}
 	if err := setDesktopProcessAUMID(); err != nil {
 		return err
