@@ -1,0 +1,14 @@
+{
+  "name": "@wheelmaker/personal-wiki-kit",
+  "version": "0.1.0",
+  "private": true,
+  "description": "可复用的本地优先个人 Wiki 工具包",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "test": "node --test tests/*.test.mjs",
+    "check:public": "node --test --test-name-pattern=\"public boundary\" tests/kit-manifest.test.mjs"
+  }
+}

@@ -49,9 +49,9 @@ Run: `rg -n "https?://" docs/wiki/features/knowledge-registry.md docs/wiki/archi
 
 Expected: Any URL shown is a loopback address or an `example.com` example, never an operator-specific value.
 
-- [ ] **Step 4: Git checkpoint**
+- [x] **Step 4: Git checkpoint**
 
-After verification passes, invoke `git-workflow` in checkpoint mode for these Wiki files. Record commit hash + subject.
+Checkpoint: `999f56cf docs(wiki): define reusable personal wiki kit`.
 
 ### Task 2: Establish the public Kit manifest and repository boundary
 
@@ -67,7 +67,7 @@ After verification passes, invoke `git-workflow` in checkpoint mode for these Wi
 
 **Acceptance:** Kit version `0.1.0` has one strict manifest API, unsupported fields/versions fail closed, and public-boundary tests reject known personal values and forbidden content roots.
 
-- [ ] **Step 1: Write failing manifest and boundary tests**
+- [x] **Step 1: Write failing manifest and boundary tests**
 
 Tests must assert:
 
@@ -82,17 +82,17 @@ assert.deepEqual(scanPublicTree(fixtureRoot), []);
 
 Add fixtures proving `content/articles/private.md`, a drive-specific path, a private key marker, and a non-example domain are reported.
 
-- [ ] **Step 2: Run tests to verify RED**
+- [x] **Step 2: Run tests to verify RED**
 
 Run: `node --test personal-wiki-kit/tests/kit-manifest.test.mjs`
 
 Expected: FAIL because `src/kit-manifest.mjs` does not exist.
 
-- [ ] **Step 3: Implement the minimal strict manifest and scanner**
+- [x] **Step 3: Implement the minimal strict manifest and scanner**
 
 The scanner walks only committed Kit source, ignores generated/cache roots, and returns normalized path + reason records. It must not treat `example.com`, loopback URLs, or generic `C:/example/...` fixtures as personal data.
 
-- [ ] **Step 4: Generate and lock the development dependency graph**
+- [x] **Step 4: Generate and lock the development dependency graph**
 
 Run: `npm install --package-lock-only --ignore-scripts`
 
@@ -100,7 +100,7 @@ Workdir: `personal-wiki-kit`
 
 Expected: `package-lock.json` is generated from `package.json`; no package lifecycle script runs.
 
-- [ ] **Step 5: Verify GREEN and focused regressions**
+- [x] **Step 5: Verify GREEN and focused regressions**
 
 Run: `npm test -- --test-name-pattern="kit manifest|public boundary"`
 
