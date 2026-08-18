@@ -4,6 +4,9 @@
   "private": true,
   "description": "可复用的本地优先个人 Wiki 工具包",
   "type": "module",
+  "bin": {
+    "personal-wiki": "src/cli.mjs"
+  },
   "engines": {
     "node": ">=22"
   },

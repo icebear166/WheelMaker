@@ -16,11 +16,16 @@ import { promisify } from 'node:util';
 import YAML from 'yaml';
 
 import { compileKnowledge } from './content.mjs';
+import { parseKitManifest } from './kit-manifest.mjs';
+import { loadKitLock } from './kit-lock.mjs';
+import { publishKnowledge } from './local-publish.mjs';
 import { migrateLegacyConfig } from './migrate-config.mjs';
 import { openLocalWiki } from './open-local.mjs';
 import { loadProjectRouting, resolveProjectIds } from './project-routing.mjs';
 import { queryKnowledge } from './query-knowledge.mjs';
 import { setupWiki } from './setup.mjs';
+import { buildSite } from './site-builder.mjs';
+import { updateKit } from './update-kit.mjs';
 import { loadUserConfig, resolveUserConfigPaths } from './user-config.mjs';
 
 const kitRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -63,6 +68,21 @@ async function resolveRepository(options) {
   return (await loadUserConfig({ configPath: options.config })).repositoryPath;
 }
 
+async function currentKitManifest() {
+  return parseKitManifest(await readFile(path.join(kitRoot, 'kit.json'), 'utf8'));
+}
+
+async function assertPinnedKit(repository) {
+  const [manifest, lock] = await Promise.all([
+    currentKitManifest(),
+    loadKitLock(path.join(repository, 'wiki-kit.lock.json')),
+  ]);
+  if (manifest.version !== lock.version) {
+    throw new Error(`私人 Wiki 锁定 Kit ${lock.version}，当前运行的是 ${manifest.version}`);
+  }
+  return { manifest, lock };
+}
+
 async function checkCommand(options) {
   const repository = await resolveRepository(options);
   const output = await mkdtemp(path.join(tmpdir(), 'personal-wiki-check-'));
@@ -83,8 +103,10 @@ async function checkCommand(options) {
 }
 
 async function queryCommand(options) {
+  const repository = await resolveRepository(options);
+  await assertPinnedKit(repository);
   return queryKnowledge({
-    repository: options.repository,
+    repository,
     configPath: options.config,
     query: options.query,
     projects: options.projects,
@@ -138,9 +160,50 @@ async function sourceCommit(repository) {
   }
 }
 
+async function buildWiki({ repository, output, reader, cleanDefaultOutput = false }) {
+  const { manifest } = await assertPinnedKit(repository);
+  const generatedAt = new Date().toISOString();
+  const commit = await sourceCommit(repository);
+  const dataOutput = await mkdtemp(path.join(tmpdir(), 'personal-wiki-build-'));
+  const defaultOutput = path.join(repository, '.wiki-kit-out', 'site');
+  const siteOutput = path.resolve(output || defaultOutput);
+  try {
+    if (!output && cleanDefaultOutput) {
+      await rm(defaultOutput, { force: true, recursive: true, maxRetries: 5, retryDelay: 100 });
+    }
+    await compileKnowledge({ repository, output: dataOutput, generatedAt });
+    const result = await buildSite({
+      reader: path.resolve(reader || path.join(kitRoot, 'reader-dist')),
+      data: dataOutput,
+      output: siteOutput,
+      releaseId: `${generatedAt.replace(/[-:.]/gu, '')}-${commit.slice(0, 12)}`,
+      generatedAt,
+      sourceCommit: commit,
+      kitVersion: manifest.version,
+    });
+    return {
+      repository,
+      output: result.output,
+      releaseId: result.metadata.releaseId,
+      sourceCommit: commit,
+    };
+  } finally {
+    await rm(dataOutput, { force: true, recursive: true, maxRetries: 5, retryDelay: 100 });
+  }
+}
+
+async function buildCommand(options) {
+  return buildWiki({
+    repository: await resolveRepository(options),
+    output: options.output,
+    reader: options.reader,
+    cleanDefaultOutput: true,
+  });
+}
+
 async function openCommand(options) {
   const repository = await resolveRepository(options);
-  const kitManifest = JSON.parse(await readFile(path.join(kitRoot, 'kit.json'), 'utf8'));
+  const { manifest: kitManifest } = await assertPinnedKit(repository);
   const executableName = process.platform === 'win32' ? 'wiki-server.exe' : 'wiki-server';
   const packagedServer = path.join(kitRoot, 'bin', executableName);
   const developmentServer = path.join(kitRoot, 'server', executableName);
@@ -169,6 +232,50 @@ async function openCommand(options) {
   process.once('SIGINT', stop);
   process.once('SIGTERM', stop);
   return session;
+}
+
+async function publishCommand(options) {
+  const repository = await resolveRepository(options);
+  await assertPinnedKit(repository);
+  return publishKnowledge({
+    repository,
+    message: options.message,
+  }, {
+    verify: async () => {
+      const output = await mkdtemp(path.join(tmpdir(), 'personal-wiki-publish-'));
+      try {
+        await buildWiki({
+          repository,
+          output,
+          reader: options.reader,
+        });
+      } finally {
+        await rm(output, { force: true, recursive: true, maxRetries: 5, retryDelay: 100 });
+      }
+    },
+  });
+}
+
+async function updateCommand(options) {
+  const repository = await resolveRepository(options);
+  for (const field of ['candidateKit', 'artifact', 'source', 'sha256']) {
+    if (!options[field]) throw new Error(`update 命令缺少 --${field.replace(/[A-Z]/gu, (letter) => `-${letter.toLowerCase()}`)}`);
+  }
+  const candidateKitRoot = path.resolve(options.candidateKit);
+  const candidateManifest = parseKitManifest(
+    await readFile(path.join(candidateKitRoot, 'kit.json'), 'utf8'),
+  );
+  return updateKit({
+    repository,
+    candidateKitRoot,
+    candidateArtifact: path.resolve(options.artifact),
+    targetLock: {
+      schema: 1,
+      version: candidateManifest.version,
+      source: options.source,
+      sha256: options.sha256,
+    },
+  });
 }
 
 async function setupCommand(options, prompt) {
@@ -235,7 +342,10 @@ export async function runCLI(values = process.argv.slice(2), {
     else if (command === 'query') result = await queryCommand(options);
     else if (command === 'route') result = await routeCommand(options);
     else if (command === 'setup') result = await setupCommand(options, prompt);
+    else if (command === 'build') result = await buildCommand(options);
     else if (command === 'open') result = await openCommand(options);
+    else if (command === 'publish') result = await publishCommand(options);
+    else if (command === 'update') result = await updateCommand(options);
     else if (command === 'migrate-config') result = await migrateCommand(options, prompt);
     else throw new Error(`未知命令：${command}`);
     const printable = command === 'open' ? { url: result.url } : result;

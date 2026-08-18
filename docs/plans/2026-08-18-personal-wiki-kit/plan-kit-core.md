@@ -342,7 +342,7 @@ Expected: FAIL because server/open modules are absent.
 
 Selectively extract the verified server implementation, replace private module names/default roots, and make no-auth legal only for an explicit loopback-local command. The CLI owns child lifecycle and temporary site cleanup.
 
-- [ ] **Step 4: Verify GREEN**
+- [x] **Step 4: Verify GREEN**
 
 Run: `go test ./... && go build ./cmd/wiki-server`
 
@@ -354,9 +354,9 @@ Workdir: `personal-wiki-kit`
 
 Expected: PASS.
 
-- [ ] **Step 5: Git checkpoint**
+- [x] **Step 5: Git checkpoint**
 
-Checkpoint server, local-open orchestrator, and tests.
+Checkpoint: `b374b484 feat(wiki-kit): open verified wiki locally`.
 
 ### Task 8: Implement safe local publication and explicit Kit updates
 
@@ -368,21 +368,22 @@ Checkpoint server, local-open orchestrator, and tests.
 - Create: `personal-wiki-kit/tests/local-publish.test.mjs`
 - Create: `personal-wiki-kit/tests/kit-lock.test.mjs`
 - Create: `personal-wiki-kit/tests/update-kit.test.mjs`
+- Create: `personal-wiki-kit/tests/support/temp-directory.mjs`
 - Modify: `personal-wiki-kit/package.json`
 
 **Acceptance:** Thin launchers invoke one CLI; publication stages only knowledge allowlist paths and handles no-remote/local commits honestly; update verifies exact version/checksum and changes the lock only after candidate compatibility checks pass.
 
-- [ ] **Step 1: Write failing publish/lock/update tests**
+- [x] **Step 1: Write failing publish/lock/update tests**
 
 Cover porcelain parsing, rename records, supported attachments, blocked files, explicit path staging, default branch requirement, no remote, normal push, non-fast-forward single retry, deployment status unknown, strict lock schema, digest mismatch, failed migration rollback, and successful atomic lock update.
 
-- [ ] **Step 2: Run tests to verify RED**
+- [x] **Step 2: Run tests to verify RED**
 
 Run: `node --test tests/local-publish.test.mjs tests/kit-lock.test.mjs tests/update-kit.test.mjs`
 
 Expected: FAIL because modules are absent.
 
-- [ ] **Step 3: Implement minimal publish/update CLI**
+- [x] **Step 3: Implement minimal publish/update CLI**
 
 Extend the Task 6 command dispatcher with `build`, `query`, `open`, `publish`, and `update`. It reports whether the result is local-only, pushed with deployment unknown, or deployed; it never reports online success without evidence.
 
