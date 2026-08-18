@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { join, normalize } from 'node:path';
+import {join, resolve} from 'node:path';
 import test from 'node:test';
 
 import {
@@ -7,7 +7,7 @@ import {
   resolveProjectIds,
 } from '../src/project-routing.mjs';
 
-const base = normalize(join('C:\\', 'example', 'work'));
+const base = resolve('example', 'work');
 
 function parse(routes) {
   return parseProjectRouting(JSON.stringify({ schema: 1, routes }), {

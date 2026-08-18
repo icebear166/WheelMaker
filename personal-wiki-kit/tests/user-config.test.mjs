@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { join, normalize } from 'node:path';
+import {join, resolve} from 'node:path';
 import test from 'node:test';
 
 import {
@@ -8,7 +8,7 @@ import {
 } from '../src/user-config.mjs';
 
 test('user config accepts only the repository locator and optional public origin', () => {
-  const repositoryPath = normalize(join('C:\\', 'example', 'private-wiki'));
+  const repositoryPath = resolve('example', 'private-wiki');
   assert.deepEqual(parseUserConfig(JSON.stringify({
     schema: 1,
     repositoryPath,
@@ -25,7 +25,7 @@ test('user config rejects unknown, remote, branch, and credential fields', () =>
     assert.throws(
       () => parseUserConfig(JSON.stringify({
         schema: 1,
-        repositoryPath: normalize(join('C:\\', 'example', 'private-wiki')),
+        repositoryPath: resolve('example', 'private-wiki'),
         [field]: 'forbidden',
       })),
       new RegExp(`不支持的字段 ${field}`),
@@ -41,7 +41,7 @@ test('user config requires an absolute canonical path and safe origin-only URL',
   assert.throws(
     () => parseUserConfig(JSON.stringify({
       schema: 1,
-      repositoryPath: normalize(join('C:\\', 'example', 'private-wiki')),
+      repositoryPath: resolve('example', 'private-wiki'),
       publicUrl: 'https://user@example.com/wiki?token=value',
     })),
     /公开地址必须是规范 origin/,
@@ -49,7 +49,7 @@ test('user config requires an absolute canonical path and safe origin-only URL',
   assert.throws(
     () => parseUserConfig(JSON.stringify({
       schema: 1,
-      repositoryPath: normalize(join('C:\\', 'example', 'private-wiki')),
+      repositoryPath: resolve('example', 'private-wiki'),
       publicUrl: 'http://wiki.example.com',
     })),
     /公网地址必须使用 HTTPS/,
@@ -57,8 +57,9 @@ test('user config requires an absolute canonical path and safe origin-only URL',
 });
 
 test('user config paths default to the independent personal wiki directory', () => {
-  const paths = resolveUserConfigPaths({ homeDirectory: normalize(join('C:\\', 'example', 'home')) });
-  assert.equal(paths.directory, normalize(join('C:\\', 'example', 'home', '.personal-wiki')));
+  const homeDirectory = resolve('example', 'home');
+  const paths = resolveUserConfigPaths({homeDirectory});
+  assert.equal(paths.directory, join(homeDirectory, '.personal-wiki'));
   assert.equal(paths.config, join(paths.directory, 'config.json'));
   assert.equal(paths.routing, join(paths.directory, 'project-routing.json'));
 });
