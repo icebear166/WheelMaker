@@ -54,8 +54,16 @@ func (s *skillSourceStore) legacyRepositoryPath(sourceKey string) string {
 	return filepath.Join(s.root, hex.EncodeToString(digest[:]))
 }
 
+func (s *skillSourceStore) legacyFlatRepositoryPath(sourceKey string) string {
+	return filepath.Join(s.root, legacyFlatSkillSourceName(sourceKey))
+}
+
 func (s *skillSourceStore) lockPath(sourceKey string) string {
 	return filepath.Join(s.root, ".locks", flatSkillSourceName(sourceKey)+".lock")
+}
+
+func (s *skillSourceStore) legacyFlatLockPath(sourceKey string) string {
+	return filepath.Join(s.root, ".locks", legacyFlatSkillSourceName(sourceKey)+".lock")
 }
 
 func (s *skillSourceStore) nestedLockPath(sourceKey string) string {
@@ -95,6 +103,7 @@ func (s *skillSourceStore) acquireSourceLock(ctx context.Context, sourceKey stri
 		repository string
 		lock       string
 	}{
+		{repository: s.legacyFlatRepositoryPath(sourceKey), lock: s.legacyFlatLockPath(sourceKey)},
 		{repository: s.nestedRepositoryPath(sourceKey), lock: s.nestedLockPath(sourceKey)},
 		{repository: s.legacyRepositoryPath(sourceKey), lock: s.legacyLockPath(sourceKey)},
 	}
@@ -134,7 +143,7 @@ func (s *skillSourceStore) migrateLegacyRepository(sourceKey string) error {
 	} else if !errors.Is(err, os.ErrNotExist) {
 		return fmt.Errorf("inspect skill source store: %w", err)
 	}
-	legacyPaths := []string{s.nestedRepositoryPath(sourceKey), s.legacyRepositoryPath(sourceKey)}
+	legacyPaths := []string{s.legacyFlatRepositoryPath(sourceKey), s.nestedRepositoryPath(sourceKey), s.legacyRepositoryPath(sourceKey)}
 	for _, legacyPath := range legacyPaths {
 		if legacyPath == flatPath {
 			continue
@@ -156,7 +165,7 @@ func (s *skillSourceStore) migrateLegacyRepository(sourceKey string) error {
 }
 
 func (s *skillSourceStore) repositoryPathForRead(sourceKey string) (string, error) {
-	paths := []string{s.repositoryPath(sourceKey), s.nestedRepositoryPath(sourceKey), s.legacyRepositoryPath(sourceKey)}
+	paths := []string{s.repositoryPath(sourceKey), s.legacyFlatRepositoryPath(sourceKey), s.nestedRepositoryPath(sourceKey), s.legacyRepositoryPath(sourceKey)}
 	seen := make(map[string]struct{}, len(paths))
 	for _, path := range paths {
 		if _, exists := seen[path]; exists {
@@ -187,29 +196,37 @@ func pathExists(path string) bool {
 }
 
 func skillSourcePathComponents(sourceKey string) []string {
-	return skillSourcePathComponentsWithDash(sourceKey, true)
+	return skillSourcePathComponentsWithOptions(sourceKey, true, true)
 }
 
 func flatSkillSourceName(sourceKey string) string {
-	components := skillSourcePathComponentsWithDash(sourceKey, false)
+	components := skillSourcePathComponentsWithOptions(sourceKey, true, false)
+	if len(components) == 0 {
+		return "~00"
+	}
+	return strings.Join(components, "_")
+}
+
+func legacyFlatSkillSourceName(sourceKey string) string {
+	components := skillSourcePathComponentsWithOptions(sourceKey, false, true)
 	if len(components) == 0 {
 		return "~00"
 	}
 	return strings.Join(components, "--")
 }
 
-func skillSourcePathComponentsWithDash(sourceKey string, allowDash bool) []string {
+func skillSourcePathComponentsWithOptions(sourceKey string, allowDash, allowUnderscore bool) []string {
 	parts := strings.FieldsFunc(strings.ToLower(strings.TrimSpace(sourceKey)), func(r rune) bool {
 		return r == '/' || r == '\\'
 	})
 	components := make([]string, 0, len(parts))
 	for _, part := range parts {
-		components = append(components, escapeSkillSourcePathComponent(part, allowDash))
+		components = append(components, escapeSkillSourcePathComponent(part, allowDash, allowUnderscore))
 	}
 	return components
 }
 
-func escapeSkillSourcePathComponent(value string, allowDash bool) string {
+func escapeSkillSourcePathComponent(value string, allowDash, allowUnderscore bool) string {
 	if value == "." || value == ".." {
 		return "~" + value
 	}
@@ -218,7 +235,7 @@ func escapeSkillSourcePathComponent(value string, allowDash bool) string {
 		char := value[index]
 		allowed := (char >= 'a' && char <= 'z') ||
 			(char >= '0' && char <= '9') ||
-			char == '.' || char == '_' || char == '@' || (allowDash && char == '-')
+			char == '.' || char == '@' || (allowDash && char == '-') || (allowUnderscore && char == '_')
 		if index == len(value)-1 && (char == '.' || char == ' ') {
 			allowed = false
 		}

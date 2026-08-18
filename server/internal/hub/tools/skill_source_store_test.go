@@ -133,16 +133,19 @@ func TestNativeSkillSourceStoreUsesReadableSourceKeyPaths(t *testing.T) {
 	home := t.TempDir()
 	store := newSkillSourceStore(home)
 
-	if got, want := filepath.ToSlash(store.repositoryPath("github.com/owner/repo")), filepath.ToSlash(filepath.Join(home, ".wheelmaker", "skills", "github.com--owner--repo")); got != want {
+	if got, want := filepath.ToSlash(store.repositoryPath("github.com/owner/repo")), filepath.ToSlash(filepath.Join(home, ".wheelmaker", "skills", "github.com_owner_repo")); got != want {
 		t.Fatalf("repositoryPath()=%q, want %q", got, want)
 	}
-	if got, want := filepath.ToSlash(store.repositoryPath("github.com:8443/owner/repo")), filepath.ToSlash(filepath.Join(home, ".wheelmaker", "skills", "github.com~3A8443--owner--repo")); got != want {
+	if got, want := filepath.ToSlash(store.repositoryPath("github.com:8443/owner/repo")), filepath.ToSlash(filepath.Join(home, ".wheelmaker", "skills", "github.com~3A8443_owner_repo")); got != want {
 		t.Fatalf("repositoryPath(port)=%q, want %q", got, want)
 	}
-	if got, want := filepath.ToSlash(store.repositoryPath("github.com/owner/repo-name")), filepath.ToSlash(filepath.Join(home, ".wheelmaker", "skills", "github.com--owner--repo~2Dname")); got != want {
+	if got, want := filepath.ToSlash(store.repositoryPath("github.com/owner/repo-name")), filepath.ToSlash(filepath.Join(home, ".wheelmaker", "skills", "github.com_owner_repo-name")); got != want {
 		t.Fatalf("repositoryPath(dash)=%q, want %q", got, want)
 	}
-	if got, want := filepath.ToSlash(store.lockPath("github.com/owner/repo")), filepath.ToSlash(filepath.Join(home, ".wheelmaker", "skills", ".locks", "github.com--owner--repo.lock")); got != want {
+	if got, want := filepath.ToSlash(store.repositoryPath("github.com/owner/repo_name")), filepath.ToSlash(filepath.Join(home, ".wheelmaker", "skills", "github.com_owner_repo~5Fname")); got != want {
+		t.Fatalf("repositoryPath(underscore)=%q, want %q", got, want)
+	}
+	if got, want := filepath.ToSlash(store.lockPath("github.com/owner/repo")), filepath.ToSlash(filepath.Join(home, ".wheelmaker", "skills", ".locks", "github.com_owner_repo.lock")); got != want {
 		t.Fatalf("lockPath()=%q, want %q", got, want)
 	}
 }
@@ -164,12 +167,37 @@ func TestNativeSkillSourceStoreMigratesLegacyHashedRepository(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ensureRepo() error=%v", err)
 	}
-	wantPath := filepath.Join(home, ".wheelmaker", "skills", "github.com--example--skills")
+	wantPath := filepath.Join(home, ".wheelmaker", "skills", "github.com_example_skills")
 	if checkout.Path != wantPath {
 		t.Fatalf("checkout.Path=%q, want %q", checkout.Path, wantPath)
 	}
 	if _, err := os.Stat(legacyPath); !os.IsNotExist(err) {
 		t.Fatalf("legacy repository still exists: %v", err)
+	}
+}
+
+func TestNativeSkillSourceStoreMigratesLegacyFlatRepository(t *testing.T) {
+	repository := t.TempDir()
+	initSkillSourceGitFixture(t, repository, "alpha")
+	home := t.TempDir()
+	key := "github.com/example/skills"
+	legacyPath := filepath.Join(home, ".wheelmaker", "skills", "github.com--example--skills")
+	if err := os.MkdirAll(filepath.Dir(legacyPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	runSkillSourceGit(t, filepath.Dir(legacyPath), "clone", "--quiet", repository, legacyPath)
+
+	store := newSkillSourceStore(home)
+	checkout, err := store.ensureRepo(context.Background(), skillSourceSnapshot{Source: repository, SourceKey: key})
+	if err != nil {
+		t.Fatalf("ensureRepo() error=%v", err)
+	}
+	wantPath := filepath.Join(home, ".wheelmaker", "skills", "github.com_example_skills")
+	if checkout.Path != wantPath {
+		t.Fatalf("checkout.Path=%q, want %q", checkout.Path, wantPath)
+	}
+	if _, err := os.Stat(legacyPath); !os.IsNotExist(err) {
+		t.Fatalf("legacy flat repository still exists: %v", err)
 	}
 }
 
@@ -189,7 +217,7 @@ func TestNativeSkillSourceStoreMigratesNestedReadableRepository(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ensureRepo() error=%v", err)
 	}
-	wantPath := filepath.Join(home, ".wheelmaker", "skills", "github.com--example--skills")
+	wantPath := filepath.Join(home, ".wheelmaker", "skills", "github.com_example_skills")
 	if checkout.Path != wantPath {
 		t.Fatalf("checkout.Path=%q, want %q", checkout.Path, wantPath)
 	}
