@@ -3,9 +3,9 @@
 package main
 
 import (
-	"bytes"
 	"errors"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -240,51 +240,37 @@ func TestDesktopToastNotifierActivationWithBadArgsDoesNothing(t *testing.T) {
 	}
 }
 
-func TestDesktopToastIconReleaseWritesEmbeddedPNG(t *testing.T) {
+func TestRemoveDesktopToastIconRoute(t *testing.T) {
 	home := t.TempDir()
-	path, err := releaseDesktopToastIcon(home)
-	if err != nil {
-		t.Fatalf("release icon: %v", err)
+	path := desktopToastIconPath(home)
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
 	}
-	data, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatalf("read icon: %v", err)
+	if err := os.WriteFile(path, []byte("png"), 0o644); err != nil {
+		t.Fatalf("write icon: %v", err)
 	}
-	if len(data) == 0 || !bytes.Equal(data, desktopToastIconPNG) {
-		t.Fatalf("icon bytes mismatch, len=%d", len(data))
+	removeDesktopToastIconRoute(home)
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		t.Fatalf("icon still present after cleanup")
 	}
-	if got := desktopToastIconPath(home); got != path {
-		t.Fatalf("path = %q, want %q", path, got)
-	}
-	info1, err := os.Stat(path)
-	if err != nil {
-		t.Fatalf("stat icon: %v", err)
-	}
-	if _, err := releaseDesktopToastIcon(home); err != nil {
-		t.Fatalf("second release: %v", err)
-	}
-	info2, err := os.Stat(path)
-	if err != nil {
-		t.Fatalf("second stat: %v", err)
-	}
-	if !info1.ModTime().Equal(info2.ModTime()) {
-		t.Fatalf("icon rewritten unnecessarily")
-	}
+	removeDesktopToastIconRoute(home) // idempotent, must not error or panic
 }
 
 func TestDesktopToastAUMIDValues(t *testing.T) {
 	got := map[string]string{}
-	for _, v := range desktopToastAUMIDValues(`C:\icon.png`) {
+	for _, v := range desktopToastAUMIDValues() {
 		got[v[0]] = v[1]
 	}
-	for want, value := range map[string]string{
-		"DisplayName":         "WheelMaker",
-		"IconUri":             `C:\icon.png`,
-		"IconBackgroundColor": "FF0A1E44",
-		"CustomActivator":     desktopToastActivatorCLSID,
-	} {
-		if got[want] != value {
-			t.Fatalf("%s = %q, want %q", want, got[want], value)
+	want := map[string]string{
+		"DisplayName":     "WheelMaker",
+		"CustomActivator": desktopToastActivatorCLSID,
+	}
+	if len(got) != len(want) {
+		t.Fatalf("values = %v, want exactly %v", got, want)
+	}
+	for name, value := range want {
+		if got[name] != value {
+			t.Fatalf("%s = %q, want %q", name, got[name], value)
 		}
 	}
 }

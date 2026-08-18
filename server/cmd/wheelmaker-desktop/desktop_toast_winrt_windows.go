@@ -3,8 +3,6 @@
 package main
 
 import (
-	"bytes"
-	_ "embed"
 	"encoding/binary"
 	"fmt"
 	"log"
@@ -170,56 +168,45 @@ func deleteHString(h uintptr) {
 	}
 }
 
-//go:embed winres/icon.png
-var desktopToastIconPNG []byte
-
 func desktopToastIconPath(home string) string {
 	return filepath.Join(home, ".wheelmaker", "desktop", "wheelmaker-toast-icon.png")
 }
 
-// releaseDesktopToastIcon writes the embedded icon to a stable path that the
-// AUMID registration references via IconUri. It is idempotent.
-func releaseDesktopToastIcon(home string) (string, error) {
-	path := desktopToastIconPath(home)
-	if existing, err := os.ReadFile(path); err == nil && bytes.Equal(existing, desktopToastIconPNG) {
-		return path, nil
-	}
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return "", err
-	}
-	if err := os.WriteFile(path, desktopToastIconPNG, 0o644); err != nil {
-		return "", err
-	}
-	return path, nil
+// removeDesktopToastIconRoute deletes the icon file released by the retired
+// registry IconUri route. Best effort.
+func removeDesktopToastIconRoute(home string) {
+	_ = os.Remove(desktopToastIconPath(home))
 }
 
 // desktopToastAUMIDValues are the registry values written under the AUMID
-// key. IconBackgroundColor tints the plate behind the toast header icon with
-// the WheelMaker brand navy.
-func desktopToastAUMIDValues(iconPath string) [][2]string {
+// key. The toast header name/icon come from the Start menu shortcut; the
+// registry only needs the display name (fallback) and the COM activator.
+func desktopToastAUMIDValues() [][2]string {
 	return [][2]string{
 		{"DisplayName", "WheelMaker"},
-		{"IconUri", iconPath},
-		{"IconBackgroundColor", "FF0A1E44"},
 		{"CustomActivator", desktopToastActivatorCLSID},
 	}
 }
 
-// writeDesktopToastRegistry (re)registers the toast identity under HKCU so the
-// toast header shows the WheelMaker name and icon and clicks reach our COM
-// activator. All values follow the current exe, so dev and release builds
-// overwrite each other (last run wins).
-func writeDesktopToastRegistry(exePath, iconPath string) error {
+// writeDesktopToastRegistry (re)registers the toast identity under HKCU so
+// toast clicks reach our COM activator. All values follow the current exe, so
+// dev and release builds overwrite each other (last run wins). Leftover
+// values from the retired IconUri route are deleted.
+func writeDesktopToastRegistry(exePath string) error {
 	aumidKey, _, err := registry.CreateKey(registry.CURRENT_USER, desktopToastAUMIDKey, registry.SET_VALUE)
 	if err != nil {
 		return fmt.Errorf("open AUMID key: %w", err)
 	}
 	defer aumidKey.Close()
-	for _, value := range desktopToastAUMIDValues(iconPath) {
+	for _, value := range desktopToastAUMIDValues() {
 		if err := aumidKey.SetStringValue(value[0], value[1]); err != nil {
 			return fmt.Errorf("set %s: %w", value[0], err)
 		}
 	}
+	// Retired registry icon route: the platform ignores these on recent
+	// Windows 11 builds and the shortcut now provides the icon.
+	_ = aumidKey.DeleteValue("IconUri")
+	_ = aumidKey.DeleteValue("IconBackgroundColor")
 	clsidKey, _, err := registry.CreateKey(registry.CURRENT_USER, desktopToastCLSIDKey, registry.SET_VALUE)
 	if err != nil {
 		return fmt.Errorf("open CLSID key: %w", err)
@@ -487,11 +474,8 @@ func (o *win32DesktopToastOps) registerIdentity() error {
 	if err != nil {
 		return fmt.Errorf("resolve home dir: %w", err)
 	}
-	iconPath, err := releaseDesktopToastIcon(home)
-	if err != nil {
-		return fmt.Errorf("release toast icon: %w", err)
-	}
-	if err := writeDesktopToastRegistry(exePath, iconPath); err != nil {
+	removeDesktopToastIconRoute(home)
+	if err := writeDesktopToastRegistry(exePath); err != nil {
 		return err
 	}
 	// Best effort: the shortcut only provides the toast header icon; the
