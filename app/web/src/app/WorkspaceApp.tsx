@@ -3979,11 +3979,20 @@ export function App() {
     if (!chatTitlePromptMenuOpen || !chatTitlePromptMenuAvailable || typeof window === 'undefined') {
       return undefined;
     }
-    // Span the title bar: the dropdown reads as the title region's own panel
-    // rather than a small floating card, on desktop and wide foldables alike.
-    const anchor =
-      chatTitlePromptButtonRef.current?.closest('.chat-title-bar')?.getBoundingClientRect() ??
-      chatTitlePromptButtonRef.current?.getBoundingClientRect();
+    const titleBar = chatTitlePromptButtonRef.current?.closest('.chat-title-bar')?.getBoundingClientRect();
+    const trigger = chatTitlePromptButtonRef.current?.getBoundingClientRect();
+    if (isWide && trigger) {
+      // Desktop: the dropdown's left edge aligns with the prompt-history icon
+      // that opened it; the right edge keeps the title bar's 8px inset.
+      const right = (titleBar ? titleBar.right : window.innerWidth) - 8;
+      return {
+        left: trigger.left,
+        width: Math.max(280, right - trigger.left),
+      };
+    }
+    // Narrow shells: span the title bar so the dropdown reads as the title
+    // region's own panel rather than a small floating card.
+    const anchor = titleBar ?? trigger;
     if (!anchor) {
       return undefined;
     }
