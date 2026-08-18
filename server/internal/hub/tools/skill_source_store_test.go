@@ -150,79 +150,47 @@ func TestNativeSkillSourceStoreUsesReadableSourceKeyPaths(t *testing.T) {
 	}
 }
 
-func TestNativeSkillSourceStoreMigratesLegacyHashedRepository(t *testing.T) {
-	repository := t.TempDir()
-	initSkillSourceGitFixture(t, repository, "alpha")
-	home := t.TempDir()
+func TestNativeSkillSourceStoreDoesNotAdoptLegacyRepositoryPaths(t *testing.T) {
 	key := "github.com/example/skills"
-	digest := sha256.Sum256([]byte(strings.ToLower(strings.TrimSpace(key))))
-	legacyPath := filepath.Join(home, ".wheelmaker", "skills", hex.EncodeToString(digest[:]))
-	if err := os.MkdirAll(filepath.Dir(legacyPath), 0o755); err != nil {
-		t.Fatal(err)
+	legacyPath := func(name string, home string) string {
+		switch name {
+		case "flat":
+			return filepath.Join(home, ".wheelmaker", "skills", "github.com--example--skills")
+		case "nested":
+			return filepath.Join(home, ".wheelmaker", "skills", "github.com", "example", "skills")
+		case "hash":
+			digest := sha256.Sum256([]byte(strings.ToLower(strings.TrimSpace(key))))
+			return filepath.Join(home, ".wheelmaker", "skills", hex.EncodeToString(digest[:]))
+		default:
+			t.Fatalf("unknown legacy path %q", name)
+			return ""
+		}
 	}
-	runSkillSourceGit(t, filepath.Dir(legacyPath), "clone", "--quiet", repository, legacyPath)
 
-	store := newSkillSourceStore(home)
-	checkout, err := store.ensureRepo(context.Background(), skillSourceSnapshot{Source: repository, SourceKey: key})
-	if err != nil {
-		t.Fatalf("ensureRepo() error=%v", err)
-	}
-	wantPath := filepath.Join(home, ".wheelmaker", "skills", "github.com_example_skills")
-	if checkout.Path != wantPath {
-		t.Fatalf("checkout.Path=%q, want %q", checkout.Path, wantPath)
-	}
-	if _, err := os.Stat(legacyPath); !os.IsNotExist(err) {
-		t.Fatalf("legacy repository still exists: %v", err)
-	}
-}
+	for _, name := range []string{"flat", "nested", "hash"} {
+		t.Run(name, func(t *testing.T) {
+			repository := t.TempDir()
+			initSkillSourceGitFixture(t, repository, "alpha")
+			home := t.TempDir()
+			oldPath := legacyPath(name, home)
+			if err := os.MkdirAll(filepath.Dir(oldPath), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			runSkillSourceGit(t, filepath.Dir(oldPath), "clone", "--quiet", repository, oldPath)
 
-func TestNativeSkillSourceStoreMigratesLegacyFlatRepository(t *testing.T) {
-	repository := t.TempDir()
-	initSkillSourceGitFixture(t, repository, "alpha")
-	home := t.TempDir()
-	key := "github.com/example/skills"
-	legacyPath := filepath.Join(home, ".wheelmaker", "skills", "github.com--example--skills")
-	if err := os.MkdirAll(filepath.Dir(legacyPath), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	runSkillSourceGit(t, filepath.Dir(legacyPath), "clone", "--quiet", repository, legacyPath)
-
-	store := newSkillSourceStore(home)
-	checkout, err := store.ensureRepo(context.Background(), skillSourceSnapshot{Source: repository, SourceKey: key})
-	if err != nil {
-		t.Fatalf("ensureRepo() error=%v", err)
-	}
-	wantPath := filepath.Join(home, ".wheelmaker", "skills", "github.com_example_skills")
-	if checkout.Path != wantPath {
-		t.Fatalf("checkout.Path=%q, want %q", checkout.Path, wantPath)
-	}
-	if _, err := os.Stat(legacyPath); !os.IsNotExist(err) {
-		t.Fatalf("legacy flat repository still exists: %v", err)
-	}
-}
-
-func TestNativeSkillSourceStoreMigratesNestedReadableRepository(t *testing.T) {
-	repository := t.TempDir()
-	initSkillSourceGitFixture(t, repository, "alpha")
-	home := t.TempDir()
-	key := "github.com/example/skills"
-	nestedPath := filepath.Join(home, ".wheelmaker", "skills", "github.com", "example", "skills")
-	if err := os.MkdirAll(filepath.Dir(nestedPath), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	runSkillSourceGit(t, filepath.Dir(nestedPath), "clone", "--quiet", repository, nestedPath)
-
-	store := newSkillSourceStore(home)
-	checkout, err := store.ensureRepo(context.Background(), skillSourceSnapshot{Source: repository, SourceKey: key})
-	if err != nil {
-		t.Fatalf("ensureRepo() error=%v", err)
-	}
-	wantPath := filepath.Join(home, ".wheelmaker", "skills", "github.com_example_skills")
-	if checkout.Path != wantPath {
-		t.Fatalf("checkout.Path=%q, want %q", checkout.Path, wantPath)
-	}
-	if _, err := os.Stat(nestedPath); !os.IsNotExist(err) {
-		t.Fatalf("nested repository still exists: %v", err)
+			store := newSkillSourceStore(home)
+			checkout, err := store.ensureRepo(context.Background(), skillSourceSnapshot{Source: repository, SourceKey: key})
+			if err != nil {
+				t.Fatalf("ensureRepo() error=%v", err)
+			}
+			wantPath := filepath.Join(home, ".wheelmaker", "skills", "github.com_example_skills")
+			if checkout.Path != wantPath {
+				t.Fatalf("checkout.Path=%q, want %q", checkout.Path, wantPath)
+			}
+			if _, err := os.Stat(oldPath); err != nil {
+				t.Fatalf("legacy repository was adopted or removed: %v", err)
+			}
+		})
 	}
 }
 

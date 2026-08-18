@@ -135,7 +135,7 @@ func populateSkillSourceWorkingTree(ctx context.Context, homeDir string, lock *s
 	store := newSkillSourceStore(homeDir)
 	for index := range lock.Sources {
 		source := &lock.Sources[index]
-		_, err := store.repositoryPathForRead(source.SourceKey)
+		_, err := os.Stat(store.repositoryPath(source.SourceKey))
 		if errors.Is(err, os.ErrNotExist) {
 			source.Status = "needs_clone"
 			continue
