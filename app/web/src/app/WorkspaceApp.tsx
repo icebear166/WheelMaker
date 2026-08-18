@@ -381,6 +381,7 @@ import {
   resolveChatKeyboardLayoutViewportHeight,
   resolveChatKeyboardInsetScrollAction,
   resolveChatSessionReadWindowUpdate,
+  resolveChatScrollFollowState,
   resolveChatScrollNavVisibility,
   shouldAutoScrollChatToBottom,
 } from '../chat/layout/chatScrollIntent';
@@ -4562,16 +4563,26 @@ export function App() {
       clientHeight: scroller.clientHeight,
       threshold: CHAT_AUTO_SCROLL_BOTTOM_THRESHOLD,
     });
-    chatAutoScrollFollowRef.current = visibility.atBottom;
-    setChatShowScrollToBottom(visibility.showScrollToBottom);
+    const followsLatest = resolveChatScrollFollowState({
+      atBottom: visibility.atBottom,
+      followsLatest: chatAutoScrollFollowRef.current,
+      userInitiated: chatPointerScrollingRef.current || isChatUserScrollLocked(chatUserScrollLockUntilRef.current),
+    });
+    chatAutoScrollFollowRef.current = followsLatest;
+    setChatShowScrollToBottom(!followsLatest);
     setChatShowScrollToTop(visibility.showScrollToTop);
   }, []);
 
   const handleChatAtBottomChange = useCallback((atBottom: boolean) => {
     // Keep Virtuoso's semantic follow signal; outer metrics can show a transient
     // gap while pending rows are being measured.
-    chatAutoScrollFollowRef.current = atBottom;
-    setChatShowScrollToBottom(!atBottom);
+    const followsLatest = resolveChatScrollFollowState({
+      atBottom,
+      followsLatest: chatAutoScrollFollowRef.current,
+      userInitiated: chatPointerScrollingRef.current || isChatUserScrollLocked(chatUserScrollLockUntilRef.current),
+    });
+    chatAutoScrollFollowRef.current = followsLatest;
+    setChatShowScrollToBottom(!followsLatest);
     const scroller = chatScrollRef.current;
     if (scroller) {
       const visibility = resolveChatScrollNavVisibility({
@@ -4583,7 +4594,7 @@ export function App() {
       setChatShowScrollToTop(visibility.showScrollToTop);
       return;
     }
-    if (atBottom) {
+    if (followsLatest) {
       setChatShowScrollToTop(false);
     }
   }, []);

@@ -9,6 +9,7 @@ import {
   resolveChatKeyboardInsetScrollAction,
   resolveChatSessionReadWindowUpdate,
   resolveChatScrollBottomTop,
+  resolveChatScrollFollowState,
   resolveChatScrollNavVisibility,
   shouldAutoScrollChatToBottom,
 } from '../web/src/chat/layout/chatScrollIntent';
@@ -46,6 +47,30 @@ describe('web drag scroll behavior', () => {
         followsLatest: false,
         pointerScrolling: false,
         userScrollLocked: true,
+      }),
+    ).toBe(true);
+  });
+
+  test('preserves follow during transient non-bottom programmatic scroll metrics', () => {
+    expect(
+      resolveChatScrollFollowState({
+        atBottom: false,
+        followsLatest: true,
+        userInitiated: false,
+      }),
+    ).toBe(true);
+    expect(
+      resolveChatScrollFollowState({
+        atBottom: false,
+        followsLatest: true,
+        userInitiated: true,
+      }),
+    ).toBe(false);
+    expect(
+      resolveChatScrollFollowState({
+        atBottom: true,
+        followsLatest: false,
+        userInitiated: false,
       }),
     ).toBe(true);
   });
@@ -109,9 +134,16 @@ describe('web drag scroll behavior', () => {
     const handlerEnd = mainTsx.indexOf('const handleChatScroll', handlerStart);
     const handler = mainTsx.slice(handlerStart, handlerEnd);
 
-    expect(handler).toContain('chatAutoScrollFollowRef.current = atBottom;');
-    expect(handler).toContain('setChatShowScrollToBottom(!atBottom);');
+    expect(handler).toContain('resolveChatScrollFollowState({');
+    expect(handler).toContain('chatAutoScrollFollowRef.current = followsLatest;');
+    expect(handler).toContain('setChatShowScrollToBottom(!followsLatest);');
     expect(handler).not.toContain('applyChatScrollNavVisibility(scroller);');
+
+    const scrollHandlerStart = mainTsx.indexOf('const applyChatScrollNavVisibility');
+    const scrollHandlerEnd = mainTsx.indexOf('const handleChatAtBottomChange', scrollHandlerStart);
+    const scrollHandler = mainTsx.slice(scrollHandlerStart, scrollHandlerEnd);
+    expect(scrollHandler).toContain('resolveChatScrollFollowState({');
+    expect(scrollHandler).toContain('userInitiated: chatPointerScrollingRef.current || isChatUserScrollLocked(chatUserScrollLockUntilRef.current)');
   });
 
   test('shows the scroll-to-bottom button from the actual chat scroll container position', () => {

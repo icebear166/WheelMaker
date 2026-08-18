@@ -20,6 +20,17 @@ export function shouldAutoScrollChatToBottom(input: {
   return input.force || (input.followsLatest && !input.pointerScrolling && !input.userScrollLocked);
 }
 
+export function resolveChatScrollFollowState(input: {
+  atBottom: boolean;
+  followsLatest: boolean;
+  userInitiated: boolean;
+}): boolean {
+  if (input.atBottom) {
+    return true;
+  }
+  return input.userInitiated ? false : input.followsLatest;
+}
+
 export type ChatKeyboardInsetScrollAction = 'none' | 'immediate' | 'deferred';
 
 export const CHAT_KEYBOARD_INSET_OPEN_THRESHOLD_PX = 72;

@@ -365,8 +365,9 @@ describe('web chat integration', () => {
     expect(mainTsx).not.toContain('function isChatScrolledNearBottom(container: HTMLElement): boolean {');
     expect(mainTsx).not.toContain('const updateChatFollowModeFromScroll = useCallback(');
     expect(mainTsx).toContain('const handleChatAtBottomChange = useCallback((atBottom: boolean) => {');
-    expect(mainTsx).toContain('chatAutoScrollFollowRef.current = atBottom;');
-    expect(mainTsx).toContain('setChatShowScrollToBottom(!atBottom);');
+    expect(mainTsx).toContain('resolveChatScrollFollowState({');
+    expect(mainTsx).toContain('chatAutoScrollFollowRef.current = followsLatest;');
+    expect(mainTsx).toContain('setChatShowScrollToBottom(!followsLatest);');
     expect(mainTsx).toContain('const handleChatScroll = useCallback((event: React.UIEvent<HTMLDivElement>) => {');
     expect(mainTsx).toContain('resolveChatScrollNavVisibility({');
     expect(mainTsx).toContain('const scrollChatToBottom = useCallback((force = false) => {');

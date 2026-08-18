@@ -116,7 +116,8 @@ describe('web chat turn rendering', () => {
     expect(main).toContain("chatVirtuosoListRef.current?.scrollToBottom('auto');");
     expect(main).not.toContain('chatVirtuosoListRef.current?.autoscrollToBottom();');
     expect(main).toContain('const handleChatAtBottomChange = useCallback((atBottom: boolean) => {');
-    expect(main).toContain('setChatShowScrollToBottom(!atBottom);');
+    expect(main).toContain('resolveChatScrollFollowState({');
+    expect(main).toContain('setChatShowScrollToBottom(!followsLatest);');
     expect(main).toContain('ref={chatVirtuosoListRef}');
     expect(main).toContain('atBottomThreshold={CHAT_AUTO_SCROLL_BOTTOM_THRESHOLD}');
     expect(main).toContain('onAtBottomChange={handleChatAtBottomChange}');
@@ -307,7 +308,8 @@ describe('web chat turn rendering', () => {
 
     expect(main).toContain('const [chatShowScrollToBottom, setChatShowScrollToBottom] = useState(false);');
     expect(main).toContain('const [chatShowScrollToTop, setChatShowScrollToTop] = useState(false);');
-    expect(main).toContain('setChatShowScrollToBottom(!atBottom);');
+    expect(main).toContain('resolveChatScrollFollowState({');
+    expect(main).toContain('setChatShowScrollToBottom(!followsLatest);');
     expect(main).toContain('className="chat-scroll-nav"');
     expect(main).toContain('className="chat-scroll-nav-button"');
     expect(main).toContain('<ChatIcon name="arrowDownToLine" size={16} />');
