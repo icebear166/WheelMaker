@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://wiki.example.com/schema/article.schema.json",
+  "title": "Personal Wiki article metadata",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "id",
+    "title",
+    "summary",
+    "section",
+    "category",
+    "order",
+    "tags",
+    "status",
+    "updated",
+    "confidence",
+    "projects",
+    "sources"
+  ],
+  "properties": {
+    "id": {"type": "string", "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"},
+    "title": {"type": "string", "minLength": 2, "maxLength": 100},
+    "summary": {"type": "string", "minLength": 10, "maxLength": 240},
+    "section": {"type": "string", "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"},
+    "category": {"type": "string", "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"},
+    "order": {"type": "integer", "minimum": 0, "maximum": 9999},
+    "tags": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1, "maxLength": 40}
+    },
+    "status": {"const": "current"},
+    "updated": {"type": "string", "format": "date"},
+    "confidence": {"enum": ["verified", "confirmed", "provisional"]},
+    "projects": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+        "maxLength": 64
+      }
+    },
+    "sources": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["kind", "ref"],
+        "properties": {
+          "kind": {"enum": ["repository", "documentation", "decision", "verification"]},
+          "ref": {"type": "string", "minLength": 3, "maxLength": 240}
+        }
+      }
+    }
+  }
+}

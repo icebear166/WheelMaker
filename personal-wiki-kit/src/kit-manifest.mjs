@@ -131,7 +131,10 @@ function isAllowedHost(host) {
     || host === '127.0.0.1'
     || host === '[::1]'
     || host === 'example.com'
-    || host.endsWith('.example.com');
+    || host.endsWith('.example.com')
+    || host === 'github.com'
+    || host === 'json-schema.org'
+    || host === 'registry.npmjs.org';
 }
 
 function contentReasons(path, source) {

@@ -106,13 +106,15 @@ Run: `npm test -- --test-name-pattern="kit manifest|public boundary"`
 
 Expected: PASS.
 
-- [ ] **Step 6: Git checkpoint**
+- [x] **Step 6: Git checkpoint**
 
-Checkpoint only the manifest, package metadata, README, scanner tests, and gitleaks rule changes.
+Checkpoint: `31cdcc33 feat(wiki-kit): establish public package boundary`.
 
 ### Task 3: Extract and parameterize the content compiler
 
 **Files:**
+- Modify: `personal-wiki-kit/package.json`
+- Modify: `personal-wiki-kit/package-lock.json`
 - Create: `personal-wiki-kit/schema/article.schema.json`
 - Create: `personal-wiki-kit/src/content.mjs`
 - Create: `personal-wiki-kit/src/release-manifest.mjs`
@@ -123,7 +125,7 @@ Checkpoint only the manifest, package metadata, README, scanner tests, and gitle
 
 **Acceptance:** The compiler accepts an explicit private repository and output directory, preserves the existing taxonomy/projects/articles contracts and dual catalogs, rejects secrets/unsafe links/unsupported files, and emits deterministic article/search/catalog/release manifests.
 
-- [ ] **Step 1: Port behavior tests before compiler code**
+- [x] **Step 1: Port behavior tests before compiler code**
 
 Write tests around the desired API:
 
@@ -140,7 +142,7 @@ assert.equal(await verifyReleaseRoot(fixtureOutput), true);
 
 Cover missing registrations, duplicate orders, unknown project IDs, unmatched attachments, raw HTML, credential patterns, traversal links, deterministic ordering, and unlisted release files.
 
-- [ ] **Step 2: Run tests to verify RED**
+- [x] **Step 2: Run tests to verify RED**
 
 Run: `node --test tests/content.test.mjs tests/registry.test.mjs tests/release-manifest.test.mjs`
 
@@ -148,11 +150,11 @@ Workdir: `personal-wiki-kit`
 
 Expected: FAIL because the compiler modules are absent.
 
-- [ ] **Step 3: Implement the minimal repository-parameterized compiler**
+- [x] **Step 3: Implement the minimal repository-parameterized compiler**
 
 Reuse verified behavior from the private implementation by selective text extraction only. Remove module-level repository paths; every filesystem operation must resolve under the explicit repository/output roots and reject escapes or symlinks crossing those roots.
 
-- [ ] **Step 4: Verify GREEN and deterministic output**
+- [x] **Step 4: Verify GREEN and deterministic output**
 
 Run: `node --test tests/content.test.mjs tests/registry.test.mjs tests/release-manifest.test.mjs`
 

@@ -1,0 +1,6 @@
+schema: 1
+projects:
+  - id: example-project
+    title: 示例项目
+    description: 仅用于公共测试的虚构项目。
+    order: 10

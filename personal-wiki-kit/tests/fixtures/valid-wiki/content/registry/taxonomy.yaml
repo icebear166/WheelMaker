@@ -1,0 +1,11 @@
+schema: 1
+sections:
+  - id: software-development
+    title: 软件开发
+    description: 可复用的软件工程知识。
+    order: 10
+    categories:
+      - id: architecture
+        title: 架构
+        description: 系统边界与组件职责。
+        order: 10
