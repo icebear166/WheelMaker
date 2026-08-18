@@ -41,7 +41,7 @@ def write_fixture_repo(root: Path) -> None:
 
 def run_helper(script: Path, repo_root: Path) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
-        [sys.executable, str(script), str(repo_root)],
+        [sys.executable, "-B", str(script), str(repo_root)],
         cwd=REPO_ROOT,
         capture_output=True,
         text=True,

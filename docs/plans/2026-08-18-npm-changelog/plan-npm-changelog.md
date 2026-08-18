@@ -128,23 +128,23 @@ Expected: it reports the expected missing package files without modifying any fi
 
 **Acceptance:** 每个活动包有一份中文 changelog；无既有记录时包含最新 10 个可获得版本，版本从新到旧排列，每个版本有适用的传统分类和 `WheelMaker integration`。
 
-- [ ] **Step 1: Build the version/source matrix**
+- [x] **Step 1: Build the version/source matrix**
 
 运行 `inspect_npm_policy.py`，为每个包读取 npm metadata 和 latest dist-tag；解析已有文件（当前为空）并确定最新 10 个版本。对每个包记录研究所需的 registry、repository、官方 changelog 和 tarball 地址；`@myflicker/cli` 使用 `npm.go` 私有 registry，不能用 public registry 结果替代。
 
-- [ ] **Step 2: Research public-source packages**
+- [x] **Step 2: Research public-source packages**
 
 对 repository 可访问的包，核对官方 changelog、release/tag 和相关 Git 提交，按版本整理新增、修改、修复、弃用、安全和 CLI/API/engine 变化；只把能支持 WheelMaker 接入判断的内容写入 changelog。
 
-- [ ] **Step 3: Research packages without accessible public source**
+- [x] **Step 3: Research packages without accessible public source**
 
 使用 `npm pack <package>@<version> --pack-destination <temporary-directory>` 下载相邻版本，解压后比较 `package.json`、bin/入口、运行时代码、依赖、内置资源和 engine 字段；过滤压缩包时间戳与生成噪声，再把实际可见的变化整理为中文版本条目。
 
-- [ ] **Step 4: Analyze WheelMaker integration impact**
+- [x] **Step 4: Analyze WheelMaker integration impact**
 
 逐包回看 `server/internal/hub/tools/npm.go` 的 policy、全局安装/更新/重装动作、binary lookup 和 registry 选择，并按需要检查对应 ACP provider/agent 启动配置；在每个版本的 `WheelMaker integration` 中给出“无需动作、需回归验证、需调整接入或暂不建议升级”的判断及理由。
 
-- [ ] **Step 5: Write all 9 Markdown files**
+- [x] **Step 5: Write all 9 Markdown files**
 
 使用 `references/changelog-format.md` 的模板，版本章节最新在前；不为没有可靠依据的细节编造结论，不要求逐条变更附来源注释，不删除未来可继续增量使用的结构。
 
@@ -155,7 +155,7 @@ Expected: it reports the expected missing package files without modifying any fi
 
 **Acceptance:** helper tests、skill validator、policy extraction、changelog validator 和 Markdown whitespace checks 全部通过；计划勾选与实际结果一致，并创建实现 checkpoint。
 
-- [ ] **Step 1: Run focused verification**
+- [x] **Step 1: Run focused verification**
 
 ```powershell
 python -B -m unittest discover -s .agents/skills/npm-changelog/scripts/tests -v
@@ -167,11 +167,11 @@ git diff --check
 
 Expected: all commands exit 0；policy contains 9 packages；changelog validator finds 9 valid files and no duplicate versions.
 
-- [ ] **Step 2: Run relevant project checks**
+- [x] **Step 2: Run relevant project checks**
 
 由于本任务只新增 skill、Python helper 和 Markdown，不修改 Go/TypeScript 行为；运行 helper tests 和 metadata/content validation 即为主验证，不执行完整 Web 构建或 Go 全量测试。
 
-- [ ] **Step 3: Review diff and checkpoint**
+- [x] **Step 3: Review diff and checkpoint**
 
 检查 `git status --short`、`git diff --stat` 和新文件内容，仅 stage 本任务文件；调用 `git-workflow` checkpoint，记录实现 commit hash 和 subject。
 

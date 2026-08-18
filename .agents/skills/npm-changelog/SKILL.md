@@ -85,10 +85,10 @@ description: 追踪并记录 WheelMaker 通过 Hub 管理的 agent runtime npm �
 - 完成后运行：
 
   ```powershell
-  python -m unittest discover -s .agents/skills/npm-changelog/scripts/tests -v
-  python -X utf8 C:\Users\suweimin\.codex\skills\.system\skill-creator\scripts\quick_validate.py .agents/skills/npm-changelog
-  python .agents/skills/npm-changelog/scripts/inspect_npm_policy.py .
-  python .agents/skills/npm-changelog/scripts/validate_changelog.py .
+  python -B -m unittest discover -s .agents/skills/npm-changelog/scripts/tests -v
+  python -B -X utf8 C:\Users\suweimin\.codex\skills\.system\skill-creator\scripts\quick_validate.py .agents/skills/npm-changelog
+  python -B .agents/skills/npm-changelog/scripts/inspect_npm_policy.py .
+  python -B .agents/skills/npm-changelog/scripts/validate_changelog.py .
   git diff --check
   ```
 
