@@ -88,6 +88,7 @@ var (
 	iidIXmlDocumentIO                  = mustParseGUID("{6cd0e74e-ee65-4489-9ebf-ca43e87ba637}")
 	iidIToastNotificationManagerStats  = mustParseGUID("{50ac103f-d235-4598-bbef-98fe4d1a3ad4}")
 	iidIToastNotificationFactory       = mustParseGUID("{04124b20-82c6-4229-b109-fd9ed4662b53}")
+	iidIToastNotification2             = mustParseGUID("{9dfb9fd1-143a-490e-90bf-b9fba7132de7}")
 	iidINotificationActivationCallback = mustParseGUID("{53e31837-6600-4a81-9395-75cffe746f94}")
 	clsidDesktopToastActivator         = mustParseGUID(desktopToastActivatorCLSID)
 )
@@ -459,13 +460,21 @@ func (o *win32DesktopToastOps) showToast(xmlPayload, tag string) error {
 	}
 	defer comRelease(toast)
 
+	// put_Tag lives on IToastNotification2 (not on the base IToastNotification
+	// interface), so it must be reached through QueryInterface.
+	var toast2 uintptr
+	if err := comQueryInterface(toast, &iidIToastNotification2, &toast2).err("QI IToastNotification2"); err != nil {
+		return err
+	}
+	defer comRelease(toast2)
+
 	hTag, err := newHString(tag)
 	if err != nil {
 		return err
 	}
-	tagResult := comCall(toast, 15 /* put_Tag */, hTag)
+	tagResult := comCall(toast2, 6 /* IToastNotification2::put_Tag */, hTag)
 	deleteHString(hTag)
-	if err := tagResult.err("ToastNotification.put_Tag"); err != nil {
+	if err := tagResult.err("ToastNotification2.put_Tag"); err != nil {
 		return err
 	}
 
