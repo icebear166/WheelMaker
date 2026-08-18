@@ -1282,6 +1282,7 @@ const SIDEBAR_TRANSIENT_MENU_SELECTOR = [
   '.chat-title-project-menu',
   '.chat-title-prompt-menu',
   '.app-confirm-dialog',
+  '.app-menu-surface',
 ].join(', ');
 const GESTURE_NAV_PRESERVED_SURFACE_SELECTOR = [
   '.drawer',

@@ -81,3 +81,11 @@ test('mobile top-level menus own an exclusive layer instead of the drawer', () =
   expect(mobileProjectAction).toContain("if (isWide || kind === 'actions')");
   expect(mobileProjectAction).toContain('closeMobileDrawerForTopLevelSurface();');
 });
+
+test('keeps the app menu interactive during global sidebar button dismissal', () => {
+  const selectorStart = workspaceApp.indexOf('const SIDEBAR_TRANSIENT_MENU_SELECTOR = [');
+  const selectorEnd = workspaceApp.indexOf('].join', selectorStart);
+  const selector = workspaceApp.slice(selectorStart, selectorEnd);
+
+  expect(selector).toContain("  '.app-menu-surface',");
+});
