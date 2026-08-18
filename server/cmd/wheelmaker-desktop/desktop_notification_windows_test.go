@@ -3,69 +3,56 @@
 package main
 
 import (
+	"errors"
 	"strings"
 	"testing"
+	"unicode/utf16"
 )
 
-type fakeNotificationOps struct {
-	metrics      desktopNotificationMetrics
-	workAreaRect desktopWindowRect
-
-	created      []uintptr
-	createdState map[uintptr]*desktopNotificationWindowState
-	destroyed    []uintptr
-	repainted    []uintptr
-	timers       []int
-	repositioned []uintptr
-	focused      int
-	evaled       []string
-	nextHwnd     uintptr
+type fakeBalloon struct {
+	hwnd  uintptr
+	title string
+	body  string
+	flags uint32
 }
 
-func newFakeNotificationOps() *fakeNotificationOps {
-	return &fakeNotificationOps{
-		metrics: desktopNotificationMetrics{
-			width: 480, height: 112, gap: 10, marginX: 16, marginY: 16,
-		},
-		workAreaRect: desktopWindowRect{left: 0, top: 0, right: 1920, bottom: 1040},
-		createdState: map[uintptr]*desktopNotificationWindowState{},
-		nextHwnd:     100,
+type fakeTrayOps struct {
+	installHwnd uintptr
+	installErr  error
+	balloonErr  error
+
+	installed int
+	balloons  []fakeBalloon
+	removed   []uintptr
+	focused   int
+	evaled    []string
+}
+
+func newFakeTrayOps() *fakeTrayOps {
+	return &fakeTrayOps{installHwnd: 77}
+}
+
+func (f *fakeTrayOps) installTrayIcon(_ *desktopTrayNotifier) (uintptr, error) {
+	f.installed++
+	if f.installErr != nil {
+		return 0, f.installErr
 	}
+	return f.installHwnd, nil
 }
 
-func (f *fakeNotificationOps) metricsForWindow() desktopNotificationMetrics { return f.metrics }
-func (f *fakeNotificationOps) workArea() (desktopWindowRect, bool)          { return f.workAreaRect, true }
-
-func (f *fakeNotificationOps) createWindow(state *desktopNotificationWindowState, rect desktopWindowRect) (uintptr, error) {
-	f.nextHwnd++
-	state.hwnd = f.nextHwnd
-	state.rect = rect
-	f.created = append(f.created, state.hwnd)
-	f.createdState[state.hwnd] = state
-	return state.hwnd, nil
-}
-
-func (f *fakeNotificationOps) repositionWindow(hwnd uintptr, rect desktopWindowRect) {
-	f.repositioned = append(f.repositioned, hwnd)
-	if state, ok := f.createdState[hwnd]; ok {
-		state.rect = rect
+func (f *fakeTrayOps) showBalloon(hwnd uintptr, title, body string, flags uint32) error {
+	if f.balloonErr != nil {
+		return f.balloonErr
 	}
+	f.balloons = append(f.balloons, fakeBalloon{hwnd: hwnd, title: title, body: body, flags: flags})
+	return nil
 }
 
-func (f *fakeNotificationOps) repaintWindow(hwnd uintptr) { f.repainted = append(f.repainted, hwnd) }
+func (f *fakeTrayOps) removeTrayIcon(hwnd uintptr) { f.removed = append(f.removed, hwnd) }
 
-func (f *fakeNotificationOps) resetDismissTimer(_ uintptr, milliseconds int) {
-	f.timers = append(f.timers, milliseconds)
-}
+func (f *fakeTrayOps) focusMainWindow() { f.focused++ }
 
-func (f *fakeNotificationOps) destroyWindow(hwnd uintptr) {
-	f.destroyed = append(f.destroyed, hwnd)
-	delete(f.createdState, hwnd)
-}
-
-func (f *fakeNotificationOps) focusMainWindow() { f.focused++ }
-
-func (f *fakeNotificationOps) evalScript(script string) { f.evaled = append(f.evaled, script) }
+func (f *fakeTrayOps) evalScript(script string) { f.evaled = append(f.evaled, script) }
 
 func validNotificationJSON(title, body string) string {
 	return `{"type":"chat.prompt.completed","projectId":"p1","sessionId":"s1","title":"` + title +
@@ -93,103 +80,186 @@ func TestParseDesktopNotification(t *testing.T) {
 	}
 }
 
-func TestDesktopNotificationMetricsUseLargerCard(t *testing.T) {
-	ops := newWin32DesktopNotificationOps(0, nil)
-	metrics := ops.metricsForWindow()
-	if metrics.width != 480 || metrics.height != 112 {
-		t.Fatalf("metrics = %+v, want 480x112 logical pixels at 100%% DPI", metrics)
+func TestDesktopNotificationBalloonFlags(t *testing.T) {
+	cases := []struct {
+		status string
+		want   uint32
+	}{
+		{"completed", niifInfo},
+		{"", niifInfo},
+		{"failed", niifError},
+		{"cancelled", niifNone},
+		{"interrupted", niifNone},
+	}
+	for _, tc := range cases {
+		if got := desktopNotificationBalloonFlags(tc.status); got != tc.want {
+			t.Fatalf("desktopNotificationBalloonFlags(%q) = %d, want %d", tc.status, got, tc.want)
+		}
 	}
 }
 
-func TestNotificationCenterCoalescesBySessionKey(t *testing.T) {
-	ops := newFakeNotificationOps()
-	c := newDesktopNotificationCenterWithOps(ops)
-	if got := c.show(validNotificationJSON("A", "one")); !strings.Contains(got, `"ok":true`) {
-		t.Fatalf("show = %s, want ok", got)
+func TestTruncateNotificationUTF16(t *testing.T) {
+	if got := truncateNotificationUTF16("short", 63); got != "short" {
+		t.Fatalf("short string changed: %q", got)
 	}
-	if got := c.show(validNotificationJSON("A", "two")); !strings.Contains(got, `"ok":true`) {
-		t.Fatalf("show = %s, want ok", got)
+	exact := strings.Repeat("a", 63)
+	if got := truncateNotificationUTF16(exact, 63); got != exact {
+		t.Fatalf("exact-fit string changed: len %d", len(got))
 	}
-	if len(ops.created) != 1 {
-		t.Fatalf("created = %d, want 1 window", len(ops.created))
+	over := strings.Repeat("汉", 300)
+	if got := truncateNotificationUTF16(over, 255); len(utf16.Encode([]rune(got))) != 255 {
+		t.Fatalf("truncated CJK body = %d utf16 units, want 255", len(utf16.Encode([]rune(got))))
 	}
-	if len(ops.repainted) != 1 || len(ops.timers) != 2 {
-		t.Fatalf("repainted = %v, timers = %v, want 1 repaint and 2 timer resets", ops.repainted, ops.timers)
-	}
-	state := ops.createdState[ops.created[0]]
-	if state.notification.Body != "two" {
-		t.Fatalf("notification body = %q, want updated content", state.notification.Body)
+	// An emoji (surrogate pair) must never be split: truncate 3 BMP runes + 1 emoji at 4 units.
+	mixed := "abc😀def"
+	if got := truncateNotificationUTF16(mixed, 4); got != "abc" {
+		t.Fatalf("truncation split surrogate pair: %q", got)
 	}
 }
 
-func TestNotificationCenterRejectsInvalidPayload(t *testing.T) {
-	ops := newFakeNotificationOps()
-	c := newDesktopNotificationCenterWithOps(ops)
-	if got := c.show(`not-json`); !strings.Contains(got, `"ok":false`) {
+func TestDesktopTrayNotifierInstallsTrayIconOnStart(t *testing.T) {
+	ops := newFakeTrayOps()
+	newDesktopTrayNotifierWithOps(ops)
+	if ops.installed != 1 {
+		t.Fatalf("installed = %d, want 1", ops.installed)
+	}
+}
+
+func TestDesktopTrayNotifierShowShowsBalloon(t *testing.T) {
+	ops := newFakeTrayOps()
+	notifier := newDesktopTrayNotifierWithOps(ops)
+	if got := notifier.show(validNotificationJSON("Fix bug", "done")); !strings.Contains(got, `"ok":true`) {
+		t.Fatalf("show = %s, want ok", got)
+	}
+	if len(ops.balloons) != 1 {
+		t.Fatalf("balloons = %v, want 1", ops.balloons)
+	}
+	balloon := ops.balloons[0]
+	if balloon.hwnd != ops.installHwnd || balloon.title != "Fix bug" || balloon.body != "done" || balloon.flags != niifInfo {
+		t.Fatalf("balloon = %+v", balloon)
+	}
+}
+
+func TestDesktopTrayNotifierShowMapsStatusToBalloonFlags(t *testing.T) {
+	ops := newFakeTrayOps()
+	notifier := newDesktopTrayNotifierWithOps(ops)
+	notifier.show(`{"type":"chat.prompt.completed","projectId":"p1","sessionId":"s1","title":"A","body":"b","status":"failed"}`)
+	if len(ops.balloons) != 1 || ops.balloons[0].flags != niifError {
+		t.Fatalf("failed status balloon = %+v, want NIIF_ERROR", ops.balloons)
+	}
+	notifier.show(`{"type":"chat.prompt.completed","projectId":"p1","sessionId":"s1","title":"A","body":"b","status":"cancelled"}`)
+	if len(ops.balloons) != 2 || ops.balloons[1].flags != niifNone {
+		t.Fatalf("cancelled status balloon = %+v, want NIIF_NONE", ops.balloons[1])
+	}
+}
+
+func TestDesktopTrayNotifierShowTruncatesTitleAndBody(t *testing.T) {
+	ops := newFakeTrayOps()
+	notifier := newDesktopTrayNotifierWithOps(ops)
+	title := strings.Repeat("t", 100)
+	body := strings.Repeat("汉", 300)
+	notifier.show(validNotificationJSON(title, body))
+	if len(ops.balloons) != 1 {
+		t.Fatalf("balloons = %v, want 1", ops.balloons)
+	}
+	balloon := ops.balloons[0]
+	if got := len(utf16.Encode([]rune(balloon.title))); got != 63 {
+		t.Fatalf("title = %d utf16 units, want 63", got)
+	}
+	if got := len(utf16.Encode([]rune(balloon.body))); got != 255 {
+		t.Fatalf("body = %d utf16 units, want 255", got)
+	}
+}
+
+func TestDesktopTrayNotifierRejectsInvalidPayload(t *testing.T) {
+	ops := newFakeTrayOps()
+	notifier := newDesktopTrayNotifierWithOps(ops)
+	if got := notifier.show(`not-json`); !strings.Contains(got, `"ok":false`) {
 		t.Fatalf("show = %s, want failure json", got)
 	}
-	if len(ops.created) != 0 {
-		t.Fatalf("created = %v, want none", ops.created)
+	if len(ops.balloons) != 0 {
+		t.Fatalf("balloons = %v, want none", ops.balloons)
 	}
 }
 
-func TestNotificationCenterStacksNewestAtBottom(t *testing.T) {
-	ops := newFakeNotificationOps()
-	c := newDesktopNotificationCenterWithOps(ops)
-	c.show(`{"type":"chat.prompt.completed","projectId":"p1","sessionId":"s1","title":"A","body":"b","status":"completed"}`)
-	c.show(`{"type":"chat.prompt.completed","projectId":"p1","sessionId":"s2","title":"B","body":"b","status":"completed"}`)
-
-	first := ops.createdState[ops.created[0]]
-	second := ops.createdState[ops.created[1]]
-	wantBottom := ops.workAreaRect.bottom - ops.metrics.marginY
-	if second.rect.bottom != wantBottom {
-		t.Fatalf("newest bottom = %d, want %d", second.rect.bottom, wantBottom)
-	}
-	if first.rect.bottom+ops.metrics.gap != second.rect.top {
-		t.Fatalf("first bottom %d + gap != second top %d", first.rect.bottom, second.rect.top)
-	}
-	if first.rect.right != ops.workAreaRect.right-ops.metrics.marginX {
-		t.Fatalf("right edge = %d", first.rect.right)
-	}
-
-	// Dismissing the newest reflows the older window down to the bottom slot.
-	repositionedBefore := len(ops.repositioned)
-	c.handleTimer(second.hwnd)
-	if len(ops.repositioned) != repositionedBefore+1 || ops.repositioned[len(ops.repositioned)-1] != first.hwnd {
-		t.Fatalf("repositioned = %v, want first window reflowed once more", ops.repositioned)
-	}
-	if first.rect.bottom != wantBottom {
-		t.Fatalf("after reflow first bottom = %d, want %d", first.rect.bottom, wantBottom)
+func TestDesktopTrayNotifierBalloonFailureReturnsNotOk(t *testing.T) {
+	ops := newFakeTrayOps()
+	ops.balloonErr = errors.New("balloon rejected")
+	notifier := newDesktopTrayNotifierWithOps(ops)
+	if got := notifier.show(validNotificationJSON("A", "b")); !strings.Contains(got, `"ok":false`) {
+		t.Fatalf("show = %s, want failure json", got)
 	}
 }
 
-func TestNotificationCenterClickFocusesEvalsAndDismisses(t *testing.T) {
-	ops := newFakeNotificationOps()
-	c := newDesktopNotificationCenterWithOps(ops)
-	c.show(validNotificationJSON("A", "b"))
-	hwnd := ops.created[0]
+func TestDesktopTrayNotifierInstallFailureDropsAndRetries(t *testing.T) {
+	ops := newFakeTrayOps()
+	ops.installErr = errors.New("explorer not ready")
+	notifier := newDesktopTrayNotifierWithOps(ops)
+	if got := notifier.show(validNotificationJSON("A", "b")); !strings.Contains(got, `"ok":false`) {
+		t.Fatalf("show = %s, want failure json", got)
+	}
+	if len(ops.balloons) != 0 {
+		t.Fatalf("balloons = %v, want none", ops.balloons)
+	}
+	ops.installErr = nil
+	if got := notifier.show(validNotificationJSON("A", "b")); !strings.Contains(got, `"ok":true`) {
+		t.Fatalf("retry show = %s, want ok", got)
+	}
+	if ops.installed != 3 {
+		t.Fatalf("installed = %d, want start + failed retry + success retry", ops.installed)
+	}
+	if len(ops.balloons) != 1 {
+		t.Fatalf("balloons = %v, want 1 after retry", ops.balloons)
+	}
+}
 
-	c.handleClick(hwnd)
+func TestDesktopTrayNotifierBalloonClickFocusesAndRoutesLatest(t *testing.T) {
+	ops := newFakeTrayOps()
+	notifier := newDesktopTrayNotifierWithOps(ops)
+	notifier.show(validNotificationJSON("A", "one"))
+	notifier.show(`{"type":"chat.prompt.completed","projectId":"p2","sessionId":"s2","title":"B","body":"two","status":"completed"}`)
+
+	notifier.handleBalloonClick()
 	if ops.focused != 1 {
 		t.Fatalf("focused = %d, want 1", ops.focused)
 	}
 	if len(ops.evaled) != 1 ||
 		!strings.Contains(ops.evaled[0], "wheelmaker:desktop-notification-click") ||
-		!strings.Contains(ops.evaled[0], `"p1"`) || !strings.Contains(ops.evaled[0], `"s1"`) {
-		t.Fatalf("evaled = %v", ops.evaled)
-	}
-	if len(ops.destroyed) != 1 || ops.destroyed[0] != hwnd {
-		t.Fatalf("destroyed = %v, want clicked window", ops.destroyed)
+		!strings.Contains(ops.evaled[0], `"p2"`) || !strings.Contains(ops.evaled[0], `"s2"`) {
+		t.Fatalf("evaled = %v, want latest notification session", ops.evaled)
 	}
 }
 
-func TestNotificationCenterCloseDestroysAll(t *testing.T) {
-	ops := newFakeNotificationOps()
-	c := newDesktopNotificationCenterWithOps(ops)
-	c.show(`{"type":"chat.prompt.completed","projectId":"p1","sessionId":"s1","title":"A","body":"b","status":"completed"}`)
-	c.show(`{"type":"chat.prompt.completed","projectId":"p1","sessionId":"s2","title":"B","body":"b","status":"completed"}`)
-	c.close()
-	if len(ops.destroyed) != 2 {
-		t.Fatalf("destroyed = %v, want both windows", ops.destroyed)
+func TestDesktopTrayNotifierBalloonClickWithoutNotificationDoesNothing(t *testing.T) {
+	ops := newFakeTrayOps()
+	notifier := newDesktopTrayNotifierWithOps(ops)
+	notifier.handleBalloonClick()
+	if ops.focused != 0 || len(ops.evaled) != 0 {
+		t.Fatalf("focused = %d, evaled = %v, want none", ops.focused, ops.evaled)
+	}
+}
+
+func TestDesktopTrayNotifierTrayClickFocusesOnly(t *testing.T) {
+	ops := newFakeTrayOps()
+	notifier := newDesktopTrayNotifierWithOps(ops)
+	notifier.handleTrayClick()
+	if ops.focused != 1 {
+		t.Fatalf("focused = %d, want 1", ops.focused)
+	}
+	if len(ops.evaled) != 0 {
+		t.Fatalf("evaled = %v, want none", ops.evaled)
+	}
+}
+
+func TestDesktopTrayNotifierCloseRemovesTrayIcon(t *testing.T) {
+	ops := newFakeTrayOps()
+	notifier := newDesktopTrayNotifierWithOps(ops)
+	notifier.close()
+	if len(ops.removed) != 1 || ops.removed[0] != ops.installHwnd {
+		t.Fatalf("removed = %v, want tray hwnd %d", ops.removed, ops.installHwnd)
+	}
+	notifier.close()
+	if len(ops.removed) != 1 {
+		t.Fatalf("second close removed = %v, want idempotent", ops.removed)
 	}
 }
