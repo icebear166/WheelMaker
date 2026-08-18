@@ -107,12 +107,13 @@ type SkillsCommand struct {
 	resolveSource   func(context.Context, skillSourceSnapshot) (skillSourceSnapshot, error)
 	store           *skillSourceStore
 
-	mu             sync.RWMutex
-	projects       []ProjectInfo
-	operation      *skillsOperationSnapshot
-	previews       map[string]skillsStoredSourcePreview
-	sourceErrors   map[string]map[string]string
-	previewCounter uint64
+	mu               sync.RWMutex
+	projects         []ProjectInfo
+	operation        *skillsOperationSnapshot
+	previews         map[string]skillsStoredSourcePreview
+	sourceErrors     map[string]map[string]string
+	previewCounter   uint64
+	operationCounter uint64
 }
 
 func NewSkillsCommand(config skillsCommandConfig) *SkillsCommand {
@@ -270,6 +271,7 @@ type skillsStoredSourcePreview struct {
 }
 
 type skillsOperationSnapshot struct {
+	ID           string                      `json:"id"`
 	Running      bool                        `json:"running"`
 	Action       string                      `json:"action"`
 	Scope        string                      `json:"scope,omitempty"`
@@ -1213,7 +1215,9 @@ func (c *SkillsCommand) acceptOperation(payload skillsCommandPayload) (*skillsOp
 	if c.operation != nil && c.operation.Running {
 		return nil, &skillsCommandError{Code: rp.CodeConflict, Message: "skills operation already running"}
 	}
+	c.operationCounter++
 	operation := &skillsOperationSnapshot{
+		ID:          fmt.Sprintf("skills-operation-%d", c.operationCounter),
 		Running:     true,
 		Action:      payload.Action,
 		Scope:       payload.Scope,
@@ -1512,16 +1516,17 @@ func removeNativeSkillLockEntries(path string, names []string) error {
 }
 
 func (c *SkillsCommand) skillsInstallDirs(target skillsCommandTarget) ([]string, error) {
+	var directories []string
 	switch target.scope {
 	case "hub":
 		home, err := c.skillsHomeDir()
 		if err != nil {
 			return nil, err
 		}
-		return []string{
+		directories = []string{
 			filepath.Join(home, ".agents", "skills"),
 			filepath.Join(home, ".claude", "skills"),
-		}, nil
+		}
 	case "project":
 		if strings.TrimSpace(target.dir) == "" {
 			return nil, fmt.Errorf("project path is empty")
@@ -1533,13 +1538,14 @@ func (c *SkillsCommand) skillsInstallDirs(target skillsCommandTarget) ([]string,
 		if !info.IsDir() {
 			return nil, fmt.Errorf("project path is not a directory: %s", target.dir)
 		}
-		return []string{
+		directories = []string{
 			filepath.Join(target.dir, ".agents", "skills"),
 			filepath.Join(target.dir, ".claude", "skills"),
-		}, nil
+		}
 	default:
 		return nil, fmt.Errorf("unsupported skills scope: %s", target.scope)
 	}
+	return directories, nil
 }
 
 func (c *SkillsCommand) skillsLockFile(target skillsCommandTarget) string {

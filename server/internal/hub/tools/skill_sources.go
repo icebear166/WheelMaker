@@ -2,6 +2,7 @@ package tools
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/binary"
 	"encoding/hex"
@@ -72,6 +73,12 @@ type skillSourceMigrationResult struct {
 	UnmanagedSkills       []string
 }
 
+type skillSourceMigrationMaterialization struct {
+	rollback func() error
+	commit   func()
+	release  func()
+}
+
 type nativeSkillSourceEntry struct {
 	Name       string
 	Source     string
@@ -124,10 +131,22 @@ func ManagedSkillNamesForScope(projectRoot, homeDir string) map[string]bool {
 		}
 	}
 	path := skillSourceLockPath(projectRoot, nativeLockPath, homeDir)
+	command := newSkillsCommandWithRunner(nil, skillsCommandConfig{HomeDir: homeDir, GlobalLockPath: nativeLockPath})
+	target := skillsCommandTarget{scope: "hub"}
+	if projectRoot != "" {
+		target = skillsCommandTarget{scope: "project", dir: projectRoot}
+	}
 	var migration skillSourceMigrationResult
 	err := withSkillSourceLockFile(path, func() error {
 		var err error
-		migration, err = readOrMigrateSkillSourceLockWithInstalled(nativeLockPath, path, installed)
+		migration, err = readOrMigrateSkillSourceLockWithMaterializer(
+			nativeLockPath,
+			path,
+			installed,
+			func(lock *skillSourceLock) (*skillSourceMigrationMaterialization, error) {
+				return command.materializeNativeMigration(context.Background(), target, lock)
+			},
+		)
 		return err
 	})
 	if err != nil {
@@ -166,10 +185,15 @@ func collectSkillDirectoryNames(directory string, names map[string]struct{}) {
 		return
 	}
 	for _, entry := range entries {
-		if !entry.IsDir() || validateSkillNames([]string{entry.Name()}) != nil {
+		if validateSkillNames([]string{entry.Name()}) != nil {
 			continue
 		}
-		if info, err := os.Stat(filepath.Join(directory, entry.Name(), "SKILL.md")); err == nil && !info.IsDir() {
+		root := filepath.Join(directory, entry.Name())
+		rootInfo, rootErr := os.Stat(root)
+		if rootErr != nil || !rootInfo.IsDir() {
+			continue
+		}
+		if info, err := os.Stat(filepath.Join(root, "SKILL.md")); err == nil && !info.IsDir() {
 			names[strings.ToLower(entry.Name())] = struct{}{}
 		}
 	}
@@ -180,6 +204,14 @@ func readOrMigrateSkillSourceLock(nativeLockPath, sourceLockPath string) (skillS
 }
 
 func readOrMigrateSkillSourceLockWithInstalled(nativeLockPath, sourceLockPath string, installed map[string]struct{}) (skillSourceMigrationResult, error) {
+	return readOrMigrateSkillSourceLockWithMaterializer(nativeLockPath, sourceLockPath, installed, nil)
+}
+
+func readOrMigrateSkillSourceLockWithMaterializer(
+	nativeLockPath, sourceLockPath string,
+	installed map[string]struct{},
+	materialize func(*skillSourceLock) (*skillSourceMigrationMaterialization, error),
+) (skillSourceMigrationResult, error) {
 	canonicalPath := strings.TrimSpace(sourceLockPath)
 	if canonicalPath == "" {
 		return skillSourceMigrationResult{}, errors.New("skill source lock path is unavailable")
@@ -221,9 +253,27 @@ func readOrMigrateSkillSourceLockWithInstalled(nativeLockPath, sourceLockPath st
 		if readPath == canonicalPath {
 			writeExpected = revision
 		}
+		var materialization *skillSourceMigrationMaterialization
+		if materialize != nil {
+			materialization, err = materialize(&lock)
+			if err != nil {
+				return skillSourceMigrationResult{}, err
+			}
+		}
+		if materialization != nil && materialization.release != nil {
+			defer materialization.release()
+		}
 		updatedRevision, err := writeSkillSourceLockFile(canonicalPath, writeExpected, lock)
 		if err != nil {
+			if materialization != nil && materialization.rollback != nil {
+				if rollbackErr := materialization.rollback(); rollbackErr != nil {
+					return skillSourceMigrationResult{}, fmt.Errorf("%w; rollback migration targets: %v", err, rollbackErr)
+				}
+			}
 			return skillSourceMigrationResult{}, err
+		}
+		if materialization != nil && materialization.commit != nil {
+			materialization.commit()
 		}
 		result.Lock = lock
 		result.Revision = updatedRevision
@@ -363,6 +413,9 @@ func normalizeSkillGitSource(raw string) (string, string, error) {
 			return "", "", err
 		}
 		user := strings.TrimSuffix(strings.TrimSpace(match[1]), "@")
+		if strings.Contains(user, ":") {
+			return "", "", errors.New("SSH skill source must not contain a password")
+		}
 		normalizedUser := ""
 		sourceUser := ""
 		if user != "" {
@@ -386,6 +439,11 @@ func normalizeSkillGitSource(raw string) (string, string, error) {
 	}
 	if (scheme == "https" || scheme == "http") && parsed.User != nil {
 		return "", "", errors.New("HTTP skill source must not contain credentials")
+	}
+	if scheme == "ssh" && parsed.User != nil {
+		if _, hasPassword := parsed.User.Password(); hasPassword {
+			return "", "", errors.New("SSH skill source must not contain a password")
+		}
 	}
 	if parsed.RawQuery != "" || parsed.Fragment != "" {
 		return "", "", errors.New("skill source must not contain query or fragment data")

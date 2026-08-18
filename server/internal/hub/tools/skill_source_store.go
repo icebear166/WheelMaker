@@ -51,21 +51,29 @@ func (s *skillSourceStore) lockPath(sourceKey string) string {
 }
 
 func (s *skillSourceStore) withSourceLock(ctx context.Context, sourceKey string, fn func() (skillSourceCheckout, error)) (skillSourceCheckout, error) {
-	if err := ctx.Err(); err != nil {
-		return skillSourceCheckout{}, err
-	}
-	if strings.TrimSpace(sourceKey) == "" {
-		return skillSourceCheckout{}, errors.New("skill source key is required")
-	}
-	if err := os.MkdirAll(filepath.Dir(s.lockPath(sourceKey)), 0o755); err != nil {
-		return skillSourceCheckout{}, fmt.Errorf("create skill source lock directory: %w", err)
-	}
-	release, err := shared.AcquireFileLock(s.lockPath(sourceKey))
+	release, err := s.acquireSourceLock(ctx, sourceKey)
 	if err != nil {
-		return skillSourceCheckout{}, fmt.Errorf("lock skill source %s: %w", sourceKey, err)
+		return skillSourceCheckout{}, err
 	}
 	defer release()
 	return fn()
+}
+
+func (s *skillSourceStore) acquireSourceLock(ctx context.Context, sourceKey string) (func(), error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if strings.TrimSpace(sourceKey) == "" {
+		return nil, errors.New("skill source key is required")
+	}
+	if err := os.MkdirAll(filepath.Dir(s.lockPath(sourceKey)), 0o755); err != nil {
+		return nil, fmt.Errorf("create skill source lock directory: %w", err)
+	}
+	release, err := shared.AcquireFileLock(s.lockPath(sourceKey))
+	if err != nil {
+		return nil, fmt.Errorf("lock skill source %s: %w", sourceKey, err)
+	}
+	return release, nil
 }
 
 func (s *skillSourceStore) ensureRepo(ctx context.Context, source skillSourceSnapshot) (skillSourceCheckout, error) {
@@ -74,27 +82,125 @@ func (s *skillSourceStore) ensureRepo(ctx context.Context, source skillSourceSna
 		return skillSourceCheckout{}, err
 	}
 	return s.withSourceLock(ctx, sourceKey, func() (skillSourceCheckout, error) {
-		path := s.repositoryPath(sourceKey)
-		if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {
-			if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-				return skillSourceCheckout{}, fmt.Errorf("create skill source store: %w", err)
-			}
-			if _, err := runSkillSourceGitCommand(ctx, "", "clone", "--quiet", address, path); err != nil {
-				_ = os.RemoveAll(path)
-				return skillSourceCheckout{}, fmt.Errorf("clone skill source: %w", err)
-			}
-		} else if err != nil {
-			return skillSourceCheckout{}, fmt.Errorf("inspect skill source clone: %w", err)
-		}
-		if err := s.validateClone(ctx, path); err != nil {
-			return skillSourceCheckout{}, err
-		}
-		return s.readCheckout(ctx, path, address, sourceKey)
+		return s.ensureRepoLocked(ctx, address, sourceKey)
 	})
 }
 
+func (s *skillSourceStore) ensureRepoLocked(ctx context.Context, address, sourceKey string) (skillSourceCheckout, error) {
+	path := s.repositoryPath(sourceKey)
+	if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			return skillSourceCheckout{}, fmt.Errorf("create skill source store: %w", err)
+		}
+		if _, err := runSkillSourceGitCommand(ctx, "", "clone", "--quiet", "--", address, path); err != nil {
+			_ = os.RemoveAll(path)
+			return skillSourceCheckout{}, fmt.Errorf("clone skill source: %w", err)
+		}
+	} else if err != nil {
+		return skillSourceCheckout{}, fmt.Errorf("inspect skill source clone: %w", err)
+	}
+	if err := s.validateClone(ctx, path); err != nil {
+		return skillSourceCheckout{}, err
+	}
+	return s.readCheckout(ctx, path, address, sourceKey)
+}
+
+func (s *skillSourceStore) withEnsuredRepo(ctx context.Context, source skillSourceSnapshot, fn func(skillSourceCheckout) error) error {
+	address, sourceKey, err := skillSourceStoreInput(source)
+	if err != nil {
+		return err
+	}
+	_, err = s.withSourceLock(ctx, sourceKey, func() (skillSourceCheckout, error) {
+		checkout, err := s.ensureRepoLocked(ctx, address, sourceKey)
+		if err != nil {
+			return skillSourceCheckout{}, err
+		}
+		return skillSourceCheckout{}, fn(checkout)
+	})
+	return err
+}
+
+func (s *skillSourceStore) withUpdatedRepo(ctx context.Context, source skillSourceSnapshot, fn func(skillSourceCheckout) error) error {
+	address, sourceKey, err := skillSourceStoreInput(source)
+	if err != nil {
+		return err
+	}
+	_, err = s.withSourceLock(ctx, sourceKey, func() (skillSourceCheckout, error) {
+		checkout, err := s.updateRepoLocked(ctx, address, sourceKey)
+		if err != nil {
+			return skillSourceCheckout{}, err
+		}
+		return skillSourceCheckout{}, fn(checkout)
+	})
+	return err
+}
+
 func (s *skillSourceStore) inspectRepo(ctx context.Context, source skillSourceSnapshot) (skillSourceCheckout, error) {
-	return s.ensureRepo(ctx, source)
+	address, sourceKey, err := skillSourceStoreInput(source)
+	if err != nil {
+		return skillSourceCheckout{}, err
+	}
+	return s.withSourceLock(ctx, sourceKey, func() (skillSourceCheckout, error) {
+		return s.inspectRepoLocked(ctx, address, sourceKey)
+	})
+}
+
+func (s *skillSourceStore) withInspectedRepo(ctx context.Context, source skillSourceSnapshot, fn func(skillSourceCheckout) error) error {
+	address, sourceKey, err := skillSourceStoreInput(source)
+	if err != nil {
+		return err
+	}
+	_, err = s.withSourceLock(ctx, sourceKey, func() (skillSourceCheckout, error) {
+		checkout, err := s.inspectRepoLocked(ctx, address, sourceKey)
+		if err != nil {
+			return skillSourceCheckout{}, err
+		}
+		return skillSourceCheckout{}, fn(checkout)
+	})
+	return err
+}
+
+func (s *skillSourceStore) inspectRepoLocked(ctx context.Context, address, sourceKey string) (skillSourceCheckout, error) {
+	checkout, err := s.ensureRepoLocked(ctx, address, sourceKey)
+	if err != nil {
+		return skillSourceCheckout{}, err
+	}
+	if _, err := runSkillSourceGitCommand(ctx, checkout.Path, "fetch", "--quiet", "--prune", "origin"); err != nil {
+		return skillSourceCheckout{}, fmt.Errorf("fetch skill source: %w", err)
+	}
+	if err := refreshSkillSourceRemoteHead(ctx, checkout.Path); err != nil {
+		return skillSourceCheckout{}, err
+	}
+	return s.readCheckout(ctx, checkout.Path, address, sourceKey)
+}
+
+func (s *skillSourceStore) updateRepoLocked(ctx context.Context, address, sourceKey string) (skillSourceCheckout, error) {
+	path, err := s.ensureExistingClone(ctx, sourceKey, address)
+	if err != nil {
+		return skillSourceCheckout{}, err
+	}
+	if err := ensureSkillSourceCheckoutClean(ctx, path); err != nil {
+		return skillSourceCheckout{}, err
+	}
+	if _, err := runSkillSourceGitCommand(ctx, path, "fetch", "--quiet", "--prune", "origin"); err != nil {
+		return skillSourceCheckout{}, fmt.Errorf("fetch skill source: %w", err)
+	}
+	if err := refreshSkillSourceRemoteHead(ctx, path); err != nil {
+		return skillSourceCheckout{}, err
+	}
+	branch, remoteRef, err := resolveSkillSourceDefaultBranch(ctx, path)
+	if err != nil {
+		return skillSourceCheckout{}, err
+	}
+	if _, err := runSkillSourceGitCommand(ctx, path, "checkout", "--quiet", "--detach", remoteRef); err != nil {
+		return skillSourceCheckout{}, fmt.Errorf("checkout skill source default branch: %w", err)
+	}
+	checkout, err := s.readCheckout(ctx, path, address, sourceKey)
+	if err != nil {
+		return skillSourceCheckout{}, err
+	}
+	checkout.Branch = branch
+	return checkout, nil
 }
 
 func (s *skillSourceStore) readRepo(ctx context.Context, source skillSourceSnapshot) (skillSourceCheckout, error) {
@@ -129,6 +235,9 @@ func (s *skillSourceStore) refreshRepo(ctx context.Context, source skillSourceSn
 		if _, err := runSkillSourceGitCommand(ctx, path, "fetch", "--quiet", "--prune", "origin"); err != nil {
 			return skillSourceCheckout{}, fmt.Errorf("fetch skill source: %w", err)
 		}
+		if err := refreshSkillSourceRemoteHead(ctx, path); err != nil {
+			return skillSourceCheckout{}, err
+		}
 		return s.readCheckout(ctx, path, address, sourceKey)
 	})
 }
@@ -139,29 +248,7 @@ func (s *skillSourceStore) updateRepo(ctx context.Context, source skillSourceSna
 		return skillSourceCheckout{}, err
 	}
 	return s.withSourceLock(ctx, sourceKey, func() (skillSourceCheckout, error) {
-		path, err := s.ensureExistingClone(ctx, sourceKey, address)
-		if err != nil {
-			return skillSourceCheckout{}, err
-		}
-		if err := ensureSkillSourceCheckoutClean(ctx, path); err != nil {
-			return skillSourceCheckout{}, err
-		}
-		if _, err := runSkillSourceGitCommand(ctx, path, "fetch", "--quiet", "--prune", "origin"); err != nil {
-			return skillSourceCheckout{}, fmt.Errorf("fetch skill source: %w", err)
-		}
-		branch, remoteRef, err := resolveSkillSourceDefaultBranch(ctx, path)
-		if err != nil {
-			return skillSourceCheckout{}, err
-		}
-		if _, err := runSkillSourceGitCommand(ctx, path, "checkout", "--quiet", "--detach", remoteRef); err != nil {
-			return skillSourceCheckout{}, fmt.Errorf("checkout skill source default branch: %w", err)
-		}
-		checkout, err := s.readCheckout(ctx, path, address, sourceKey)
-		if err != nil {
-			return skillSourceCheckout{}, err
-		}
-		checkout.Branch = branch
-		return checkout, nil
+		return s.updateRepoLocked(ctx, address, sourceKey)
 	})
 }
 
@@ -171,7 +258,7 @@ func (s *skillSourceStore) ensureExistingClone(ctx context.Context, sourceKey, a
 		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 			return "", fmt.Errorf("create skill source store: %w", err)
 		}
-		if _, err := runSkillSourceGitCommand(ctx, "", "clone", "--quiet", address, path); err != nil {
+		if _, err := runSkillSourceGitCommand(ctx, "", "clone", "--quiet", "--", address, path); err != nil {
 			_ = os.RemoveAll(path)
 			return "", fmt.Errorf("clone skill source: %w", err)
 		}
@@ -182,6 +269,19 @@ func (s *skillSourceStore) ensureExistingClone(ctx context.Context, sourceKey, a
 		return "", err
 	}
 	return path, nil
+}
+
+func refreshSkillSourceRemoteHead(ctx context.Context, checkout string) error {
+	if _, err := runSkillSourceGitCommand(ctx, checkout, "remote", "set-head", "origin", "--auto"); err != nil {
+		// Some Git remotes do not advertise a symbolic HEAD. Preserve a usable
+		// cached remote HEAD in that case; a remote that does advertise one is
+		// refreshed authoritatively by the command above.
+		if _, cachedErr := runSkillSourceGitCommand(ctx, checkout, "symbolic-ref", "--quiet", "refs/remotes/origin/HEAD"); cachedErr == nil {
+			return nil
+		}
+		return fmt.Errorf("resolve skill source remote default branch: %w", err)
+	}
+	return nil
 }
 
 func (s *skillSourceStore) validateClone(ctx context.Context, path string) error {

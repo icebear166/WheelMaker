@@ -302,6 +302,7 @@ function InlineAddRepository({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [repo, setRepo] = useState<RegistrySkillRepoSnapshot | null>(null);
+  const [selectedSkills, setSelectedSkills] = useState<string[]>([]);
 
   const inspect = async () => {
     const value = source.trim();
@@ -314,8 +315,10 @@ function InlineAddRepository({
     try {
       const inspected = await actions.onInspectRepo(target, value);
       setRepo(inspected);
+      setSelectedSkills(inspected.skills.map(skill => skill.name));
     } catch (inspectError) {
       setRepo(null);
+      setSelectedSkills([]);
       setError(inspectError instanceof Error ? inspectError.message : String(inspectError));
     } finally {
       setLoading(false);
@@ -329,6 +332,7 @@ function InlineAddRepository({
     setExpanded(false);
     setSource('');
     setRepo(null);
+    setSelectedSkills([]);
     setError('');
   };
 
@@ -355,6 +359,7 @@ function InlineAddRepository({
               onChange={event => {
                 setSource(event.target.value);
                 setRepo(null);
+                setSelectedSkills([]);
                 setError('');
               }}
               onKeyDown={event => {
@@ -374,10 +379,24 @@ function InlineAddRepository({
             <div className="chat-hub-skill-add-repository-preview">
               <div className="chat-hub-skill-add-repository-preview-meta">
                 <strong>{skillSourceDisplayName(repo.sourceKey)}</strong>
-                <span>{repo.skills.length} skills · {(repo.commit || '').slice(0, 8) || '-'}</span>
+                <span>{repo.skills.length} skills · {selectedSkills.length} selected · {(repo.commit || '').slice(0, 8) || '-'}</span>
               </div>
               <div className="chat-hub-skill-add-repository-preview-skills">
-                {repo.skills.map(skill => <span key={skill.name}>{skill.name}</span>)}
+                {repo.skills.map(skill => (
+                  <label key={skill.name} className="chat-hub-skill-add-repository-preview-skill">
+                    <input
+                      type="checkbox"
+                      aria-label={`Select ${skill.name}`}
+                      checked={selectedSkills.includes(skill.name)}
+                      onChange={event => {
+                        setSelectedSkills(current => event.target.checked
+                          ? [...current, skill.name]
+                          : current.filter(name => name !== skill.name));
+                      }}
+                    />
+                    <span>{skill.name}</span>
+                  </label>
+                ))}
               </div>
               <button type="button" className="is-primary" disabled={busy} onClick={add}>Add repository</button>
             </div>

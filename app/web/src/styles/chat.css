@@ -3257,12 +3257,20 @@ button.chat-hub-skill-name:disabled {
   gap: 4px;
 }
 
-.chat-hub-skill-add-repository-preview-skills span {
+.chat-hub-skill-add-repository-preview-skill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   padding: 2px 6px;
   border-radius: 4px;
   background: var(--surface-panel);
   color: var(--text-secondary);
   font-size: 11px;
+  cursor: pointer;
+}
+
+.chat-hub-skill-add-repository-preview-skill input {
+  margin: 0;
 }
 
 .chat-hub-skill-add-repository-preview button.is-primary {

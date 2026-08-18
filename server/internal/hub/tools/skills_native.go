@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"sort"
 	"strings"
 	"time"
@@ -52,15 +53,18 @@ func (c *SkillsCommand) withNativeScopeLock(target skillsCommandTarget, fn func(
 	return fn()
 }
 
-func (c *SkillsCommand) readNativeScopeLock(target skillsCommandTarget) (skillSourceLock, string, error) {
+func (c *SkillsCommand) readNativeScopeLock(ctx context.Context, target skillsCommandTarget) (skillSourceLock, string, error) {
 	installed, err := c.nativeInstalledNames(target)
 	if err != nil {
 		return skillSourceLock{}, "", err
 	}
-	migration, err := readOrMigrateSkillSourceLockWithInstalled(
+	migration, err := readOrMigrateSkillSourceLockWithMaterializer(
 		c.skillsLockFile(target),
 		c.sourceLockFile(target),
 		installed,
+		func(lock *skillSourceLock) (*skillSourceMigrationMaterialization, error) {
+			return c.materializeNativeMigration(ctx, target, lock)
+		},
 	)
 	if err != nil {
 		return skillSourceLock{}, "", err
@@ -83,16 +87,85 @@ func (c *SkillsCommand) nativeInstalledNames(target skillsCommandTarget) (map[st
 			return nil, fmt.Errorf("read installed skills directory: %w", err)
 		}
 		for _, entry := range entries {
-			if !entry.IsDir() || validateSkillNames([]string{entry.Name()}) != nil {
+			if validateSkillNames([]string{entry.Name()}) != nil {
 				continue
 			}
-			info, err := os.Stat(filepath.Join(directory, entry.Name(), "SKILL.md"))
+			root := filepath.Join(directory, entry.Name())
+			rootInfo, rootErr := os.Stat(root)
+			if rootErr != nil || !rootInfo.IsDir() {
+				continue
+			}
+			info, err := os.Stat(filepath.Join(root, "SKILL.md"))
 			if err == nil && !info.IsDir() {
 				installed[strings.ToLower(entry.Name())] = struct{}{}
 			}
 		}
 	}
 	return installed, nil
+}
+
+func (c *SkillsCommand) materializeNativeMigration(ctx context.Context, target skillsCommandTarget, lock *skillSourceLock) (*skillSourceMigrationMaterialization, error) {
+	if target.scope != "hub" || lock == nil || len(lock.Sources) == 0 {
+		return nil, nil
+	}
+	sortSkillSourceLock(lock)
+	releases := make([]func(), 0, len(lock.Sources))
+	released := false
+	releaseAll := func() {
+		if released {
+			return
+		}
+		released = true
+		for index := len(releases) - 1; index >= 0; index-- {
+			releases[index]()
+		}
+	}
+	for _, source := range lock.Sources {
+		_, sourceKey, err := skillSourceStoreInput(source)
+		if err != nil {
+			releaseAll()
+			return nil, err
+		}
+		release, err := c.nativeStore().acquireSourceLock(ctx, sourceKey)
+		if err != nil {
+			releaseAll()
+			return nil, err
+		}
+		releases = append(releases, release)
+	}
+
+	changes := make([]nativeDirectoryChange, 0)
+	for index := range lock.Sources {
+		source := lock.Sources[index]
+		address, sourceKey, err := skillSourceStoreInput(source)
+		if err != nil {
+			releaseAll()
+			return nil, err
+		}
+		checkout, err := c.nativeStore().inspectRepoLocked(ctx, address, sourceKey)
+		if err != nil {
+			releaseAll()
+			return nil, err
+		}
+		managed := append([]string(nil), source.ManagedSkills...)
+		lock.Sources[index] = nativeSnapshotFromCheckout(checkout, c.now(), managed)
+		installChanges, err := c.nativeInstallChanges(target, checkout, managed)
+		if err != nil {
+			releaseAll()
+			return nil, err
+		}
+		changes = append(changes, installChanges...)
+	}
+	transaction, err := applyNativeDirectoryChanges(changes)
+	if err != nil {
+		releaseAll()
+		return nil, err
+	}
+	return &skillSourceMigrationMaterialization{
+		rollback: transaction.Rollback,
+		commit:   transaction.Commit,
+		release:  releaseAll,
+	}, nil
 }
 
 func (c *SkillsCommand) startNativeOperation(payload skillsCommandPayload, work func() error) (any, *skillsCommandError) {
@@ -243,35 +316,26 @@ func (c *SkillsCommand) startNativeRemoveRepo(payload skillsCommandPayload) (any
 
 func (c *SkillsCommand) nativeAddRepo(ctx context.Context, target skillsCommandTarget, source, sourceKey string) error {
 	return c.withNativeScopeLock(target, func() error {
-		checkout, err := c.nativeStore().ensureRepo(ctx, skillSourceSnapshot{Source: source, SourceKey: sourceKey})
-		if err != nil {
-			return err
-		}
-		lock, revision, err := c.readNativeScopeLock(target)
+		lock, revision, err := c.readNativeScopeLock(ctx, target)
 		if err != nil {
 			return err
 		}
 		index := nativeSourceIndex(lock, sourceKey)
-		if index < 0 {
-			lock.Sources = append(lock.Sources, nativeSnapshotFromCheckout(checkout, c.now(), nil))
-		} else {
-			managed := append([]string(nil), lock.Sources[index].ManagedSkills...)
-			// Equivalent HTTPS/SSH/shorthand addresses share one sourceKey. Keep
-			// the scope's existing display address while the central clone keeps
-			// the origin from its first successful clone.
-			checkout.Source = lock.Sources[index].Source
-			checkout.SourceKey = lock.Sources[index].SourceKey
-			lock.Sources[index] = nativeSnapshotFromCheckout(checkout, c.now(), managed)
+		if index >= 0 {
+			return nil
 		}
-		sortSkillSourceLock(&lock)
-		_, err = writeSkillSourceLockFile(c.sourceLockFile(target), revision, lock)
-		return err
+		return c.nativeStore().withEnsuredRepo(ctx, skillSourceSnapshot{Source: source, SourceKey: sourceKey}, func(checkout skillSourceCheckout) error {
+			lock.Sources = append(lock.Sources, nativeSnapshotFromCheckout(checkout, c.now(), nil))
+			sortSkillSourceLock(&lock)
+			_, err := writeSkillSourceLockFile(c.sourceLockFile(target), revision, lock)
+			return err
+		})
 	})
 }
 
 func (c *SkillsCommand) nativeUpdateRepo(ctx context.Context, target skillsCommandTarget, source string) error {
 	return c.withNativeScopeLock(target, func() error {
-		lock, revision, err := c.readNativeScopeLock(target)
+		lock, revision, err := c.readNativeScopeLock(ctx, target)
 		if err != nil {
 			return err
 		}
@@ -283,37 +347,35 @@ func (c *SkillsCommand) nativeUpdateRepo(ctx context.Context, target skillsComma
 		if index < 0 {
 			return errors.New("skill source is not installed in this scope")
 		}
-		checkout, err := c.nativeStore().updateRepo(ctx, lock.Sources[index])
-		if err != nil {
-			return err
-		}
-		managed := append([]string(nil), lock.Sources[index].ManagedSkills...)
-		changes, remaining, err := c.nativeChangesForManaged(
-			target,
-			checkout,
-			managed,
-			nativeManagedOwnersExcluding(lock, sourceKey),
-		)
-		if err != nil {
-			return err
-		}
-		transaction, err := applyNativeDirectoryChanges(changes)
-		if err != nil {
-			return err
-		}
-		lock.Sources[index] = nativeSnapshotFromCheckout(checkout, c.now(), remaining)
-		if _, err = writeSkillSourceLockFile(c.sourceLockFile(target), revision, lock); err != nil {
-			transaction.Rollback()
-			return err
-		}
-		transaction.Commit()
-		return err
+		sourceSnapshot := lock.Sources[index]
+		return c.nativeStore().withUpdatedRepo(ctx, sourceSnapshot, func(checkout skillSourceCheckout) error {
+			managed := append([]string(nil), sourceSnapshot.ManagedSkills...)
+			changes, remaining, err := c.nativeChangesForManaged(
+				target,
+				checkout,
+				managed,
+				nativeManagedOwnersExcluding(lock, sourceKey),
+			)
+			if err != nil {
+				return err
+			}
+			transaction, err := applyNativeDirectoryChanges(changes)
+			if err != nil {
+				return err
+			}
+			lock.Sources[index] = nativeSnapshotFromCheckout(checkout, c.now(), remaining)
+			if _, err = writeSkillSourceLockFile(c.sourceLockFile(target), revision, lock); err != nil {
+				return rollbackNativeTransaction(transaction, err)
+			}
+			transaction.Commit()
+			return nil
+		})
 	})
 }
 
 func (c *SkillsCommand) nativeInstall(ctx context.Context, target skillsCommandTarget, source string, requested []string, installAll bool) error {
 	return c.withNativeScopeLock(target, func() error {
-		lock, revision, err := c.readNativeScopeLock(target)
+		lock, revision, err := c.readNativeScopeLock(ctx, target)
 		if err != nil {
 			return err
 		}
@@ -325,68 +387,67 @@ func (c *SkillsCommand) nativeInstall(ctx context.Context, target skillsCommandT
 		if index < 0 {
 			return errors.New("skill source is not installed in this scope; add the repository first")
 		}
-		checkout, err := c.nativeStore().ensureRepo(ctx, lock.Sources[index])
-		if err != nil {
-			return err
-		}
-		if err := ensureSkillSourceCheckoutClean(ctx, checkout.Path); err != nil {
-			return err
-		}
-		available := nativeSkillNames(checkout.Skills)
-		if installAll {
-			requested = append([]string(nil), available...)
-		}
-		selected, err := canonicalNativeSkillNames(requested, available)
-		if err != nil {
-			return err
-		}
-		managed := append([]string(nil), lock.Sources[index].ManagedSkills...)
-		needsSync := lock.Sources[index].Commit != "" && lock.Sources[index].Commit != checkout.Commit
-		changes := []nativeDirectoryChange{}
-		remaining := make([]string, 0, len(managed)+len(selected))
-		if needsSync {
-			syncChanges, syncRemaining, syncErr := c.nativeChangesForManaged(
-				target,
-				checkout,
-				managed,
-				nativeManagedOwnersExcluding(lock, sourceKey),
-			)
-			if syncErr != nil {
-				return syncErr
+		sourceSnapshot := lock.Sources[index]
+		return c.nativeStore().withEnsuredRepo(ctx, sourceSnapshot, func(checkout skillSourceCheckout) error {
+			if err := ensureSkillSourceCheckoutClean(ctx, checkout.Path); err != nil {
+				return err
 			}
-			changes = append(changes, syncChanges...)
-			remaining = append(remaining, syncRemaining...)
-		} else {
-			remaining = append(remaining, managed...)
-		}
-		for _, name := range selected {
-			if nativeContainsFold(remaining, name) {
-				continue
+			available := nativeSkillNames(checkout.Skills)
+			selectedRequested := requested
+			if installAll {
+				selectedRequested = append([]string(nil), available...)
 			}
-			remaining = append(remaining, name)
-		}
-		if needsSync {
-			// The sync plan already stages all currently managed entries. Selected
-			// entries are added below only when they were not previously managed.
-			selected = filterNativeNamesNotIn(selected, managed)
-		}
-		installChanges, err := c.nativeInstallChanges(target, checkout, selected)
-		if err != nil {
-			return err
-		}
-		changes = append(changes, installChanges...)
-		removeOwnershipFromOtherSources(&lock, sourceKey, selected)
-		transaction, err := applyNativeDirectoryChanges(changes)
-		if err != nil {
-			return err
-		}
-		lock.Sources[index] = nativeSnapshotFromCheckout(checkout, c.now(), remaining)
-		if _, err = writeSkillSourceLockFile(c.sourceLockFile(target), revision, lock); err != nil {
-			transaction.Rollback()
-			return err
-		}
-		transaction.Commit()
-		return err
+			selected, err := canonicalNativeSkillNames(selectedRequested, available)
+			if err != nil {
+				return err
+			}
+			managed := append([]string(nil), sourceSnapshot.ManagedSkills...)
+			needsSync := sourceSnapshot.Commit != "" && sourceSnapshot.Commit != checkout.Commit
+			changes := []nativeDirectoryChange{}
+			remaining := make([]string, 0, len(managed)+len(selected))
+			if needsSync {
+				syncChanges, syncRemaining, syncErr := c.nativeChangesForManaged(
+					target,
+					checkout,
+					managed,
+					nativeManagedOwnersExcluding(lock, sourceKey),
+				)
+				if syncErr != nil {
+					return syncErr
+				}
+				changes = append(changes, syncChanges...)
+				remaining = append(remaining, syncRemaining...)
+			} else {
+				remaining = append(remaining, managed...)
+			}
+			for _, name := range selected {
+				if nativeContainsFold(remaining, name) {
+					continue
+				}
+				remaining = append(remaining, name)
+			}
+			if needsSync {
+				// The sync plan already stages all currently managed entries. Selected
+				// entries are added below only when they were not previously managed.
+				selected = filterNativeNamesNotIn(selected, managed)
+			}
+			installChanges, err := c.nativeInstallChanges(target, checkout, selected)
+			if err != nil {
+				return err
+			}
+			changes = append(changes, installChanges...)
+			removeOwnershipFromOtherSources(&lock, sourceKey, selected)
+			transaction, err := applyNativeDirectoryChanges(changes)
+			if err != nil {
+				return err
+			}
+			lock.Sources[index] = nativeSnapshotFromCheckout(checkout, c.now(), remaining)
+			if _, err = writeSkillSourceLockFile(c.sourceLockFile(target), revision, lock); err != nil {
+				return rollbackNativeTransaction(transaction, err)
+			}
+			transaction.Commit()
+			return nil
+		})
 	})
 }
 
@@ -396,7 +457,7 @@ func (c *SkillsCommand) nativeUninstall(ctx context.Context, target skillsComman
 		if err != nil {
 			return err
 		}
-		lock, revision, err := c.readNativeScopeLock(target)
+		lock, revision, err := c.readNativeScopeLock(ctx, target)
 		if err != nil {
 			return err
 		}
@@ -466,8 +527,7 @@ func (c *SkillsCommand) nativeUninstall(ctx context.Context, target skillsComman
 		}
 		if lockChanged {
 			if _, err = writeSkillSourceLockFile(c.sourceLockFile(target), revision, lock); err != nil {
-				transaction.Rollback()
-				return err
+				return rollbackNativeTransaction(transaction, err)
 			}
 		}
 		transaction.Commit()
@@ -477,7 +537,7 @@ func (c *SkillsCommand) nativeUninstall(ctx context.Context, target skillsComman
 
 func (c *SkillsCommand) nativeRemoveRepo(ctx context.Context, target skillsCommandTarget, source string) error {
 	return c.withNativeScopeLock(target, func() error {
-		lock, revision, err := c.readNativeScopeLock(target)
+		lock, revision, err := c.readNativeScopeLock(ctx, target)
 		if err != nil {
 			return err
 		}
@@ -509,12 +569,21 @@ func (c *SkillsCommand) nativeRemoveRepo(ctx context.Context, target skillsComma
 			return err
 		}
 		if _, err = writeSkillSourceLockFile(c.sourceLockFile(target), revision, lock); err != nil {
-			transaction.Rollback()
-			return err
+			return rollbackNativeTransaction(transaction, err)
 		}
 		transaction.Commit()
 		return err
 	})
+}
+
+func rollbackNativeTransaction(transaction *nativeDirectoryTransaction, cause error) error {
+	if transaction == nil {
+		return cause
+	}
+	if rollbackErr := transaction.Rollback(); rollbackErr != nil {
+		return errors.Join(cause, fmt.Errorf("rollback skill targets: %w", rollbackErr))
+	}
+	return cause
 }
 
 func nativeRepoSnapshot(checkout skillSourceCheckout) *skillsRepoSnapshot {
@@ -733,9 +802,9 @@ func nativeSkillTargetPath(directory, name string) (string, error) {
 	if err := validateSkillNames([]string{name}); err != nil {
 		return "", err
 	}
-	root, err := filepath.Abs(directory)
+	root, err := validateNativeManagedRoot(directory)
 	if err != nil {
-		return "", fmt.Errorf("resolve skills directory: %w", err)
+		return "", err
 	}
 	final, err := filepath.Abs(filepath.Join(root, name))
 	if err != nil {
@@ -746,6 +815,58 @@ func nativeSkillTargetPath(directory, name string) (string, error) {
 		return "", fmt.Errorf("skill path escapes skills directory: %s", name)
 	}
 	return final, nil
+}
+
+func validateNativeManagedRoot(directory string) (string, error) {
+	root, err := filepath.Abs(strings.TrimSpace(directory))
+	if err != nil {
+		return "", fmt.Errorf("resolve skills directory: %w", err)
+	}
+	root = filepath.Clean(root)
+	if root == "." || strings.TrimSpace(root) == "" {
+		return "", errors.New("skills directory is required")
+	}
+	for current := root; ; current = filepath.Dir(current) {
+		info, statErr := os.Lstat(current)
+		if statErr == nil {
+			if info.Mode()&os.ModeSymlink != 0 || isNativeReparsePoint(info) {
+				return "", fmt.Errorf("managed skills directory contains a symlink: %s", current)
+			}
+			resolved, evalErr := filepath.EvalSymlinks(current)
+			if evalErr != nil {
+				return "", fmt.Errorf("resolve managed skills directory: %w", evalErr)
+			}
+			resolved, absErr := filepath.Abs(resolved)
+			if absErr != nil || !samePath(current, resolved) {
+				return "", fmt.Errorf("managed skills directory resolves through a link: %s", current)
+			}
+		} else if !errors.Is(statErr, os.ErrNotExist) {
+			return "", fmt.Errorf("inspect managed skills directory: %w", statErr)
+		}
+		parent := filepath.Dir(current)
+		if samePath(parent, current) {
+			break
+		}
+	}
+	return root, nil
+}
+
+func isNativeReparsePoint(info os.FileInfo) bool {
+	if info == nil || info.Sys() == nil {
+		return false
+	}
+	value := reflect.ValueOf(info.Sys())
+	if value.Kind() == reflect.Pointer {
+		if value.IsNil() {
+			return false
+		}
+		value = value.Elem()
+	}
+	if value.Kind() != reflect.Struct {
+		return false
+	}
+	attributes := value.FieldByName("FileAttributes")
+	return attributes.IsValid() && attributes.Kind() >= reflect.Uint && attributes.Kind() <= reflect.Uint64 && attributes.Uint()&0x400 != 0
 }
 
 func nativeSkillRoot(checkout skillSourceCheckout, name string) (string, error) {
@@ -849,24 +970,20 @@ func applyNativeDirectoryChanges(changes []nativeDirectoryChange) (*nativeDirect
 		if _, err := os.Lstat(item.Final); err == nil {
 			backup, backupErr := os.MkdirTemp(filepath.Dir(item.Final), ".wheelmaker-skill-backup-")
 			if backupErr != nil {
-				transaction.Rollback()
-				return nil, backupErr
+				return nil, errors.Join(backupErr, transaction.Rollback())
 			}
 			_ = os.RemoveAll(backup)
 			if err := os.Rename(item.Final, backup); err != nil {
 				_ = os.RemoveAll(backup)
-				transaction.Rollback()
-				return nil, fmt.Errorf("stage existing skill target: %w", err)
+				return nil, errors.Join(fmt.Errorf("stage existing skill target: %w", err), transaction.Rollback())
 			}
 			item.Backup, item.HadExist = backup, true
 		} else if !errors.Is(err, os.ErrNotExist) {
-			transaction.Rollback()
-			return nil, err
+			return nil, errors.Join(err, transaction.Rollback())
 		}
 		if !item.Remove {
 			if err := os.Rename(item.Stage, item.Final); err != nil {
-				transaction.Rollback()
-				return nil, fmt.Errorf("replace skill target: %w", err)
+				return nil, errors.Join(fmt.Errorf("replace skill target: %w", err), transaction.Rollback())
 			}
 			item.Stage = ""
 		}
@@ -875,23 +992,31 @@ func applyNativeDirectoryChanges(changes []nativeDirectoryChange) (*nativeDirect
 	return transaction, nil
 }
 
-func (transaction *nativeDirectoryTransaction) Rollback() {
+func (transaction *nativeDirectoryTransaction) Rollback() error {
 	if transaction == nil || transaction.finalized {
-		return
+		return nil
 	}
+	var rollbackErr error
 	for index := len(transaction.items) - 1; index >= 0; index-- {
 		item := &transaction.items[index]
 		if item.Committed {
-			_ = os.RemoveAll(item.Final)
+			if err := os.RemoveAll(item.Final); err != nil && !errors.Is(err, os.ErrNotExist) {
+				rollbackErr = errors.Join(rollbackErr, fmt.Errorf("remove staged skill target %s: %w", item.Final, err))
+			}
 		}
 		if item.HadExist && item.Backup != "" {
-			_ = os.Rename(item.Backup, item.Final)
+			if err := os.Rename(item.Backup, item.Final); err != nil {
+				rollbackErr = errors.Join(rollbackErr, fmt.Errorf("restore staged skill target %s: %w", item.Final, err))
+			}
 		}
 		if item.Stage != "" {
-			_ = os.RemoveAll(item.Stage)
+			if err := os.RemoveAll(item.Stage); err != nil && !errors.Is(err, os.ErrNotExist) {
+				rollbackErr = errors.Join(rollbackErr, fmt.Errorf("remove staged skill directory %s: %w", item.Stage, err))
+			}
 		}
 	}
 	transaction.finalized = true
+	return rollbackErr
 }
 
 func (transaction *nativeDirectoryTransaction) Commit() {
@@ -936,7 +1061,7 @@ func (c *SkillsCommand) nativeScan(ctx context.Context, hubID string) skillsComm
 func (c *SkillsCommand) nativeScanScope(ctx context.Context, target skillsCommandTarget) ([]skillsSkillSnapshot, error) {
 	var result []skillsSkillSnapshot
 	err := c.withNativeScopeLock(target, func() error {
-		lock, _, err := c.readNativeScopeLock(target)
+		lock, _, err := c.readNativeScopeLock(ctx, target)
 		if err != nil {
 			return err
 		}
@@ -955,7 +1080,7 @@ func (c *SkillsCommand) nativeScanScope(ctx context.Context, target skillsComman
 				return readErr
 			}
 			for _, entry := range entries {
-				if !entry.IsDir() || validateSkillNames([]string{entry.Name()}) != nil {
+				if validateSkillNames([]string{entry.Name()}) != nil {
 					continue
 				}
 				skillFile := filepath.Join(directory, entry.Name(), "SKILL.md")
@@ -1006,7 +1131,7 @@ func (c *SkillsCommand) nativeDetail(ctx context.Context, payload skillsCommandP
 	}
 	var detail *skillsSkillDetailSnapshot
 	err := c.withNativeScopeLock(target, func() error {
-		lock, _, err := c.readNativeScopeLock(target)
+		lock, _, err := c.readNativeScopeLock(ctx, target)
 		if err != nil {
 			return err
 		}

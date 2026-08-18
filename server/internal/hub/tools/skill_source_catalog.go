@@ -92,6 +92,11 @@ func ScanSkillsSourceScope(ctx context.Context, input SkillsSourceScopeInput) (S
 	if sourceLockPath == "" {
 		return SkillsSourceScopeSnapshot{}, fmt.Errorf("skill source lock path is unavailable")
 	}
+	command := newSkillsCommandWithRunner(nil, skillsCommandConfig{HomeDir: input.HomeDir, GlobalLockPath: nativeLockPath})
+	target := skillsCommandTarget{scope: "hub"}
+	if projectRoot != "" {
+		target = skillsCommandTarget{scope: "project", dir: projectRoot}
+	}
 	var migration skillSourceMigrationResult
 	installedNames := map[string]struct{}{}
 	for _, item := range input.Installed {
@@ -101,7 +106,14 @@ func ScanSkillsSourceScope(ctx context.Context, input SkillsSourceScopeInput) (S
 	}
 	err := withSkillSourceLockFile(sourceLockPath, func() error {
 		var err error
-		migration, err = readOrMigrateSkillSourceLockWithInstalled(nativeLockPath, sourceLockPath, installedNames)
+		migration, err = readOrMigrateSkillSourceLockWithMaterializer(
+			nativeLockPath,
+			sourceLockPath,
+			installedNames,
+			func(lock *skillSourceLock) (*skillSourceMigrationMaterialization, error) {
+				return command.materializeNativeMigration(ctx, target, lock)
+			},
+		)
 		return err
 	})
 	if err != nil {

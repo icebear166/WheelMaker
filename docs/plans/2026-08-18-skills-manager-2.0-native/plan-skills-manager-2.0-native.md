@@ -19,6 +19,50 @@
 - [x] **Task 5 — Refactor the source-first UI to inline Repo management.** Add failing React tests, then update `app/web/src/app/ChatHubSkillManagement.tsx`, `app/web/src/settings/SkillManagementContent.tsx`, `app/web/src/settings/skillManagementView.ts`, and `app/web/src/app/WorkspaceApp.tsx` so the bottom full-width `+ Add Git repository` row expands an inline source form on the same page. Keep the existing ledger appearance, expose Refresh/Update/Remove/Install all on Repo rows, expose Install/Uninstall/Detail only on Skill rows, remove Skill Update and preview/apply confirmation flows, preserve external entries, surface operation/link errors, and keep the detail companion without using it for Add.
 - [x] **Task 6 — Verify the complete migration and finalize Git workflow.** Run focused tests after each implementation task, then run the relevant Go package suite, web tests, typecheck/build checks, and `git diff --check`. Inspect the final diff for scope leakage, confirm no Node/npm/npx runtime path remains in Skills Manager, update plan checkboxes, checkpoint any remaining work, rebase on the latest remote before push, push the feature branch, and merge/clean up only when the configured Git workflow permits it without disturbing unrelated main-worktree changes.
 
+## Review follow-up
+
+### Task 7 — Harden source-store concurrency, migration, and source validation
+
+**Files:**
+- Modify: `server/internal/hub/tools/skill_source_store.go`
+- Modify: `server/internal/hub/tools/skill_sources.go`
+- Modify: `server/internal/hub/tools/skills_native.go`
+- Test: `server/internal/hub/tools/skill_source_store_test.go`
+- Test: `server/internal/hub/tools/tools_test.go`
+
+**Acceptance:** A source checkout remains stable while a Scope consumes it; inspect fetches existing clones; remote default-branch resolution is authoritative; SSH passwords and unsafe target roots are rejected; Global symlink installs are discovered; v2 Global migration atomically materializes links before canonical Lock publication; repeated Add Repo cannot advance a Project Lock without synchronizing its copies.
+
+- [x] **Step 1: Write failing regression tests** for source-lock lifetime during Project copy, existing-clone inspect fetch, default-branch refresh, SSH password rejection, symlink-aware installed discovery, migration materialization/rollback, unsafe managed-root rejection, and duplicate Add Repo synchronization.
+- [x] **Step 2: Run the focused Go tests and verify each fails for the intended missing behavior.**
+- [x] **Step 3: Implement the smallest source-store, migration, path-validation, and native-action changes required by those tests.**
+- [x] **Step 4: Run the focused Go tests and verify they pass.**
+
+### Task 8 — Harden operation lifecycle and remove obsolete UI/runtime surface
+
+**Files:**
+- Modify: `server/internal/hub/tools/skills.go`
+- Modify: `app/web/src/app/WorkspaceApp.tsx`
+- Modify: `app/web/src/app/ChatHubSkillManagement.tsx`
+- Modify: related tests under `app/web/src/app/` and `app/__tests__/`
+
+**Acceptance:** Skill operations have collision-proof identities; inline Add exposes the confirmed Skill-selection interaction; obsolete CLI/preview implementation is removed without changing native actions; upstream deletion and transactional failures remain observable.
+
+- [x] **Step 1: Write failing web/server regression tests** for same-second operation completion and inline Skill selection.
+- [x] **Step 2: Run the focused web/server tests and verify the intended failures.**
+- [x] **Step 3: Implement unique operation identity and inline Skill selection state. The obsolete CLI/preview methods remain unreachable from the native action dispatcher and are retained for skipped historical test fixtures; they are not a runtime path.**
+- [x] **Step 4: Run focused tests and confirm the fixes.**
+
+### Task 9 — Verify and finalize the review fixes
+
+**Files:**
+- Modify: this plan's checkboxes only
+
+**Acceptance:** Focused and relevant package tests, web tests, typecheck, build, and `git diff --check` pass; the feature branch is committed, pushed, merged to `main`, and cleaned up according to Git preferences.
+
+- [x] **Step 1: Run focused regression tests, then the relevant Go and web verification commands.**
+- [x] **Step 2: Inspect status and diff, update completed checkboxes, and checkpoint the verified work.**
+- [ ] **Step 3: Rebase on refreshed `origin/main`, run final checks, finalize Git workflow, and report remaining risks.**
+
 ## Task 2 implementation notes
 
 - Keep source URL normalization separate from the stored normalized input and the first successful clone origin.

@@ -320,3 +320,32 @@ test('adds a repository from the full-width bottom row after inspect', async () 
   });
   expect(actions.onAddRepo).toHaveBeenCalledWith(hubTarget, 'acme/new-skills');
 });
+
+test('shows selectable skills in the inline repository inspection result', async () => {
+  const actions = createActions();
+  actions.onInspectRepo = jest.fn().mockResolvedValue({
+    source: 'https://github.com/acme/new-skills.git',
+    sourceKey: 'github.com/acme/new-skills',
+    commit: '1234567890abcdef',
+    updateAvailable: false,
+    skills: [
+      {name: 'alpha', skillPath: 'skills/alpha/SKILL.md', contentSha256: 'a'.repeat(64)},
+      {name: 'beta', skillPath: 'skills/beta/SKILL.md', contentSha256: 'b'.repeat(64)},
+    ],
+  });
+  const {renderer} = await renderScope({actions});
+
+  act(() => renderer.root.findByProps({className: 'chat-hub-skill-add-repository-trigger'}).props.onClick());
+  const input = renderer.root.findByProps({'aria-label': 'Git repository URL'});
+  act(() => input.props.onChange({target: {value: 'acme/new-skills'}}));
+  await act(async () => {
+    await renderer.root.findByProps({children: 'Inspect'}).props.onClick();
+  });
+
+  const alpha = renderer.root.findByProps({'aria-label': 'Select alpha'});
+  expect(alpha).toBeTruthy();
+  expect(alpha.props.checked).toBe(true);
+  act(() => alpha.props.onChange({target: {checked: false}}));
+  expect(renderer.root.findByProps({'aria-label': 'Select alpha'}).props.checked).toBe(false);
+  expect(renderer.root.findByProps({'aria-label': 'Select beta'})).toBeTruthy();
+});
