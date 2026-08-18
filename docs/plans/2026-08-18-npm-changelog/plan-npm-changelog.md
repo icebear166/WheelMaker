@@ -22,7 +22,7 @@
 
 **Acceptance:** 标准 skill 目录、`SKILL.md`、`agents/openai.yaml`、`scripts/` 和 `references/` 存在；测试以 CLI 方式验证包清单提取、文件名编码和 changelog 结构，并在辅助脚本尚未实现时因返回码/断言失败而 RED。
 
-- [ ] **Step 1: Initialize the skill**
+- [x] **Step 1: Initialize the skill**
 
 Run from the worktree root:
 
@@ -32,11 +32,11 @@ python C:\Users\suweimin\.codex\skills\.system\skill-creator\scripts\init_skill.
 
 Expected: exit code 0 and no example placeholder files.
 
-- [ ] **Step 2: Write CLI helper tests before helper implementation**
+- [x] **Step 2: Write CLI helper tests before helper implementation**
 
 测试使用临时 Go source、临时 changelog 目录和 `subprocess` 调用未来的两个 CLI，覆盖：解析 runtime policy 并排除 deprecated、scoped package 文件名编码、检测重复版本、检查 `WheelMaker integration` 章节和报告缺失包文件。
 
-- [ ] **Step 3: Run the helper tests to verify RED**
+- [x] **Step 3: Run the helper tests to verify RED**
 
 Run:
 
@@ -58,15 +58,15 @@ Expected: tests fail through assertions because the helper command files do not 
 
 **Acceptance:** Helper tests pass; skill frontmatter triggers on WheelMaker agent npm update/changelog requests; instructions are imperative, Chinese, under the context budget, and do not include template placeholders.
 
-- [ ] **Step 1: Implement `inspect_npm_policy.py`**
+- [x] **Step 1: Implement `inspect_npm_policy.py`**
 
 从 `server/internal/hub/tools/npm.go` 读取 `runtimeNPMPackages`，解析字符串常量别名、包名、显示名、agent 类型、binary name、kind 和私有 registry 特例；只输出 `kind == runtime` 的活动包，并给出稳定 changelog 文件名。无效或重复 policy 以非零状态退出。
 
-- [ ] **Step 2: Implement `validate_changelog.py`**
+- [x] **Step 2: Implement `validate_changelog.py`**
 
 复用 policy 提取逻辑，检查每个活动包存在且仅存在对应文件；解析 `##` semver 标题，拒绝重复版本和非降序章节；检查每个版本拥有 `### WheelMaker integration`，并报告缺失文件、重复版本、空版本章节和未清理占位文本。
 
-- [ ] **Step 3: Run the helper tests to verify GREEN**
+- [x] **Step 3: Run the helper tests to verify GREEN**
 
 Run:
 
@@ -76,16 +76,16 @@ python -m unittest discover -s .agents/skills/npm-changelog/scripts/tests -v
 
 Expected: all helper tests pass.
 
-- [ ] **Step 4: Write the skill workflow and references**
+- [x] **Step 4: Write the skill workflow and references**
 
 `SKILL.md` 必须说明：读取仓库 `CLAUDE.md`、动态读取 npm policy、增量/首次 10 版本规则、开源 Git/changelog 路径、闭源 npm tarball diff 路径、`@myflicker/cli` 私有 registry、中文 CHANGELOG 分类、WheelMaker integration 检查点、失败时不猜测且 best-effort、写入前检查 Git 状态和完成后的验证命令。详细模板和接入检查项放入两个 reference 文件。
 
-- [ ] **Step 5: Validate skill metadata and helper entrypoints**
+- [x] **Step 5: Validate skill metadata and helper entrypoints**
 
 Run:
 
 ```powershell
-python C:\Users\suweimin\.codex\skills\.system\skill-creator\scripts\quick_validate.py .agents/skills/npm-changelog
+python -X utf8 C:\Users\suweimin\.codex\skills\.system\skill-creator\scripts\quick_validate.py .agents/skills/npm-changelog
 python .agents/skills/npm-changelog/scripts/inspect_npm_policy.py .
 ```
 
@@ -159,7 +159,7 @@ Expected: it reports the expected missing package files without modifying any fi
 
 ```powershell
 python -m unittest discover -s .agents/skills/npm-changelog/scripts/tests -v
-python C:\Users\suweimin\.codex\skills\.system\skill-creator\scripts\quick_validate.py .agents/skills/npm-changelog
+python -X utf8 C:\Users\suweimin\.codex\skills\.system\skill-creator\scripts\quick_validate.py .agents/skills/npm-changelog
 python .agents/skills/npm-changelog/scripts/inspect_npm_policy.py .
 python .agents/skills/npm-changelog/scripts/validate_changelog.py .
 git diff --check
