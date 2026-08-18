@@ -94,29 +94,23 @@ function replaceMethodOnceRegex(source, signature, pattern, replacement, label) 
 function patchMyFlickerBundle(source) {
   source = replaceOnceRegex(
     source,
-    /}(class \w+\{connection;sessions=new Map;sessionModelMap=new Map;messageBus;nodeBridge;context;defaultCwd;contextCreateOpts;clientFsCapabilities;)/,
+    /}(class \w+\{connection;sessions=new Map;sessionModelMap=new Map;messageBus;nodeBridge;context;defaultCwd;contextCreateOpts;clientFsCapabilities;runtimeMcpServers=\{\};)/,
     "}function WMFA(A,Q){Q=Q||{};let B=Q.access||\"yolo\";return[{id:\"access\",name:\"Access\",category:\"access\",type:\"select\",currentValue:B,options:[{value:\"default\",name:\"Default\"},{value:\"autoEdit\",name:\"Auto Edit\"},{value:\"auto\",name:\"Auto\"},{value:\"yolo\",name:\"Yolo\"},{value:\"plan\",name:\"Plan\"},{value:\"dontAsk\",name:\"Dont Ask\"}]},...(Array.isArray(A)?A:[])]}async function WMFS(A,Q){if(!A.messageBus)throw Error(\"Agent not initialized\");A.__wmfConfig={...A.__wmfConfig,access:Q};await A.messageBus.request(\"config.set\",{cwd:A.defaultCwd,key:\"approvalMode\",value:Q,isGlobal:!0}),await A.messageBus.request(\"project.clearContext\",{});let B=await A.getCanUseModels();return{configOptions:WMFA(A.buildSessionConfigOptions(B),A.__wmfConfig)}}$1",
-    "0.3.14 access config helpers"
+    "0.3.16 access config helpers"
   );
   source = replaceMethodOnceRegex(
     source,
     "buildSessionConfigOptions(A){",
     /return Q}/,
     "return WMFA(Q,this.__wmfConfig)}",
-    "0.3.14 config options"
+    "0.3.16 config options"
   );
   source = replaceMethodOnceRegex(
     source,
     "async unstable_setSessionConfigOption(A){if(!this.messageBus)throw Error(\"Agent not initialized\");",
-    /let\{configId:Q,value:B\}=A,\$=this\.sessions\.get\(A\.sessionId\);if\(Q===\"model\"\)/,
-    "let{configId:Q,value:B}=A,$=this.sessions.get(A.sessionId);if(Q===\"access\")return await WMFS(this,B);if(Q===\"model\")",
-    "0.3.14 access config handler"
-  );
-  source = replaceOnce(
-    source,
-    "unstable_resumeSession(A){throw Error(\"Method not implemented.\")}",
-    "async unstable_resumeSession(A){return await this.loadSession(A)}",
-    "resumeSession"
+    /let\{configId:Q,value:B\}=A,([A-Za-z$])=this\.sessions\.get\(A\.sessionId\);if\(Q===\"model\"\)/,
+    "let{configId:Q,value:B}=A,$1=this.sessions.get(A.sessionId);if(Q===\"access\")return await WMFS(this,B);if(Q===\"model\")",
+    "0.3.16 access config handler"
   );
   return source;
 }

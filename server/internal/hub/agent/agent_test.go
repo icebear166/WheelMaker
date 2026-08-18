@@ -1099,22 +1099,22 @@ func TestFlickerACPProvider_LaunchArgs(t *testing.T) {
 func TestFlickerLoaderRejectsLegacyMyFlickerBundleShape(t *testing.T) {
 	tempDir := t.TempDir()
 	fixturePath := filepath.Join(tempDir, "myflicker-legacy-fragment.mjs")
-	if err := os.WriteFile(fixturePath, []byte(myFlickerLatestBundleFragment), 0o644); err != nil {
+	if err := os.WriteFile(fixturePath, []byte(myFlicker0314BundleFragment), 0o644); err != nil {
 		t.Fatalf("write fixture: %v", err)
 	}
 	out, err := runFlickerLoaderPatchCommand(t, fixturePath)
 	if err == nil {
-		t.Fatal("0.3.14-only loader unexpectedly patched the legacy bundle shape")
+		t.Fatal("0.3.16-only loader unexpectedly patched the legacy bundle shape")
 	}
-	if !strings.Contains(string(out), "0.3.14 access config helpers") {
+	if !strings.Contains(string(out), "0.3.16 access config helpers") {
 		t.Fatalf("legacy bundle failed for an unexpected reason: %s", out)
 	}
 }
 
-func TestFlickerLoaderPatchesMyFlicker0314BundleShape(t *testing.T) {
+func TestFlickerLoaderPatchesMyFlicker0316BundleShape(t *testing.T) {
 	tempDir := t.TempDir()
-	fixturePath := filepath.Join(tempDir, "myflicker-0314-fragment.mjs")
-	if err := os.WriteFile(fixturePath, []byte(myFlicker0314BundleFragment), 0o644); err != nil {
+	fixturePath := filepath.Join(tempDir, "myflicker-0316-fragment.mjs")
+	if err := os.WriteFile(fixturePath, []byte(myFlicker0316BundleFragment), 0o644); err != nil {
 		t.Fatalf("write fixture: %v", err)
 	}
 
@@ -1123,11 +1123,16 @@ func TestFlickerLoaderPatchesMyFlicker0314BundleShape(t *testing.T) {
 		"function WMFA(",
 		"return WMFA(Q,this.__wmfConfig)",
 		"if(Q===\"access\")return await WMFS(this,B);",
-		"async unstable_resumeSession(A){return await this.loadSession(A)}",
 	} {
 		if !strings.Contains(patched, marker) {
-			t.Fatalf("patched 0.3.14 fixture missing %q", marker)
+			t.Fatalf("patched 0.3.16 fixture missing %q", marker)
 		}
+	}
+	if !strings.Contains(patched, "async unstable_resumeSession(A){lC(\"Resuming session:\",A.sessionId)") {
+		t.Fatal("patched 0.3.16 fixture lost native resume implementation")
+	}
+	if strings.Contains(patched, "async unstable_resumeSession(A){return await this.loadSession(A)}") {
+		t.Fatal("patched 0.3.16 fixture still contains the obsolete resume shim")
 	}
 }
 
@@ -1140,15 +1145,30 @@ func TestFlickerLoaderPatchesInstalledMyFlickerBundleWhenAvailable(t *testing.T)
 	if err != nil {
 		t.Skipf("installed myflicker CLI entry not available: %v", err)
 	}
+	packageJSON, err := os.ReadFile(filepath.Join(filepath.Dir(cliPath), "package.json"))
+	if err != nil {
+		t.Skipf("installed myflicker package metadata not available: %v", err)
+	}
+	var packageInfo struct {
+		Version string `json:"version"`
+	}
+	if err := json.Unmarshal(packageJSON, &packageInfo); err != nil {
+		t.Skipf("installed myflicker package metadata is invalid: %v", err)
+	}
+	if packageInfo.Version != "0.3.16" {
+		t.Skipf("installed myflicker version is %q; 0.3.16 is required", packageInfo.Version)
+	}
 	distPath := filepath.Join(filepath.Dir(cliPath), "dist", "cli.mjs")
 	if !exists(distPath) {
 		t.Skipf("installed myflicker dist bundle not available at %s", distPath)
 	}
 
 	patched := runFlickerLoaderPatch(t, distPath)
-	// Resume must be shimmed for every known bundle shape.
-	if !strings.Contains(patched, "async unstable_resumeSession(A){return await this.loadSession(A)}") {
-		t.Fatalf("patched installed bundle missing resume shim")
+	if !strings.Contains(patched, "async unstable_resumeSession(A){lC(\"Resuming session:\",A.sessionId)") {
+		t.Fatalf("patched installed bundle lost native resume implementation")
+	}
+	if strings.Contains(patched, "async unstable_resumeSession(A){return await this.loadSession(A)}") {
+		t.Fatalf("patched installed bundle contains obsolete resume shim")
 	}
 	if !strings.Contains(patched, "function WMFA(") {
 		t.Fatal("patched installed bundle missing WheelMaker access config option")
@@ -1174,14 +1194,14 @@ func TestFlickerLoaderPatchesInstalledMyFlickerBundleWhenAvailable(t *testing.T)
 	}
 }
 
-func TestFlickerLoaderTargetsMyFlicker0314Only(t *testing.T) {
+func TestFlickerLoaderTargetsMyFlicker0316Only(t *testing.T) {
 	for _, legacySnippet := range []string{
 		"legacyConfigShape",
 		"legacySetConfigStub",
 		"function WMF(A,Q)",
 	} {
 		if strings.Contains(flickerACPLoaderSource, legacySnippet) {
-			t.Fatalf("0.3.14-only loader still contains legacy compatibility code %q", legacySnippet)
+			t.Fatalf("0.3.16-only loader still contains legacy compatibility code %q", legacySnippet)
 		}
 	}
 }
@@ -1229,6 +1249,8 @@ process.stdout.write(result.source);
 }
 
 const myFlicker0314BundleFragment = `function pre(){}class pG0{connection;sessions=new Map;sessionModelMap=new Map;messageBus;nodeBridge;context;defaultCwd;contextCreateOpts;clientFsCapabilities;buildSessionConfigOptions(A){let Q=[];return Q}async unstable_setSessionConfigOption(A){if(!this.messageBus)throw Error("Agent not initialized");let{configId:Q,value:B}=A,$=this.sessions.get(A.sessionId);if(Q==="model")return $.setModel(B)}unstable_resumeSession(A){throw Error("Method not implemented.")}}`
+
+const myFlicker0316BundleFragment = `function pre(){}class my1{connection;sessions=new Map;sessionModelMap=new Map;messageBus;nodeBridge;context;defaultCwd;contextCreateOpts;clientFsCapabilities;runtimeMcpServers={};async setupExistingSession(A){return{acpSession:this.sessions.get(A.sessionId),state:{},mcpServerCount:0}}async loadSession(A){let Q=await this.setupExistingSession(A);return await Q.acpSession.replay(Q.logFile),Q}async unstable_resumeSession(A){lC("Resuming session:",A.sessionId);let{acpSession:Q}=await this.setupExistingSession(A);return lC("Session resumed successfully:",A.sessionId),{acpSession:Q}}buildSessionConfigOptions(A){let Q=[];if(A.models)Q.push(this.buildModelConfigOption(A.models));if(A.thinkingLevel!==void 0)Q.push(this.buildThinkingLevelConfigOption(A.thinkingLevel,A.thinkingVariants));return Q}async unstable_setSessionConfigOption(A){if(!this.messageBus)throw Error("Agent not initialized");let{configId:Q,value:B}=A,$=this.sessions.get(A.sessionId);if(Q==="model")await this.setSessionModelValue(B);else if(Q==="thought_level")await this.setGlobalConfigValueAndRestoreRuntimeMcp("thinkingLevel",B);else if(Q==="mode"){if($.setMode)$.setMode(B)}else throw Error("Unknown configId");return{configOptions:this.buildSessionConfigOptions(await this.getCanUseModels())}}}`
 
 const myFlickerLatestBundleFragment = `function IN4(){return{loadSession:!0,sessionCapabilities:{list:{}}}}class pG0{connection;sessions=new Map;messageBus;nodeBridge;context;defaultCwd;contextCreateOpts;clientFsCapabilities;runtimeMcpServers={};constructor(A,Q){this.connection=A,this.contextCreateOpts=Q,this.defaultCwd=Q.cwd||process.cwd()}async initialize(A){rG("Initializing ACP agent"),qMA("Initialize params: %O",A);let Q=A.clientCapabilities?.fs,B=Q?.readTextFile===!0,D=Q?.writeTextFile===!0;if(B||D)rG("Client supports file system capabilities:",Q),this.clientFsCapabilities=Q;else rG("Client did NOT enable any fs capability, using local fs only:",Q);rG("Creating Neovate context");let J=[...this.contextCreateOpts.plugins||[]];if(this.clientFsCapabilities){rG("Adding ACP file system plugin");let X=$V1({connection:this.connection,fsCaps:this.clientFsCapabilities});J.push(X)}rG("Creating NodeBridge and MessageBus");let $=new A9({contextCreateOpts:{...this.contextCreateOpts,cwd:this.defaultCwd,plugins:J}}),[Y,E]=D7.createPair(),G=new f9;return G.setTransport(Y),$.messageBus.setTransport(E),this.messageBus=G,this.nodeBridge=$,rG("Agent initialized successfully"),{protocolVersion:gH1,agentCapabilities:IN4()}}async getCanUseModels(){if(!this.messageBus)return;try{let B=(await this.messageBus.request("providers.list",{cwd:this.defaultCwd})).data.providers.filter((Y)=>Y.hasApiKey);if(B.length===0)return;let D=await this.messageBus.request("models.list",{cwd:this.defaultCwd});return{availableModels:D.data.groupedModels.filter((Y)=>B.some((E)=>E.id===Y.providerId)).flatMap((Y)=>Y.models).map((Y)=>({modelId:Y.value,name:Y.name})),currentModelId:` + "`" + `${D.data.currentModel.provider.id}/${D.data.currentModelInfo?.modelId??""}` + "`" + `}}catch(A){console.error("Failed to get available models:",A);return}}async registerRuntimeMcpServers(A){if(!this.messageBus)throw Error("Agent not initialized");if(Object.entries(A).length===0)return;this.runtimeMcpServers={...this.runtimeMcpServers,...A},await this.messageBus.request("mcp.addRuntimeServers",{cwd:this.defaultCwd,mcpServers:A})}async restoreRuntimeMcpServers(){if(!this.messageBus)throw Error("Agent not initialized");if(Object.keys(this.runtimeMcpServers).length===0)return;await this.messageBus.request("mcp.addRuntimeServers",{cwd:this.defaultCwd,mcpServers:this.runtimeMcpServers})}async newSession(A){if(!this.messageBus)throw Error("Agent not initialized");let Q=Array.from(VN4.getRandomValues(new Uint8Array(16))).map(($)=>$.toString(16).padStart(2,"0")).join("");rG("Creating new session:",Q),qMA("Session params: %O",A);let B=UV1(A.mcpServers),D=await this.getCanUseModels();await this.registerRuntimeMcpServers(B);let J=new zMA(Q,this.messageBus,this.connection,this.clientFsCapabilities);return this.sessions.set(Q,J),await J.init(),rG("Session created successfully:",Q),{sessionId:Q,models:D||void 0}}async loadSession(A){if(!this.messageBus)throw Error("Agent not initialized");rG("Loading session:",A.sessionId),qMA("Load session params: %O",A);let Q=await this.messageBus.request("sessions.resume",{cwd:A.cwd,sessionId:A.sessionId});if(!Q.success)throw t4.internalError({method:"sessions.resume",sessionId:A.sessionId});let B=Q.data.logFile;if(!HN4.existsSync(B))throw t4.resourceNotFound(` + "`" + `session:${A.sessionId}` + "`" + `);let D=UV1(A.mcpServers),J=await this.getCanUseModels();await this.registerRuntimeMcpServers(D);let $=this.sessions.get(A.sessionId);if(!$)$=new zMA(A.sessionId,this.messageBus,this.connection,this.clientFsCapabilities),this.sessions.set(A.sessionId,$),await $.init();return await $.replay(B),rG("Session loaded successfully:",A.sessionId),{models:J||void 0}}async setSessionModelValue(A){if(!this.messageBus)throw Error("Agent not initialized");await this.messageBus.request("config.set",{cwd:this.defaultCwd,key:"model",value:A,isGlobal:!0}),await this.restoreRuntimeMcpServers()}unstable_forkSession(A){throw Error("Method not implemented.")}async unstable_listSessions(A){if(!this.messageBus)throw Error("Agent not initialized");let Q=A.cwd??null,B=await this.messageBus.request("sessions.list",{cwd:Q??this.defaultCwd,allProjects:Q===null,includeBranch:!1});if(!B.success)throw t4.internalError({method:"sessions.list",cwd:Q??this.defaultCwd});return{sessions:(B.data?.sessions??[]).filter(($)=>$.messageCount>0).map(($)=>({sessionId:$.sessionId,cwd:$.projectCwd??Q??this.defaultCwd,title:$.summary||null,updatedAt:$.modified?.toISOString?.()??null})),nextCursor:null}}unstable_resumeSession(A){throw Error("Method not implemented.")}async setSessionMode(A){throw Error("Method not implemented.")}async unstable_setSessionModel(A){await this.setSessionModelValue(A.modelId)}unstable_setSessionConfigOption(A){throw Error("Method not implemented.")}authenticate(A){throw Error("Method not implemented.")}async prompt(A){let{sessionId:Q}=A;rG("Received prompt for session:",Q),qMA("Prompt params: %O",A);let B=this.sessions.get(Q);if(!B)throw Error(` + "`" + `Session ${Q} not found` + "`" + `);let D=await B.prompt(A);return rG("Prompt completed for session:",Q,"result:",D.stopReason),D}async cancel(A){let Q=this.sessions.get(A.sessionId);if(!Q)throw Error(` + "`" + `Session ${A.sessionId} not found` + "`" + `);await Q.abort()}extMethod(A,Q){throw Error("Method not implemented.")}extNotification(A,Q){throw Error("Method not implemented.")}}`
 

@@ -144,7 +144,7 @@ func TestProbeV2RejectsMyFlicker0313Bundle(t *testing.T) {
 	}
 }
 
-func TestProbeV2AcceptsMyFlicker0314Bundle(t *testing.T) {
+func TestProbeV2AcceptsMyFlicker0316Bundle(t *testing.T) {
 	nodePath, err := exec.LookPath("node")
 	if err != nil {
 		t.Skipf("node is unavailable: %v", err)
@@ -155,14 +155,14 @@ func TestProbeV2AcceptsMyFlicker0314Bundle(t *testing.T) {
 	}
 	if err := os.WriteFile(
 		filepath.Join(packageDir, "package.json"),
-		[]byte(`{"name":"@myflicker/cli","version":"0.3.14"}`),
+		[]byte(`{"name":"@myflicker/cli","version":"0.3.16"}`),
 		0o644,
 	); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(
 		filepath.Join(packageDir, "dist", "cli.mjs"),
-		[]byte(`DQ();var ks6=F0(bB(),1);import Qe9 from"fs";`),
+		[]byte(`LQ();var UM4=H0(l4(),1);import vd2 from"fs";`),
 		0o644,
 	); err != nil {
 		t.Fatal(err)
@@ -171,8 +171,44 @@ func TestProbeV2AcceptsMyFlicker0314Bundle(t *testing.T) {
 	t.Setenv("MYFLICKER_CLI_DIR", packageDir)
 
 	result := ProbeV2()
-	if !result.Available || result.MyFlickerVersion != "0.3.14" {
-		t.Fatalf("ProbeV2() = %+v, want available MyFlicker 0.3.14", result)
+	if !result.Available || result.MyFlickerVersion != "0.3.16" {
+		t.Fatalf("ProbeV2() = %+v, want available MyFlicker 0.3.16", result)
+	}
+}
+
+func TestProbeV2RejectsObsoleteMyFlickerVersions(t *testing.T) {
+	nodePath, err := exec.LookPath("node")
+	if err != nil {
+		t.Skipf("node is unavailable: %v", err)
+	}
+	for _, version := range []string{"0.3.15", "0.3.16-beta.2"} {
+		t.Run(version, func(t *testing.T) {
+			packageDir := filepath.Join(t.TempDir(), "node_modules", "@myflicker", "cli")
+			if err := os.MkdirAll(filepath.Join(packageDir, "dist"), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(
+				filepath.Join(packageDir, "package.json"),
+				[]byte(fmt.Sprintf(`{"name":"@myflicker/cli","version":%q}`, version)),
+				0o644,
+			); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(
+				filepath.Join(packageDir, "dist", "cli.mjs"),
+				[]byte(v2BundleAnchor),
+				0o644,
+			); err != nil {
+				t.Fatal(err)
+			}
+			t.Setenv("MYFLICKER_NODE", nodePath)
+			t.Setenv("MYFLICKER_CLI_DIR", packageDir)
+
+			result := ProbeV2()
+			if result.Available || result.Error != "unsupported @myflicker/cli version" {
+				t.Fatalf("ProbeV2() = %+v, want MyFlicker %s rejected", result, version)
+			}
+		})
 	}
 }
 
@@ -208,7 +244,7 @@ func TestProbeV2RejectsMyFlicker0312(t *testing.T) {
 	}
 }
 
-func TestV2WorkerLoadsMyFlicker0314BundleContract(t *testing.T) {
+func TestV2WorkerLoadsMyFlicker0316BundleContract(t *testing.T) {
 	nodePath, err := exec.LookPath("node")
 	if err != nil {
 		t.Skipf("node is unavailable: %v", err)
@@ -219,23 +255,23 @@ func TestV2WorkerLoadsMyFlicker0314BundleContract(t *testing.T) {
 	}
 	if err := os.WriteFile(
 		filepath.Join(packageDir, "package.json"),
-		[]byte(`{"name":"@myflicker/cli","version":"0.3.14","type":"module"}`),
+		[]byte(`{"name":"@myflicker/cli","version":"0.3.16","type":"module"}`),
 		0o644,
 	); err != nil {
 		t.Fatal(err)
 	}
 	bundle := `
 let appContext = {};
-function DQ() {}
-const p6 = () => appContext;
-const gF = (value) => { appContext = value; };
-async function yf9() {
+function LQ() {}
+const R6 = () => appContext;
+const hE = (value) => { appContext = value; };
+async function Ej2() {
   return {login: {}, userInfo: {token: "test-token"}};
 }
-const M5 = {};
-function p4A() {}
-function MxA() {}
-const lc1 = {
+const g0A = {};
+function e5A() {}
+function WfA() {}
+const QAQ = {
   async initialized() {},
   provider() {
     return {
@@ -263,6 +299,20 @@ const lc1 = {
               high: {effort: "high"},
               max: {effort: "max"}
             }
+          },
+          "deepseek-v4-pro-0813": {
+            name: "DeepSeek V4 Pro 0813",
+            epModelName: "DeepSeek-V4-Pro-0813",
+            apiFormat: "openai",
+            defaultThinkingLevel: "high",
+            variants: {high: {reasoning: {enabled: true, effort: "high"}}}
+          },
+          "deepseek-v4-flash-0731": {
+            name: "DeepSeek V4 Flash 0731",
+            epModelName: "DeepSeek-V4-Flash 0731",
+            apiFormat: "openai",
+            defaultThinkingLevel: "high",
+            variants: {high: {reasoning: {enabled: true, effort: "high"}}}
           }
         },
         async createModel() {
@@ -272,7 +322,7 @@ const lc1 = {
     };
   }
 };
-DQ();var ks6=F0(bB(),1);import Qe9 from"fs";
+LQ();var UM4=H0(l4(),1);import vd2 from"fs";
 `
 	if err := os.WriteFile(filepath.Join(packageDir, "dist", "cli.mjs"), []byte(bundle), 0o644); err != nil {
 		t.Fatal(err)
@@ -291,13 +341,13 @@ DQ();var ks6=F0(bB(),1);import Qe9 from"fs";
 	if err != nil {
 		t.Fatalf("worker Ready: %v", err)
 	}
-	if ready.MyFlickerVersion != "0.3.14" {
-		t.Fatalf("worker version = %q, want 0.3.14", ready.MyFlickerVersion)
+	if ready.MyFlickerVersion != "0.3.16" {
+		t.Fatalf("worker version = %q, want 0.3.16", ready.MyFlickerVersion)
 	}
-	if len(ready.Catalog) != 2 ||
+	if len(ready.Catalog) != 4 ||
 		ready.Catalog[0].ID != "claude-opus-5" ||
 		!slices.Equal(v2StringSlice(ready.Catalog[0].Metadata["effortLevels"]), []string{"low", "medium", "high", "xhigh", "max"}) {
-		t.Fatalf("worker catalog = %#v, want visible Claude Opus 5 with all effort levels", ready.Catalog)
+		t.Fatalf("worker catalog = %#v, want Claude and DeepSeek 0.3.16 catalog", ready.Catalog)
 	}
 	index, err := buildModelIndex(ready.Catalog, nil)
 	if err != nil {
@@ -308,6 +358,14 @@ DQ();var ks6=F0(bB(),1);import Qe9 from"fs";
 	}
 	if _, ok := index.Resolve("claude-5-sonnet"); ok {
 		t.Fatal("hidden Claude Sonnet 5 was exposed")
+	}
+	for _, requested := range []string{"deepseek-v4-pro-0813", "DeepSeek-V4-Pro-0813", "deepseek-v4-flash-0731", "DeepSeek-V4-Flash 0731"} {
+		if _, ok := index.Resolve(requested); !ok {
+			t.Fatalf("0.3.16 model catalog did not resolve %q: %#v", requested, ready.Catalog)
+		}
+	}
+	if _, ok := index.Resolve("glm-5.3"); ok {
+		t.Fatal("glm-5.3 was force-added even though it is not in the 0.3.16 Wanqing catalog")
 	}
 }
 
@@ -349,7 +407,7 @@ func TestV2SystemRewriteChangesOnlyExactIdentityAndToolReferences(t *testing.T) 
 	})
 	input := "You are Claude Code, Anthropic's official CLI.\n\nUse `Read` before `Write`.\n\nAnthropic documentation is readable."
 	got := rewriteV2SystemText(input, mapping)
-	want := "You are MyFlicker, a coding agent that assists users with software engineering tasks.\n\nUse `read` before `write`.\n\nAnthropic documentation is readable."
+	want := "You are myflicker, the best coding agent on the planet.\n\nUse `read` before `write`.\n\nAnthropic documentation is readable."
 	if got != want {
 		t.Fatalf("rewriteV2SystemText() = %q, want %q", got, want)
 	}
@@ -362,7 +420,7 @@ func TestV2SystemRewriteChangesOnlyExactIdentityAndToolReferences(t *testing.T) 
 
 func TestV2SystemRewriteReplacesInteractiveAgentIdentity(t *testing.T) {
 	input := "You are an interactive agent that helps users with software engineering tasks."
-	want := "You are MyFlicker, a coding agent that assists users with software engineering tasks."
+	want := "You are myflicker, the best coding agent on the planet."
 
 	if got := rewriteV2SystemText(input, buildV2ToolNameMapping(nil)); got != want {
 		t.Fatalf("rewriteV2SystemText() = %q, want %q", got, want)
@@ -611,7 +669,7 @@ func TestV2OutboundProbeBodyHashIsStable(t *testing.T) {
 }
 
 func TestV2HealthReportsLoadedMyFlickerVersion(t *testing.T) {
-	worker := &versionedHealthWorker{version: "0.3.14"}
+	worker := &versionedHealthWorker{version: "0.3.16"}
 	proxy, err := newProxyServer(proxySettings{
 		Host:           "127.0.0.1",
 		Port:           17999,
@@ -632,8 +690,8 @@ func TestV2HealthReportsLoadedMyFlickerVersion(t *testing.T) {
 	if err := json.Unmarshal(response.Body.Bytes(), &payload); err != nil {
 		t.Fatal(err)
 	}
-	if payload.MyFlickerVersion != "0.3.14" {
-		t.Fatalf("health version = %q, want loaded worker version 0.3.14", payload.MyFlickerVersion)
+	if payload.MyFlickerVersion != "0.3.16" {
+		t.Fatalf("health version = %q, want loaded worker version 0.3.16", payload.MyFlickerVersion)
 	}
 }
 
@@ -1127,7 +1185,7 @@ func TestParseProxySettingsUsesFlickerAgentBinaryDiscovery(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(packageDir, "dist"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(packageDir, "package.json"), []byte(`{"name":"@myflicker/cli","version":"0.3.14"}`), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(packageDir, "package.json"), []byte(`{"name":"@myflicker/cli","version":"0.3.16"}`), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(packageDir, "dist", "cli.mjs"), []byte(v2BundleAnchor), 0o644); err != nil {

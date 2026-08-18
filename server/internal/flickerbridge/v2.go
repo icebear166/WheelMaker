@@ -56,7 +56,7 @@ type V2ProbeResult struct {
 	Error            string `json:"error,omitempty"`
 }
 
-const v2BundleAnchor = `DQ();var ks6=F0(bB(),1);import Qe9 from"fs";`
+const v2BundleAnchor = `LQ();var UM4=H0(l4(),1);import vd2 from"fs";`
 
 type v2BundleContract struct {
 	Anchor  string
@@ -64,9 +64,9 @@ type v2BundleContract struct {
 }
 
 var v2BundleContracts = map[string]v2BundleContract{
-	"0.3.14": {
+	"0.3.16": {
 		Anchor:  v2BundleAnchor,
-		Exports: "DQ();\nexport{lc1 as wanqingPlugin,M5 as models,p4A as createOpenAI,MxA as createAnthropic,yf9 as login,gF as setContext,p6 as getContext};",
+		Exports: "LQ();\nexport{QAQ as wanqingPlugin,g0A as models,e5A as createOpenAI,WfA as createAnthropic,Ej2 as login,hE as setContext,R6 as getContext};",
 	},
 }
 
@@ -458,9 +458,9 @@ const { pathToFileURL } = require("node:url");
 const { registerHooks } = require("node:module");
 
 const BUNDLE_CONTRACTS = {
-  "0.3.14": {
-    anchor: 'DQ();var ks6=F0(bB(),1);import Qe9 from"fs";',
-    exports: 'DQ();\nexport{lc1 as wanqingPlugin,M5 as models,p4A as createOpenAI,MxA as createAnthropic,yf9 as login,gF as setContext,p6 as getContext};',
+  "0.3.16": {
+    anchor: 'LQ();var UM4=H0(l4(),1);import vd2 from"fs";',
+    exports: 'LQ();\nexport{QAQ as wanqingPlugin,g0A as models,e5A as createOpenAI,WfA as createAnthropic,Ej2 as login,hE as setContext,R6 as getContext};',
   },
 };
 const controllers = new Map();
@@ -762,7 +762,7 @@ function installInterception() {
         bodyHash:createHash("sha256").update(serializedBody).digest("hex"),
         systemBlocks:Array.isArray(system) ? system.length : system ? 1 : 0,
         toolNames,
-        hasMyFlickerIdentity:serializedSystem.includes("You are MyFlicker, a coding agent that assists users with software engineering tasks."),
+        hasMyFlickerIdentity:serializedSystem.includes("You are myflicker, the best coding agent on the planet."),
         hasClaudeIdentity:serializedSystem.includes("You are Claude Code, Anthropic's official CLI"),
         hasImage:serializedBody.includes('"type":"image"') ||
           serializedBody.includes('"type":"image_url"') ||
@@ -1042,7 +1042,7 @@ func mapV2Tools(tools []anthropicTool, mapping v2ToolNameMapping) []anthropicToo
 	return result
 }
 
-const myFlickerIdentityPrompt = "You are MyFlicker, a coding agent that assists users with software engineering tasks."
+const myFlickerIdentityPrompt = "You are myflicker, the best coding agent on the planet."
 
 var v2ClaudeIdentitySentences = []string{
 	"You are Claude Code, Anthropic's official CLI.",
@@ -2781,7 +2781,7 @@ func selfTestPrompt() error {
 Always inspect the workspace before editing. Use ` + "`Read`" + ` before ` + "`Write`" + `.
 
 The user requires all output to remain concise.`
-	want := `You are MyFlicker, a coding agent that assists users with software engineering tasks.
+	want := `You are myflicker, the best coding agent on the planet.
 
 Always inspect the workspace before editing. Use ` + "`read`" + ` before ` + "`write`" + `.
 
@@ -2961,6 +2961,17 @@ func selfTestLiveCatalog() error {
 	if _, ok := index.Resolve("glm-5.2"); !ok {
 		return errors.New("glm-5.2 missing from live catalog")
 	}
+	for _, modelID := range []string{"deepseek-v4-pro-0813", "deepseek-v4-flash-0731"} {
+		if _, ok := index.Resolve(modelID); !ok {
+			return fmt.Errorf("%s missing from live catalog", modelID)
+		}
+	}
+	if model, ok := index.Resolve("DeepSeek-V4-Flash 0731"); !ok || model.ID != "deepseek-v4-flash-0731" {
+		return errors.New("DeepSeek-V4-Flash 0731 alias does not resolve to deepseek-v4-flash-0731")
+	}
+	if _, ok := index.Resolve("glm-5.3"); ok {
+		return errors.New("glm-5.3 was unexpectedly added to the live catalog")
+	}
 	return nil
 }
 
@@ -3008,7 +3019,7 @@ globalThis.fetch = async (input, init) => {
     version: headers.get("x-takumi-version") || "",
     bodyKeys: Object.keys(body).sort(),
     toolNames: nativeToolNames(body),
-    hasNativeIdentity: system.includes("You are MyFlicker, a coding agent that assists users with software engineering tasks."),
+    hasNativeIdentity: system.includes("You are myflicker, the best coding agent on the planet."),
     hasClaudeIdentity: system.includes("You are Claude Code, Anthropic's official CLI"),
     hasGatewayAuthToken: headers.has("x-takumi-token"),
   }));
@@ -3295,10 +3306,9 @@ func selfTestLiveFormats() error {
 			return fmt.Errorf("%s used unexpected URL %q", format, probe.URL)
 		}
 		for _, header := range []string{
-			"x-chat-id",
 			"x-takumi-client-id",
 			"x-takumi-product-name",
-			"x-takumi-session-id",
+			"x-takumi-sid",
 			"x-takumi-timestamp",
 			"x-takumi-token",
 			"x-takumi-version",
