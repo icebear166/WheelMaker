@@ -35,9 +35,10 @@ function parseArguments(values) {
   if (values.length === 0) {
     throw new Error('缺少命令');
   }
+  if (values[0] === '--help' || values[0] === '-h') return {command: 'help', options: {}};
   const command = values[0];
   const options = { projects: [], sources: [] };
-  const booleans = new Set(['--working-tree', '--yes']);
+  const booleans = new Set(['--help', '--non-interactive', '--working-tree', '--yes']);
   const repeatable = new Map([
     ['--project', 'projects'],
     ['--source', 'sources'],
@@ -279,13 +280,19 @@ async function updateCommand(options) {
 }
 
 async function setupCommand(options, prompt) {
+  if (options.noninteractive && !options.repository) {
+    throw new Error('非交互初始化必须提供 --repository');
+  }
   const repositoryPath = path.resolve(
-    options.repository || await prompt.text('私人 Wiki 仓库目录：'),
+    options.repository || (options.noninteractive ? '' : await prompt.text('私人 Wiki 仓库目录：')),
   );
-  const siteTitle = options.title || await prompt.text('网站标题（默认 Personal Wiki）：') || 'Personal Wiki';
-  const publicUrl = options.publicUrl || await prompt.text('可选网站地址（留空跳过）：');
+  const siteTitle = options.title
+    || (options.noninteractive ? '' : await prompt.text('网站标题（默认 Personal Wiki）：'))
+    || 'Personal Wiki';
+  const publicUrl = options.publicUrl
+    || (options.noninteractive ? '' : await prompt.text('可选网站地址（留空跳过）：'));
   const githubRepository = options.githubRepository
-    || await prompt.text('可选 GitHub owner/name（留空只创建本地仓库）：');
+    || (options.noninteractive ? '' : await prompt.text('可选 GitHub owner/name（留空只创建本地仓库）：'));
   const userPaths = resolveUserConfigPaths();
   const kitManifestSource = await readFile(path.join(kitRoot, 'kit.json'));
   const kitManifest = JSON.parse(kitManifestSource);
@@ -338,6 +345,10 @@ export async function runCLI(values = process.argv.slice(2), {
   try {
     const { command, options } = parseArguments(values);
     let result;
+    if (command === 'help' || options.help) {
+      stdout.write('Personal Wiki Kit\n\nUsage: personal-wiki <setup|check|query|route|build|open|publish|update|migrate-config> [options]\n');
+      return { help: true };
+    }
     if (command === 'check') result = await checkCommand(options);
     else if (command === 'query') result = await queryCommand(options);
     else if (command === 'route') result = await routeCommand(options);

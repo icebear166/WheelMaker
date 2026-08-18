@@ -27,11 +27,11 @@
 
 **Acceptance:** A Kit version produces deterministic Windows and Linux archive trees containing CLI/runtime, prebuilt Reader, server binary, Skills, templates, manifest, and per-file SHA-256; no host Node/Go is needed after extraction.
 
-- [ ] **Step 1: Write failing archive-layout, tamper, and Windows smoke tests**
+- [x] **Step 1: Write failing archive-layout, tamper, and Windows smoke tests**
 
 Fixture tests assert required paths, executable metadata for Linux assets, deterministic normalized ordering/timestamps, manifest completeness, runtime invocation path, and failure when a declared file is missing or extra. The Windows smoke removes host Node/Go from `PATH`, then exercises the staged runtime through setup, query, build, open-health, and local publish fixtures.
 
-- [ ] **Step 2: Run tests to verify RED**
+- [x] **Step 2: Run tests to verify RED**
 
 Run: `node --test scripts/archive.test.mjs scripts/build-release.test.mjs tests/windows-local-smoke.test.mjs`
 
@@ -39,17 +39,17 @@ Workdir: `personal-wiki-kit`
 
 Expected: FAIL because release modules are absent.
 
-- [ ] **Step 3: Implement minimal packager**
+- [x] **Step 3: Implement minimal packager**
 
 Copy `process.execPath` as the development Windows runtime fixture, accept explicit platform runtime/server inputs for CI, copy production dependencies without running lifecycle scripts, and generate manifests after the final tree is complete.
 
-- [ ] **Step 4: Verify GREEN and self-contained invocation**
+- [x] **Step 4: Verify GREEN and self-contained invocation**
 
 Run: `node --test scripts/archive.test.mjs scripts/build-release.test.mjs tests/windows-local-smoke.test.mjs && npm run build:release -- --platform windows-x64 --output .wiki-kit-out`
 
 Expected: PASS; invoking the staged `setup-wiki.bat --help` succeeds with `PATH` that excludes host Node/Go.
 
-- [ ] **Step 5: Git checkpoint**
+- [x] **Step 5: Git checkpoint**
 
 Checkpoint release packager, archive helpers, package scripts, and tests; do not commit `.wiki-kit-out`.
 
