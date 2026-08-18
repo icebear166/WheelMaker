@@ -246,7 +246,7 @@
 
 **Acceptance:** The Skills wiki describes the implemented latest-first operations and no longer documents Refresh as a user action; all required tests and repository checks pass.
 
-- [ ] **Step 1: Write the failing documentation checks**
+- [x] **Step 1: Write the failing documentation checks**
 
   Search the existing wiki and assert the stale user-facing rules are identified:
 
@@ -256,15 +256,15 @@
 
   Expected result: the current wiki contains the old Refresh and install-without-fetch descriptions that must be replaced.
 
-- [ ] **Step 2: Run the documentation check to verify RED**
+- [x] **Step 2: Run the documentation check to verify RED**
 
   Run the command above and record the matching lines before editing; the check is RED while old user-facing behavior remains documented.
 
-- [ ] **Step 3: Write the minimal wiki update**
+- [x] **Step 3: Write the minimal wiki update**
 
   Update only `docs/wiki/features/skills-management.md` to document: latest-first Repo operations, Scope-level Update/Install all, Repo-level Update/Install all retention, installation-before-update ordering, source-level partial failure continuation, Global link/Project copy semantics, and the absence of the visible Refresh action. Preserve the existing migration, lock, source discovery, external Skill and protocol-version rules.
 
-- [ ] **Step 4: Run full verification**
+- [x] **Step 4: Run full verification**
 
   Run from `server`:
 
