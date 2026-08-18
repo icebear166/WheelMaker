@@ -8,10 +8,42 @@
     "node": ">=22"
   },
   "dependencies": {
+    "@fontsource/ibm-plex-sans": "^5.2.8",
+    "@fontsource/jetbrains-mono": "^5.2.8",
+    "@shikijs/core": "^4.0.2",
+    "@shikijs/engine-javascript": "^4.0.2",
+    "@shikijs/langs": "^4.0.2",
+    "@shikijs/themes": "^4.0.2",
+    "katex": "^0.16.22",
+    "mermaid": "^11.12.1",
+    "react": "19.2.3",
+    "react-dom": "19.2.3",
+    "react-markdown": "^10.1.0",
+    "rehype-katex": "^7.0.1",
+    "remark-gfm": "^4.0.1",
+    "remark-math": "^6.0.0",
     "yaml": "^2.8.1"
   },
+  "devDependencies": {
+    "@babel/core": "7.29.7",
+    "@babel/preset-env": "^7.25.3",
+    "@babel/preset-react": "^7.27.1",
+    "@babel/preset-typescript": "^7.27.1",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.2",
+    "babel-loader": "^10.1.1",
+    "css-loader": "^7.1.2",
+    "html-webpack-plugin": "^5.6.6",
+    "mini-css-extract-plugin": "^2.10.2",
+    "typescript": "^5.8.3",
+    "webpack": "^5.105.4",
+    "webpack-cli": "^7.0.2"
+  },
   "scripts": {
+    "build": "npm run build:reader",
+    "build:reader": "webpack --config reader/webpack.config.cjs && node src/site-builder.mjs seal-reader reader-dist kit.json",
     "test": "node --test tests/*.test.mjs",
-    "check:public": "node --test --test-name-pattern=\"public boundary\" tests/kit-manifest.test.mjs"
+    "check:public": "node --test --test-name-pattern=\"public boundary\" tests/kit-manifest.test.mjs",
+    "typecheck": "tsc -p reader/tsconfig.json"
   }
 }

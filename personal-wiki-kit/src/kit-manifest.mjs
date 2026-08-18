@@ -134,7 +134,9 @@ function isAllowedHost(host) {
     || host.endsWith('.example.com')
     || host === 'github.com'
     || host === 'json-schema.org'
-    || host === 'registry.npmjs.org';
+    || host === 'opencollective.com'
+    || host === 'registry.npmjs.org'
+    || host === 'tidelift.com';
 }
 
 function contentReasons(path, source) {

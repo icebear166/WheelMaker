@@ -160,13 +160,15 @@ Run: `node --test tests/content.test.mjs tests/registry.test.mjs tests/release-m
 
 Expected: PASS with identical manifest hashes across two builds with the same `generatedAt`.
 
-- [ ] **Step 5: Git checkpoint**
+- [x] **Step 5: Git checkpoint**
 
-Checkpoint compiler, schema, fixtures, and tests.
+Checkpoint: `6c82951e feat(wiki-kit): compile private knowledge data`.
 
 ### Task 4: Build the release-time Reader and data-only site assembly
 
 **Files:**
+- Modify: `personal-wiki-kit/package.json`
+- Modify: `personal-wiki-kit/package-lock.json`
 - Create: `personal-wiki-kit/reader/public/index.html`
 - Create: `personal-wiki-kit/reader/src/App.tsx`
 - Create: `personal-wiki-kit/reader/src/MarkdownRenderer.tsx`
@@ -181,21 +183,21 @@ Checkpoint compiler, schema, fixtures, and tests.
 
 **Acceptance:** Reader supports topic and project views with stable article IDs, and private-repository builds copy a prebuilt Reader shell plus generated data without webpack/npm execution.
 
-- [ ] **Step 1: Write failing site assembly tests**
+- [x] **Step 1: Write failing site assembly tests**
 
 Use a fake prebuilt Reader containing `index.html` and hashed assets. Assert `buildSite()` copies only declared Reader files, overlays generated `data/`, writes release metadata/manifest, and rejects extra or tampered Reader assets.
 
-- [ ] **Step 2: Run tests to verify RED**
+- [x] **Step 2: Run tests to verify RED**
 
 Run: `node --test tests/site-builder.test.mjs`
 
 Expected: FAIL because `src/site-builder.mjs` is absent.
 
-- [ ] **Step 3: Implement the minimal site assembler and Reader source**
+- [x] **Step 3: Implement the minimal site assembler and Reader source**
 
 Reader source is selectively extracted from the current private implementation, with no private content/default URL. The release build writes `reader-dist/`; `buildSite()` accepts that directory explicitly and never invokes npm.
 
-- [ ] **Step 4: Verify Reader and assembler GREEN**
+- [x] **Step 4: Verify Reader and assembler GREEN**
 
 Run: `npm run typecheck && npm run build:reader && node --test tests/site-builder.test.mjs`
 
