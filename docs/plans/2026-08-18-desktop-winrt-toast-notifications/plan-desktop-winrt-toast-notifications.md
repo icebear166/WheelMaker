@@ -56,7 +56,7 @@ COM 常量：`CLSCTX_LOCAL_SERVER=0x4`、`REGCLS_MULTIPLEUSE=1`、`COINIT_APARTM
 
 **Acceptance:** `desktopNotificationStatusPrefix`、`desktopToastContentFor`、`marshalDesktopToastXML` 三个纯函数行为正确；符号前缀映射与 XML 转义有测试覆盖。
 
-- [ ] **Step 1: Write the failing tests**（追加到 desktop_notification_windows_test.go）
+- [x] **Step 1: Write the failing tests**（追加到 desktop_notification_windows_test.go）
 
 ```go
 func TestDesktopNotificationStatusPrefix(t *testing.T) {
@@ -101,12 +101,12 @@ func TestMarshalDesktopToastXMLEscapesAndShapes(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `cd server && go test ./cmd/wheelmaker-desktop -run 'TestDesktopNotificationStatusPrefix|TestDesktopToastContentFor|TestMarshalDesktopToastXML' -v`
 Expected: 编译失败 `undefined: desktopNotificationStatusPrefix` 等（功能缺失，非笔误）。
 
-- [ ] **Step 3: Minimal implementation**（desktop_notification_windows.go 追加）
+- [x] **Step 3: Minimal implementation**（desktop_notification_windows.go 追加）
 
 ```go
 // desktopNotificationStatusPrefix returns the status symbol prepended to the
@@ -154,14 +154,14 @@ func marshalDesktopToastXML(c desktopToastContent) string {
 
 注意：`xml.EscapeText` 把 `"` 转成 `&#34;`、单引号转 `&#39;`，符合 XML 属性与文本安全要求；新增 import `encoding/xml`、`strings`（如已存在则复用）。
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `cd server && go test ./cmd/wheelmaker-desktop -run 'TestDesktopNotificationStatusPrefix|TestDesktopToastContentFor|TestMarshalDesktopToastXML' -v`
 Expected: PASS。
 
-- [ ] **Step 5: Regression** — `go build ./cmd/wheelmaker-desktop`，预期通过（旧气球代码此时尚存，编译不受影响）。
+- [x] **Step 5: Regression** — `go build ./cmd/wheelmaker-desktop`，预期通过（旧气球代码此时尚存，编译不受影响）。
 
-- [ ] **Step 6: Git checkpoint** — 本任务与 Task 2/3 同属通知器核心单元，合并到 Task 3 后一次 checkpoint；本步记录"随 Task 3 提交"。
+- [x] **Step 6: Git checkpoint** — 本任务与 Task 2/3 同属通知器核心单元，合并到 Task 3 后一次 checkpoint；本步记录"随 Task 3 提交"。
 
 ---
 
@@ -173,7 +173,7 @@ Expected: PASS。
 
 **Acceptance:** 通知器经注入 ops 发 toast（身份注册幂等、失败丢弃返回 ok:false）；托盘图标保留（安装/单击聚焦/关闭移除）；气球相关代码与测试全部删除。
 
-- [ ] **Step 1: Rewrite the failing tests**（重写 desktop_notification_windows_test.go：删除 `TestDesktopNotificationBalloonFlags`、`TestTruncateNotificationUTF16`、气球点击/失败/重试等气球测试；保留 `TestParseDesktopNotification` 与 Task 1 新增测试；新增）
+- [x] **Step 1: Rewrite the failing tests**（重写 desktop_notification_windows_test.go：删除 `TestDesktopNotificationBalloonFlags`、`TestTruncateNotificationUTF16`、气球点击/失败/重试等气球测试；保留 `TestParseDesktopNotification` 与 Task 1 新增测试；新增）
 
 ```go
 type fakeToastOps struct {
@@ -278,12 +278,12 @@ func TestDesktopToastNotifierTrayLifecycle(t *testing.T) {
 
 `fakeTrayOps` 精简为托盘职责：`installTrayIcon(*desktopToastNotifier) (uintptr, error)`、`removeTrayIcon(hwnd)`、`focusMainWindow()`、`evalScript(script)`（删除 `showBalloon`/`balloons` 字段）。
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `cd server && go test ./cmd/wheelmaker-desktop -run TestDesktopToastNotifier -v`
 Expected: 编译失败 `undefined: desktopToastNotifier / newDesktopToastNotifierWithOps`（功能缺失）。
 
-- [ ] **Step 3: Minimal implementation**（desktop_notification_windows.go）
+- [x] **Step 3: Minimal implementation**（desktop_notification_windows.go）
 
 ```go
 type desktopToastOps interface {
@@ -383,14 +383,14 @@ func (n *desktopToastNotifier) close() {
 
 托盘 Win32 层（`win32DesktopTrayOps`）删除 `showBalloon`；删除常量 `niifNone/niifInfo/niifError/ninBalloonUserClick/nifInfo/nimModify`、`truncateNotificationUTF16`、`desktopNotificationTitleMaxUTF16/desktopNotificationBodyMaxUTF16`、`wmApp` 保留；托盘 wndproc 删除气球 case。`desktopTrayNotifier` 旧类型及其测试全部移除；`desktopActiveTrayNotifier` 类型改为 `atomic.Pointer[desktopToastNotifier]`。
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `cd server && go test ./cmd/wheelmaker-desktop -v`
 Expected: 全部 PASS（注意 `newWin32DesktopToastOps` 在 Task 4 才落地——Step 3 先在 desktop_notification_windows.go 保留一个编译占位：`newWin32DesktopToastOps` 返回真实类型的最小空实现骨架会被 Task 4 补全；若选择保持测试编译，Task 2 允许该构造函数暂以 `return &win32DesktopToastOps{mainHwnd: mainHwnd}` 形式存在且方法体返回错误）。
 
-- [ ] **Step 5: Regression** — `go build ./cmd/wheelmaker-desktop && go vet ./cmd/wheelmaker-desktop`，预期无新增告警。
+- [x] **Step 5: Regression** — `go build ./cmd/wheelmaker-desktop && go vet ./cmd/wheelmaker-desktop`，预期无新增告警。
 
-- [ ] **Step 6: Git checkpoint** — 随 Task 3 后一次提交；记录"随 Task 3 提交"。
+- [x] **Step 6: Git checkpoint** — 随 Task 3 后一次提交；记录"随 Task 3 提交"。
 
 ---
 
@@ -402,7 +402,7 @@ Expected: 全部 PASS（注意 `newWin32DesktopToastOps` 在 Task 4 才落地—
 
 **Acceptance:** launch args 解析正确；有效激活 → 聚焦 + 派发 `wheelmaker:desktop-notification-click`（带正确 projectId/sessionId）；无效激活静默忽略。
 
-- [ ] **Step 1: Write the failing tests**（追加）
+- [x] **Step 1: Write the failing tests**（追加）
 
 ```go
 func TestParseDesktopToastLaunchArgs(t *testing.T) {
@@ -441,12 +441,12 @@ func TestDesktopToastNotifierActivationWithBadArgsDoesNothing(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `cd server && go test ./cmd/wheelmaker-desktop -run 'ToastLaunchArgs|Activation' -v`
 Expected: 编译失败 `undefined: parseDesktopToastLaunchArgs / handleToastActivation`。
 
-- [ ] **Step 3: Minimal implementation**
+- [x] **Step 3: Minimal implementation**
 
 ```go
 // parseDesktopToastLaunchArgs parses the toast launch attribute produced by
@@ -476,11 +476,11 @@ func (n *desktopToastNotifier) handleToastActivation(args string) {
 
 新增 import `net/url`。托盘 wndproc 增加 case `wmToastActivated`（`= wmApp + 2`）：从全局 pending 队列取出激活参数并调用 `handleToastActivation`（队列本身在 Task 4 实现，本任务只接 wndproc 分支 + 类型方法）。
 
-- [ ] **Step 4: Run tests to verify they pass** — 同上命令，Expected: PASS。
+- [x] **Step 4: Run tests to verify they pass** — 同上命令，Expected: PASS。
 
-- [ ] **Step 5: Regression** — `cd server && go test ./cmd/wheelmaker-desktop` 全绿。
+- [x] **Step 5: Regression** — `cd server && go test ./cmd/wheelmaker-desktop` 全绿。
 
-- [ ] **Step 6: Git checkpoint**
+- [x] **Step 6: Git checkpoint**
 
 git-workflow checkpoint（Task 1-3 文件：`desktop_notification_windows.go` + `desktop_notification_windows_test.go`）。建议提交信息：`feat(desktop): toast notification content model and notifier core`。记录 hash + subject。
 
@@ -496,7 +496,7 @@ git-workflow checkpoint（Task 1-3 文件：`desktop_notification_windows.go` + 
 
 **Acceptance:** 真实 ops 完成 HKCU 自注册 + AUMID 设置 + COM 激活器注册 + WinRT toast 发送；托盘隐藏窗口接收激活中转消息；装配替换；全量构建与测试通过。
 
-- [ ] **Step 1: Write the failing tests**（图标释放是纯文件逻辑，先测）
+- [x] **Step 1: Write the failing tests**（图标释放是纯文件逻辑，先测）
 
 ```go
 func TestDesktopToastIconReleaseWritesEmbeddedPNG(t *testing.T) {
@@ -529,12 +529,12 @@ func TestDesktopToastIconReleaseWritesEmbeddedPNG(t *testing.T) {
 
 新增 import `bytes`、`os`。
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `cd server && go test ./cmd/wheelmaker-desktop -run TestDesktopToastIconRelease -v`
 Expected: 编译失败 `undefined: releaseDesktopToastIcon / desktopToastIconPNG`。
 
-- [ ] **Step 3: Implementation**（desktop_toast_winrt_windows.go，要点全量落地）
+- [x] **Step 3: Implementation**（desktop_toast_winrt_windows.go，要点全量落地）
 
 3a. GUID 类型与常量（用"固定常量"表的全部值）：
 
@@ -644,19 +644,19 @@ type desktopToastActivator struct { ... }
 
 `desktopTrayWindowHwnd atomic.Uintptr` 在托盘 `installTrayIcon` 成功时 Store、`removeTrayIcon` 时 Store(0)。托盘 wndproc 的 `wmToastActivated` 分支：从 pending 队列 drain，逐条 `notifier.handleToastActivation(args)`（notifier 从 `desktopActiveTrayNotifier.Load()` 取）。激活器 QI 只认 IID_IUnknown 与 IID_INotificationActivationCallback，其余返回 E_NOINTERFACE；AddRef/Release 返回 1（进程生命周期内常驻，不做真实计数）。
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `cd server && go test ./cmd/wheelmaker-desktop -v`
 Expected: 全绿（含 Task 1-3 全部测试 + 图标释放测试）。
 
-- [ ] **Step 5: 接线**
+- [x] **Step 5: 接线**
 
 `webview_windows.go:74`：`newDesktopTrayNotifier(hwnd, ...)` → `newDesktopToastNotifier(hwnd, func(script string) { w.Eval(script) })`。
 
 Run: `cd server && gofmt -w cmd/wheelmaker-desktop && go build ./cmd/wheelmaker-desktop && go vet ./cmd/wheelmaker-desktop && go test ./cmd/wheelmaker-desktop`
 Expected: 构建通过、无新增 vet 告警、测试全绿。
 
-- [ ] **Step 6: Git checkpoint**
+- [x] **Step 6: Git checkpoint**
 
 git-workflow checkpoint（Task 4 文件：`desktop_toast_winrt_windows.go`、`desktop_notification_windows.go`、`desktop_notification_windows_test.go`、`webview_windows.go`）。建议提交信息：`feat(desktop): winrt toast ops with com activator and self-registration`。记录 hash + subject。
 

@@ -5,7 +5,6 @@ package main
 import (
 	"encoding/json"
 	"encoding/xml"
-	"errors"
 	"fmt"
 	"net/url"
 	"strconv"
@@ -270,22 +269,6 @@ func (n *desktopToastNotifier) close() {
 
 var desktopActiveTrayNotifier atomic.Pointer[desktopToastNotifier]
 
-var errDesktopToastNotImplemented = errors.New("win32 toast ops are not implemented")
-
-// win32DesktopToastOps is a placeholder so construction wiring compiles; the
-// real WinRT/COM implementation lives in desktop_toast_winrt_windows.go.
-type win32DesktopToastOps struct {
-	mainHwnd uintptr
-}
-
-func newWin32DesktopToastOps(mainHwnd uintptr) *win32DesktopToastOps {
-	return &win32DesktopToastOps{mainHwnd: mainHwnd}
-}
-
-func (o *win32DesktopToastOps) registerIdentity() error     { return errDesktopToastNotImplemented }
-func (o *win32DesktopToastOps) showToast(_, _ string) error { return errDesktopToastNotImplemented }
-func (o *win32DesktopToastOps) unregister()                 {}
-
 // --- Win32 tray layer ---
 
 var (
@@ -413,10 +396,12 @@ func (o *win32DesktopTrayOps) installTrayIcon(_ *desktopToastNotifier) (uintptr,
 		procDestroyWindow.Call(hwnd)
 		return 0, fmt.Errorf("Shell_NotifyIconW NIM_ADD failed: %w", callErr)
 	}
+	desktopTrayWindowHwnd.Store(hwnd)
 	return hwnd, nil
 }
 
 func (o *win32DesktopTrayOps) removeTrayIcon(hwnd uintptr) {
+	desktopTrayWindowHwnd.Store(0)
 	data := desktopNotifyIconData{
 		hwnd: hwnd,
 		id:   desktopTrayIconID,
@@ -453,6 +438,14 @@ func desktopTrayWndProc(hwnd uintptr, msg uint32, wparam, lparam uintptr) uintpt
 		if lparam == wmLButtonUp {
 			if notifier := desktopActiveTrayNotifier.Load(); notifier != nil {
 				notifier.handleTrayClick()
+			}
+		}
+		return 0
+	}
+	if msg == wmToastActivated {
+		if notifier := desktopActiveTrayNotifier.Load(); notifier != nil {
+			for _, args := range drainDesktopToastActivations() {
+				notifier.handleToastActivation(args)
 			}
 		}
 		return 0

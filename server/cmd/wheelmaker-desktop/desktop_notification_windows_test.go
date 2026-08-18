@@ -3,7 +3,9 @@
 package main
 
 import (
+	"bytes"
 	"errors"
+	"os"
 	"strings"
 	"testing"
 )
@@ -235,5 +237,37 @@ func TestDesktopToastNotifierActivationWithBadArgsDoesNothing(t *testing.T) {
 	n.handleToastActivation("garbage")
 	if tray.focused != 0 || len(tray.evaled) != 0 {
 		t.Fatalf("focused = %d evaled = %v, want none", tray.focused, tray.evaled)
+	}
+}
+
+func TestDesktopToastIconReleaseWritesEmbeddedPNG(t *testing.T) {
+	home := t.TempDir()
+	path, err := releaseDesktopToastIcon(home)
+	if err != nil {
+		t.Fatalf("release icon: %v", err)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read icon: %v", err)
+	}
+	if len(data) == 0 || !bytes.Equal(data, desktopToastIconPNG) {
+		t.Fatalf("icon bytes mismatch, len=%d", len(data))
+	}
+	if got := desktopToastIconPath(home); got != path {
+		t.Fatalf("path = %q, want %q", path, got)
+	}
+	info1, err := os.Stat(path)
+	if err != nil {
+		t.Fatalf("stat icon: %v", err)
+	}
+	if _, err := releaseDesktopToastIcon(home); err != nil {
+		t.Fatalf("second release: %v", err)
+	}
+	info2, err := os.Stat(path)
+	if err != nil {
+		t.Fatalf("second stat: %v", err)
+	}
+	if !info1.ModTime().Equal(info2.ModTime()) {
+		t.Fatalf("icon rewritten unnecessarily")
 	}
 }
