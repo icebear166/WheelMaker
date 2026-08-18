@@ -71,7 +71,7 @@ func (webView2Launcher) Launch(target desktopLaunchTarget, opts desktopWindowOpt
 		if opts.CustomTitleBar {
 			suppressDesktopWindowBorder(hwnd)
 		}
-		notifications := newDesktopTrayNotifier(hwnd, func(script string) { w.Eval(script) })
+		notifications := newDesktopToastNotifier(hwnd, func(script string) { w.Eval(script) })
 		defer notifications.close()
 		previewController, err = newDesktopPreviewWindowController(w, hwnd, opts.Runtime, previewChannelName)
 		if err != nil {

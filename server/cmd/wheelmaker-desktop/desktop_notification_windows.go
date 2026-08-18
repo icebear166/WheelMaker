@@ -4,8 +4,12 @@ package main
 
 import (
 	"encoding/json"
+	"encoding/xml"
+	"errors"
 	"fmt"
+	"net/url"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"unicode/utf16"
@@ -14,11 +18,10 @@ import (
 	"golang.org/x/sys/windows"
 )
 
-// desktopNotification is the trusted-page payload delivered through the tray
-// balloon pipeline. Balloons are converted to system toasts by the shell on
-// Windows 10/11 and land in the action center. The WebView2 notification
-// pipeline is intentionally not used: it denies permission requests without
-// host handling and never routes toast clicks back to the page.
+// desktopNotification is the trusted-page payload rendered as a WinRT system
+// toast. The WebView2 notification pipeline is intentionally not used: it
+// denies permission requests without host handling and never routes toast
+// clicks back to the page.
 type desktopNotification struct {
 	Key       string
 	ProjectID string
@@ -71,30 +74,58 @@ func desktopNotificationResult(ok bool, reason string) string {
 	return `{"ok":false,"error":` + strconv.Quote(reason) + `}`
 }
 
-// Balloon fields are fixed-size UTF-16 buffers: szInfoTitle holds 64 WCHARs
-// and szInfo 256, both including the terminator.
-const (
-	desktopNotificationTitleMaxUTF16 = 63
-	desktopNotificationBodyMaxUTF16  = 255
-)
+// desktopNotificationStatusPrefix returns the status symbol prepended to the
+// toast body, matching the PWA notification convention.
+func desktopNotificationStatusPrefix(status string) string {
+	switch status {
+	case "failed":
+		return "✗ "
+	case "cancelled", "interrupted":
+		return "■ "
+	default:
+		return "✓ "
+	}
+}
+
+type desktopToastContent struct {
+	Title  string
+	Body   string
+	Tag    string
+	Launch string
+}
+
+func desktopToastContentFor(n desktopNotification) desktopToastContent {
+	return desktopToastContent{
+		Title:  n.Title,
+		Body:   desktopNotificationStatusPrefix(n.Status) + n.Body,
+		Tag:    n.Key,
+		Launch: "projectId=" + n.ProjectID + "&sessionId=" + n.SessionID,
+	}
+}
+
+func marshalDesktopToastXML(c desktopToastContent) string {
+	escape := func(s string) string {
+		var b strings.Builder
+		_ = xml.EscapeText(&b, []byte(s))
+		return b.String()
+	}
+	return `<toast launch="` + escape(c.Launch) + `" activationType="foreground">` +
+		`<visual><binding template="ToastGeneric">` +
+		`<text>` + escape(c.Title) + `</text>` +
+		`<text>` + escape(c.Body) + `</text>` +
+		`</binding></visual></toast>`
+}
 
 const (
 	nimAdd    = 0x0
-	nimModify = 0x1
 	nimDelete = 0x2
 
 	nifMessage = 0x1
 	nifIcon    = 0x2
 	nifTip     = 0x4
-	nifInfo    = 0x10
 
-	niifNone  = 0x0
-	niifInfo  = 0x1
-	niifError = 0x3
-
-	wmApp               = 0x8000
-	wmLButtonUp         = 0x0202
-	ninBalloonUserClick = 0x0405
+	wmApp       = 0x8000
+	wmLButtonUp = 0x0202
 
 	desktopTrayIconID          = 1
 	desktopTrayCallbackMessage = wmApp + 1
@@ -102,135 +133,160 @@ const (
 	desktopTrayTooltip         = "WheelMaker"
 )
 
-func desktopNotificationBalloonFlags(status string) uint32 {
-	switch status {
-	case "failed":
-		return niifError
-	case "cancelled", "interrupted":
-		return niifNone
-	default:
-		return niifInfo
-	}
-}
-
-// truncateNotificationUTF16 cuts s to at most maxUnits UTF-16 code units
-// without splitting a surrogate pair.
-func truncateNotificationUTF16(s string, maxUnits int) string {
-	units := 0
-	for i, r := range s {
-		need := 1
-		if r > 0xFFFF {
-			need = 2
-		}
-		if units+need > maxUnits {
-			return s[:i]
-		}
-		units += need
-	}
-	return s
+// desktopToastOps abstracts the WinRT/COM toast machinery so the notifier
+// stays testable without touching real COM.
+type desktopToastOps interface {
+	registerIdentity() error
+	showToast(xml, tag string) error
+	unregister()
 }
 
 type desktopTrayOps interface {
-	installTrayIcon(notifier *desktopTrayNotifier) (uintptr, error)
-	showBalloon(hwnd uintptr, title, body string, flags uint32) error
+	installTrayIcon(notifier *desktopToastNotifier) (uintptr, error)
 	removeTrayIcon(hwnd uintptr)
 	focusMainWindow()
 	evalScript(script string)
 }
 
-// desktopTrayNotifier owns the persistent tray icon that hosts balloon
-// notifications. A single balloon is showing at any time: a new notification
-// replaces the one still on screen. Only a click on the showing balloon can
-// be routed back to its session; action center history entries cannot.
-type desktopTrayNotifier struct {
-	ops       desktopTrayOps
-	mu        sync.Mutex
-	hwnd      uintptr
-	installed bool
-	last      desktopNotification
-	hasLast   bool
+// desktopToastNotifier sends WinRT toasts and owns the persistent tray icon.
+// The tray icon is no longer a notification channel; it only provides the
+// click-to-focus entry point and hosts the hidden window that toast
+// activations are relayed to.
+type desktopToastNotifier struct {
+	toast desktopToastOps
+	tray  desktopTrayOps
+
+	mu                 sync.Mutex
+	trayHwnd           uintptr
+	trayInstalled      bool
+	identityRegistered bool
 }
 
-func newDesktopTrayNotifier(mainHwnd uintptr, eval func(script string)) *desktopTrayNotifier {
-	return newDesktopTrayNotifierWithOps(newWin32DesktopTrayOps(mainHwnd, eval))
+func newDesktopToastNotifier(mainHwnd uintptr, eval func(script string)) *desktopToastNotifier {
+	return newDesktopToastNotifierWithOps(
+		newWin32DesktopToastOps(mainHwnd),
+		newWin32DesktopTrayOps(mainHwnd, eval),
+	)
 }
 
-func newDesktopTrayNotifierWithOps(ops desktopTrayOps) *desktopTrayNotifier {
-	notifier := &desktopTrayNotifier{ops: ops}
+func newDesktopToastNotifierWithOps(toast desktopToastOps, tray desktopTrayOps) *desktopToastNotifier {
+	notifier := &desktopToastNotifier{toast: toast, tray: tray}
 	desktopActiveTrayNotifier.Store(notifier)
 	notifier.mu.Lock()
-	notifier.installLocked()
-	notifier.mu.Unlock()
+	defer notifier.mu.Unlock()
+	notifier.registerLocked()
+	notifier.installTrayLocked()
 	return notifier
 }
 
-// installLocked adds the tray icon. A failure leaves the notifier
-// uninstalled so a later show retries once the shell is ready.
-func (n *desktopTrayNotifier) installLocked() {
-	if n.installed {
+// registerLocked self-registers the toast identity. A failure leaves the
+// notifier unregistered so a later show retries.
+func (n *desktopToastNotifier) registerLocked() {
+	if n.identityRegistered {
 		return
 	}
-	hwnd, err := n.ops.installTrayIcon(n)
+	if err := n.toast.registerIdentity(); err != nil {
+		return
+	}
+	n.identityRegistered = true
+}
+
+// installTrayLocked adds the tray icon. A failure leaves the tray
+// uninstalled so a later show retries; toast delivery does not depend on it.
+func (n *desktopToastNotifier) installTrayLocked() {
+	if n.trayInstalled {
+		return
+	}
+	hwnd, err := n.tray.installTrayIcon(n)
 	if err != nil {
 		return
 	}
-	n.hwnd = hwnd
-	n.installed = true
+	n.trayHwnd = hwnd
+	n.trayInstalled = true
 }
 
-func (n *desktopTrayNotifier) show(raw string) string {
+func (n *desktopToastNotifier) show(raw string) string {
 	notification, err := parseDesktopNotification(raw)
 	if err != nil {
 		return desktopNotificationResult(false, "invalid_payload")
 	}
 	n.mu.Lock()
 	defer n.mu.Unlock()
-	n.installLocked()
-	if !n.installed {
-		return desktopNotificationResult(false, "tray_unavailable")
+	n.installTrayLocked()
+	n.registerLocked()
+	if !n.identityRegistered {
+		return desktopNotificationResult(false, "identity_unavailable")
 	}
-	title := truncateNotificationUTF16(notification.Title, desktopNotificationTitleMaxUTF16)
-	body := truncateNotificationUTF16(notification.Body, desktopNotificationBodyMaxUTF16)
-	if err := n.ops.showBalloon(n.hwnd, title, body, desktopNotificationBalloonFlags(notification.Status)); err != nil {
-		return desktopNotificationResult(false, "balloon_failed")
+	content := desktopToastContentFor(notification)
+	if err := n.toast.showToast(marshalDesktopToastXML(content), content.Tag); err != nil {
+		return desktopNotificationResult(false, "toast_failed")
 	}
-	n.last = notification
-	n.hasLast = true
 	return desktopNotificationResult(true, "")
 }
 
-func (n *desktopTrayNotifier) handleBalloonClick() {
-	n.mu.Lock()
-	if !n.hasLast {
-		n.mu.Unlock()
+func (n *desktopToastNotifier) handleTrayClick() {
+	n.tray.focusMainWindow()
+}
+
+// parseDesktopToastLaunchArgs parses the toast launch attribute produced by
+// desktopToastContentFor ("projectId=<pid>&sessionId=<sid>").
+func parseDesktopToastLaunchArgs(args string) (projectID, sessionID string, ok bool) {
+	values, err := url.ParseQuery(args)
+	if err != nil {
+		return "", "", false
+	}
+	projectID = values.Get("projectId")
+	sessionID = values.Get("sessionId")
+	return projectID, sessionID, projectID != "" && sessionID != ""
+}
+
+// handleToastActivation runs on the UI thread; the COM activator relays toast
+// clicks here via PostMessage to the hidden tray window.
+func (n *desktopToastNotifier) handleToastActivation(args string) {
+	projectID, sessionID, ok := parseDesktopToastLaunchArgs(args)
+	if !ok {
 		return
 	}
-	target := n.last
-	n.mu.Unlock()
-	n.ops.focusMainWindow()
-	n.ops.evalScript("window.dispatchEvent(new CustomEvent('wheelmaker:desktop-notification-click', {detail: {projectId: " +
-		strconv.Quote(target.ProjectID) + ", sessionId: " +
-		strconv.Quote(target.SessionID) + "}}));")
+	n.tray.focusMainWindow()
+	n.tray.evalScript("window.dispatchEvent(new CustomEvent('wheelmaker:desktop-notification-click', {detail: {projectId: " +
+		strconv.Quote(projectID) + ", sessionId: " +
+		strconv.Quote(sessionID) + "}}));")
 }
 
-func (n *desktopTrayNotifier) handleTrayClick() {
-	n.ops.focusMainWindow()
-}
-
-func (n *desktopTrayNotifier) close() {
+func (n *desktopToastNotifier) close() {
 	n.mu.Lock()
 	defer n.mu.Unlock()
-	if n.installed {
-		n.ops.removeTrayIcon(n.hwnd)
-		n.installed = false
-		n.hwnd = 0
+	if n.trayInstalled {
+		n.tray.removeTrayIcon(n.trayHwnd)
+		n.trayInstalled = false
+		n.trayHwnd = 0
+	}
+	if n.identityRegistered {
+		n.toast.unregister()
+		n.identityRegistered = false
 	}
 	desktopActiveTrayNotifier.CompareAndSwap(n, nil)
 }
 
-var desktopActiveTrayNotifier atomic.Pointer[desktopTrayNotifier]
+var desktopActiveTrayNotifier atomic.Pointer[desktopToastNotifier]
 
-// --- Win32 presentation layer ---
+var errDesktopToastNotImplemented = errors.New("win32 toast ops are not implemented")
+
+// win32DesktopToastOps is a placeholder so construction wiring compiles; the
+// real WinRT/COM implementation lives in desktop_toast_winrt_windows.go.
+type win32DesktopToastOps struct {
+	mainHwnd uintptr
+}
+
+func newWin32DesktopToastOps(mainHwnd uintptr) *win32DesktopToastOps {
+	return &win32DesktopToastOps{mainHwnd: mainHwnd}
+}
+
+func (o *win32DesktopToastOps) registerIdentity() error     { return errDesktopToastNotImplemented }
+func (o *win32DesktopToastOps) showToast(_, _ string) error { return errDesktopToastNotImplemented }
+func (o *win32DesktopToastOps) unregister()                 {}
+
+// --- Win32 tray layer ---
 
 var (
 	procShellNotifyIconW         = desktopShell32.NewProc("Shell_NotifyIconW")
@@ -316,7 +372,7 @@ func registerDesktopTrayClass() error {
 	return desktopTrayClassErr
 }
 
-func (o *win32DesktopTrayOps) installTrayIcon(_ *desktopTrayNotifier) (uintptr, error) {
+func (o *win32DesktopTrayOps) installTrayIcon(_ *desktopToastNotifier) (uintptr, error) {
 	if err := registerDesktopTrayClass(); err != nil {
 		return 0, err
 	}
@@ -360,23 +416,6 @@ func (o *win32DesktopTrayOps) installTrayIcon(_ *desktopTrayNotifier) (uintptr, 
 	return hwnd, nil
 }
 
-func (o *win32DesktopTrayOps) showBalloon(hwnd uintptr, title, body string, flags uint32) error {
-	data := desktopNotifyIconData{
-		hwnd:      hwnd,
-		id:        desktopTrayIconID,
-		flags:     nifInfo,
-		infoFlags: flags,
-	}
-	data.cbSize = uint32(unsafe.Sizeof(data))
-	setNotifyIconString(data.infoTitle[:], title)
-	setNotifyIconString(data.info[:], body)
-	result, _, callErr := procShellNotifyIconW.Call(nimModify, uintptr(unsafe.Pointer(&data)))
-	if result == 0 {
-		return fmt.Errorf("Shell_NotifyIconW NIM_MODIFY balloon failed: %w", callErr)
-	}
-	return nil
-}
-
 func (o *win32DesktopTrayOps) removeTrayIcon(hwnd uintptr) {
 	data := desktopNotifyIconData{
 		hwnd: hwnd,
@@ -411,12 +450,9 @@ func (o *win32DesktopTrayOps) evalScript(script string) {
 
 func desktopTrayWndProc(hwnd uintptr, msg uint32, wparam, lparam uintptr) uintptr {
 	if msg == desktopTrayCallbackMessage {
-		if notifier := desktopActiveTrayNotifier.Load(); notifier != nil {
-			switch lparam {
-			case wmLButtonUp:
+		if lparam == wmLButtonUp {
+			if notifier := desktopActiveTrayNotifier.Load(); notifier != nil {
 				notifier.handleTrayClick()
-			case ninBalloonUserClick:
-				notifier.handleBalloonClick()
 			}
 		}
 		return 0

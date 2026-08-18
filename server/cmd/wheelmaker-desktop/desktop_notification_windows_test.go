@@ -6,23 +6,13 @@ import (
 	"errors"
 	"strings"
 	"testing"
-	"unicode/utf16"
 )
-
-type fakeBalloon struct {
-	hwnd  uintptr
-	title string
-	body  string
-	flags uint32
-}
 
 type fakeTrayOps struct {
 	installHwnd uintptr
 	installErr  error
-	balloonErr  error
 
 	installed int
-	balloons  []fakeBalloon
 	removed   []uintptr
 	focused   int
 	evaled    []string
@@ -32,7 +22,7 @@ func newFakeTrayOps() *fakeTrayOps {
 	return &fakeTrayOps{installHwnd: 77}
 }
 
-func (f *fakeTrayOps) installTrayIcon(_ *desktopTrayNotifier) (uintptr, error) {
+func (f *fakeTrayOps) installTrayIcon(_ *desktopToastNotifier) (uintptr, error) {
 	f.installed++
 	if f.installErr != nil {
 		return 0, f.installErr
@@ -40,19 +30,34 @@ func (f *fakeTrayOps) installTrayIcon(_ *desktopTrayNotifier) (uintptr, error) {
 	return f.installHwnd, nil
 }
 
-func (f *fakeTrayOps) showBalloon(hwnd uintptr, title, body string, flags uint32) error {
-	if f.balloonErr != nil {
-		return f.balloonErr
-	}
-	f.balloons = append(f.balloons, fakeBalloon{hwnd: hwnd, title: title, body: body, flags: flags})
-	return nil
-}
-
 func (f *fakeTrayOps) removeTrayIcon(hwnd uintptr) { f.removed = append(f.removed, hwnd) }
 
 func (f *fakeTrayOps) focusMainWindow() { f.focused++ }
 
 func (f *fakeTrayOps) evalScript(script string) { f.evaled = append(f.evaled, script) }
+
+type fakeToastOps struct {
+	registerErr error
+	showErr     error
+	registered  int
+	shown       []struct{ xml, tag string }
+	unreg       int
+}
+
+func (f *fakeToastOps) registerIdentity() error {
+	f.registered++
+	return f.registerErr
+}
+
+func (f *fakeToastOps) showToast(xml, tag string) error {
+	if f.showErr != nil {
+		return f.showErr
+	}
+	f.shown = append(f.shown, struct{ xml, tag string }{xml, tag})
+	return nil
+}
+
+func (f *fakeToastOps) unregister() { f.unreg++ }
 
 func validNotificationJSON(title, body string) string {
 	return `{"type":"chat.prompt.completed","projectId":"p1","sessionId":"s1","title":"` + title +
@@ -80,186 +85,155 @@ func TestParseDesktopNotification(t *testing.T) {
 	}
 }
 
-func TestDesktopNotificationBalloonFlags(t *testing.T) {
-	cases := []struct {
-		status string
-		want   uint32
-	}{
-		{"completed", niifInfo},
-		{"", niifInfo},
-		{"failed", niifError},
-		{"cancelled", niifNone},
-		{"interrupted", niifNone},
+func TestDesktopNotificationStatusPrefix(t *testing.T) {
+	cases := map[string]string{
+		"completed": "✓ ", "": "✓ ",
+		"failed":    "✗ ",
+		"cancelled": "■ ", "interrupted": "■ ",
 	}
-	for _, tc := range cases {
-		if got := desktopNotificationBalloonFlags(tc.status); got != tc.want {
-			t.Fatalf("desktopNotificationBalloonFlags(%q) = %d, want %d", tc.status, got, tc.want)
+	for status, want := range cases {
+		if got := desktopNotificationStatusPrefix(status); got != want {
+			t.Fatalf("prefix(%q) = %q, want %q", status, got, want)
 		}
 	}
 }
 
-func TestTruncateNotificationUTF16(t *testing.T) {
-	if got := truncateNotificationUTF16("short", 63); got != "short" {
-		t.Fatalf("short string changed: %q", got)
-	}
-	exact := strings.Repeat("a", 63)
-	if got := truncateNotificationUTF16(exact, 63); got != exact {
-		t.Fatalf("exact-fit string changed: len %d", len(got))
-	}
-	over := strings.Repeat("汉", 300)
-	if got := truncateNotificationUTF16(over, 255); len(utf16.Encode([]rune(got))) != 255 {
-		t.Fatalf("truncated CJK body = %d utf16 units, want 255", len(utf16.Encode([]rune(got))))
-	}
-	// An emoji (surrogate pair) must never be split: truncate 3 BMP runes + 1 emoji at 4 units.
-	mixed := "abc😀def"
-	if got := truncateNotificationUTF16(mixed, 4); got != "abc" {
-		t.Fatalf("truncation split surrogate pair: %q", got)
+func TestDesktopToastContentFor(t *testing.T) {
+	n := desktopNotification{Key: "p1:s1", ProjectID: "p1", SessionID: "s1", Title: "Fix bug", Body: "done", Status: "failed"}
+	c := desktopToastContentFor(n)
+	if c.Title != "Fix bug" || c.Body != "✗ done" || c.Tag != "p1:s1" ||
+		c.Launch != "projectId=p1&sessionId=s1" {
+		t.Fatalf("content = %+v", c)
 	}
 }
 
-func TestDesktopTrayNotifierInstallsTrayIconOnStart(t *testing.T) {
-	ops := newFakeTrayOps()
-	newDesktopTrayNotifierWithOps(ops)
-	if ops.installed != 1 {
-		t.Fatalf("installed = %d, want 1", ops.installed)
+func TestMarshalDesktopToastXMLEscapesAndShapes(t *testing.T) {
+	c := desktopToastContent{
+		Title: `A<b>&"c"`, Body: "✓ done",
+		Tag: "p1:s1", Launch: "projectId=p1&sessionId=s1",
+	}
+	got := marshalDesktopToastXML(c)
+	for _, want := range []string{
+		`activationType="foreground"`,
+		`launch="projectId=p1&amp;sessionId=s1"`,
+		`template="ToastGeneric"`,
+		`<text>A&lt;b&gt;&amp;&#34;c&#34;</text>`,
+		`<text>✓ done</text>`,
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("xml missing %q:\n%s", want, got)
+		}
 	}
 }
 
-func TestDesktopTrayNotifierShowShowsBalloon(t *testing.T) {
-	ops := newFakeTrayOps()
-	notifier := newDesktopTrayNotifierWithOps(ops)
-	if got := notifier.show(validNotificationJSON("Fix bug", "done")); !strings.Contains(got, `"ok":true`) {
+func TestDesktopToastNotifierShowBuildsAndSendsToast(t *testing.T) {
+	toast := &fakeToastOps{}
+	tray := newFakeTrayOps()
+	n := newDesktopToastNotifierWithOps(toast, tray)
+	if toast.registered != 1 {
+		t.Fatalf("registered = %d, want 1 at construction", toast.registered)
+	}
+	if got := n.show(validNotificationJSON("Fix bug", "done")); !strings.Contains(got, `"ok":true`) {
 		t.Fatalf("show = %s, want ok", got)
 	}
-	if len(ops.balloons) != 1 {
-		t.Fatalf("balloons = %v, want 1", ops.balloons)
+	if len(toast.shown) != 1 {
+		t.Fatalf("shown = %v, want 1 toast", toast.shown)
 	}
-	balloon := ops.balloons[0]
-	if balloon.hwnd != ops.installHwnd || balloon.title != "Fix bug" || balloon.body != "done" || balloon.flags != niifInfo {
-		t.Fatalf("balloon = %+v", balloon)
-	}
-}
-
-func TestDesktopTrayNotifierShowMapsStatusToBalloonFlags(t *testing.T) {
-	ops := newFakeTrayOps()
-	notifier := newDesktopTrayNotifierWithOps(ops)
-	notifier.show(`{"type":"chat.prompt.completed","projectId":"p1","sessionId":"s1","title":"A","body":"b","status":"failed"}`)
-	if len(ops.balloons) != 1 || ops.balloons[0].flags != niifError {
-		t.Fatalf("failed status balloon = %+v, want NIIF_ERROR", ops.balloons)
-	}
-	notifier.show(`{"type":"chat.prompt.completed","projectId":"p1","sessionId":"s1","title":"A","body":"b","status":"cancelled"}`)
-	if len(ops.balloons) != 2 || ops.balloons[1].flags != niifNone {
-		t.Fatalf("cancelled status balloon = %+v, want NIIF_NONE", ops.balloons[1])
+	if toast.shown[0].tag != "p1:s1" || !strings.Contains(toast.shown[0].xml, "<text>Fix bug</text>") {
+		t.Fatalf("shown = %+v", toast.shown[0])
 	}
 }
 
-func TestDesktopTrayNotifierShowTruncatesTitleAndBody(t *testing.T) {
-	ops := newFakeTrayOps()
-	notifier := newDesktopTrayNotifierWithOps(ops)
-	title := strings.Repeat("t", 100)
-	body := strings.Repeat("汉", 300)
-	notifier.show(validNotificationJSON(title, body))
-	if len(ops.balloons) != 1 {
-		t.Fatalf("balloons = %v, want 1", ops.balloons)
-	}
-	balloon := ops.balloons[0]
-	if got := len(utf16.Encode([]rune(balloon.title))); got != 63 {
-		t.Fatalf("title = %d utf16 units, want 63", got)
-	}
-	if got := len(utf16.Encode([]rune(balloon.body))); got != 255 {
-		t.Fatalf("body = %d utf16 units, want 255", got)
-	}
-}
-
-func TestDesktopTrayNotifierRejectsInvalidPayload(t *testing.T) {
-	ops := newFakeTrayOps()
-	notifier := newDesktopTrayNotifierWithOps(ops)
-	if got := notifier.show(`not-json`); !strings.Contains(got, `"ok":false`) {
+func TestDesktopToastNotifierRegisterFailureDropsNotification(t *testing.T) {
+	toast := &fakeToastOps{registerErr: errors.New("registry denied")}
+	tray := newFakeTrayOps()
+	n := newDesktopToastNotifierWithOps(toast, tray)
+	if got := n.show(validNotificationJSON("A", "b")); !strings.Contains(got, `"ok":false`) {
 		t.Fatalf("show = %s, want failure json", got)
 	}
-	if len(ops.balloons) != 0 {
-		t.Fatalf("balloons = %v, want none", ops.balloons)
+	if len(toast.shown) != 0 {
+		t.Fatalf("shown = %v, want none", toast.shown)
 	}
-}
-
-func TestDesktopTrayNotifierBalloonFailureReturnsNotOk(t *testing.T) {
-	ops := newFakeTrayOps()
-	ops.balloonErr = errors.New("balloon rejected")
-	notifier := newDesktopTrayNotifierWithOps(ops)
-	if got := notifier.show(validNotificationJSON("A", "b")); !strings.Contains(got, `"ok":false`) {
-		t.Fatalf("show = %s, want failure json", got)
-	}
-}
-
-func TestDesktopTrayNotifierInstallFailureDropsAndRetries(t *testing.T) {
-	ops := newFakeTrayOps()
-	ops.installErr = errors.New("explorer not ready")
-	notifier := newDesktopTrayNotifierWithOps(ops)
-	if got := notifier.show(validNotificationJSON("A", "b")); !strings.Contains(got, `"ok":false`) {
-		t.Fatalf("show = %s, want failure json", got)
-	}
-	if len(ops.balloons) != 0 {
-		t.Fatalf("balloons = %v, want none", ops.balloons)
-	}
-	ops.installErr = nil
-	if got := notifier.show(validNotificationJSON("A", "b")); !strings.Contains(got, `"ok":true`) {
+	toast.registerErr = nil
+	if got := n.show(validNotificationJSON("A", "b")); !strings.Contains(got, `"ok":true`) {
 		t.Fatalf("retry show = %s, want ok", got)
 	}
-	if ops.installed != 3 {
-		t.Fatalf("installed = %d, want start + failed retry + success retry", ops.installed)
-	}
-	if len(ops.balloons) != 1 {
-		t.Fatalf("balloons = %v, want 1 after retry", ops.balloons)
+	if toast.registered != 3 {
+		t.Fatalf("registered = %d, want construct + failed retry + success retry", toast.registered)
 	}
 }
 
-func TestDesktopTrayNotifierBalloonClickFocusesAndRoutesLatest(t *testing.T) {
-	ops := newFakeTrayOps()
-	notifier := newDesktopTrayNotifierWithOps(ops)
-	notifier.show(validNotificationJSON("A", "one"))
-	notifier.show(`{"type":"chat.prompt.completed","projectId":"p2","sessionId":"s2","title":"B","body":"two","status":"completed"}`)
-
-	notifier.handleBalloonClick()
-	if ops.focused != 1 {
-		t.Fatalf("focused = %d, want 1", ops.focused)
-	}
-	if len(ops.evaled) != 1 ||
-		!strings.Contains(ops.evaled[0], "wheelmaker:desktop-notification-click") ||
-		!strings.Contains(ops.evaled[0], `"p2"`) || !strings.Contains(ops.evaled[0], `"s2"`) {
-		t.Fatalf("evaled = %v, want latest notification session", ops.evaled)
+func TestDesktopToastNotifierShowToastFailureReturnsNotOk(t *testing.T) {
+	toast := &fakeToastOps{showErr: errors.New("com error")}
+	n := newDesktopToastNotifierWithOps(toast, newFakeTrayOps())
+	if got := n.show(validNotificationJSON("A", "b")); !strings.Contains(got, `"ok":false`) {
+		t.Fatalf("show = %s, want failure json", got)
 	}
 }
 
-func TestDesktopTrayNotifierBalloonClickWithoutNotificationDoesNothing(t *testing.T) {
-	ops := newFakeTrayOps()
-	notifier := newDesktopTrayNotifierWithOps(ops)
-	notifier.handleBalloonClick()
-	if ops.focused != 0 || len(ops.evaled) != 0 {
-		t.Fatalf("focused = %d, evaled = %v, want none", ops.focused, ops.evaled)
+func TestDesktopToastNotifierRejectsInvalidPayload(t *testing.T) {
+	toast := &fakeToastOps{}
+	n := newDesktopToastNotifierWithOps(toast, newFakeTrayOps())
+	if got := n.show(`not-json`); !strings.Contains(got, `"ok":false`) {
+		t.Fatalf("show = %s, want failure json", got)
+	}
+	if len(toast.shown) != 0 {
+		t.Fatalf("shown = %v, want none", toast.shown)
 	}
 }
 
-func TestDesktopTrayNotifierTrayClickFocusesOnly(t *testing.T) {
-	ops := newFakeTrayOps()
-	notifier := newDesktopTrayNotifierWithOps(ops)
-	notifier.handleTrayClick()
-	if ops.focused != 1 {
-		t.Fatalf("focused = %d, want 1", ops.focused)
+func TestDesktopToastNotifierTrayLifecycle(t *testing.T) {
+	toast := &fakeToastOps{}
+	tray := newFakeTrayOps()
+	n := newDesktopToastNotifierWithOps(toast, tray)
+	if tray.installed != 1 {
+		t.Fatalf("tray installed = %d, want 1", tray.installed)
 	}
-	if len(ops.evaled) != 0 {
-		t.Fatalf("evaled = %v, want none", ops.evaled)
+	n.handleTrayClick()
+	if tray.focused != 1 || len(tray.evaled) != 0 {
+		t.Fatalf("tray click focused = %d evaled = %v, want focus only", tray.focused, tray.evaled)
+	}
+	n.close()
+	if len(tray.removed) != 1 || toast.unreg != 1 {
+		t.Fatalf("close removed = %v unreg = %d, want tray removed + unregistered", tray.removed, toast.unreg)
+	}
+	n.close()
+	if len(tray.removed) != 1 || toast.unreg != 1 {
+		t.Fatalf("second close = %v/%d, want idempotent", tray.removed, toast.unreg)
 	}
 }
 
-func TestDesktopTrayNotifierCloseRemovesTrayIcon(t *testing.T) {
-	ops := newFakeTrayOps()
-	notifier := newDesktopTrayNotifierWithOps(ops)
-	notifier.close()
-	if len(ops.removed) != 1 || ops.removed[0] != ops.installHwnd {
-		t.Fatalf("removed = %v, want tray hwnd %d", ops.removed, ops.installHwnd)
+func TestParseDesktopToastLaunchArgs(t *testing.T) {
+	pid, sid, ok := parseDesktopToastLaunchArgs("projectId=p1&sessionId=s1")
+	if !ok || pid != "p1" || sid != "s1" {
+		t.Fatalf("parse = %q %q %v", pid, sid, ok)
 	}
-	notifier.close()
-	if len(ops.removed) != 1 {
-		t.Fatalf("second close removed = %v, want idempotent", ops.removed)
+	for _, bad := range []string{"", "projectId=p1", "sessionId=s1", "a=b&c=d"} {
+		if _, _, ok := parseDesktopToastLaunchArgs(bad); ok {
+			t.Fatalf("parse(%q) = ok, want not ok", bad)
+		}
+	}
+}
+
+func TestDesktopToastNotifierActivationFocusesAndRoutes(t *testing.T) {
+	tray := newFakeTrayOps()
+	n := newDesktopToastNotifierWithOps(&fakeToastOps{}, tray)
+	n.handleToastActivation("projectId=p2&sessionId=s2")
+	if tray.focused != 1 {
+		t.Fatalf("focused = %d, want 1", tray.focused)
+	}
+	if len(tray.evaled) != 1 ||
+		!strings.Contains(tray.evaled[0], "wheelmaker:desktop-notification-click") ||
+		!strings.Contains(tray.evaled[0], `"p2"`) || !strings.Contains(tray.evaled[0], `"s2"`) {
+		t.Fatalf("evaled = %v", tray.evaled)
+	}
+}
+
+func TestDesktopToastNotifierActivationWithBadArgsDoesNothing(t *testing.T) {
+	tray := newFakeTrayOps()
+	n := newDesktopToastNotifierWithOps(&fakeToastOps{}, tray)
+	n.handleToastActivation("garbage")
+	if tray.focused != 0 || len(tray.evaled) != 0 {
+		t.Fatalf("focused = %d evaled = %v, want none", tray.focused, tray.evaled)
 	}
 }
