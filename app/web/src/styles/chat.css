@@ -4378,20 +4378,31 @@ button.chat-hub-skill-name:disabled {
   gap: 6px;
   padding: 0 6px;
   border: 0;
-  border-bottom: 1px solid var(--border-subtle);
-  border-radius: 6px;
+  border-radius: 0;
   background: transparent;
   color: inherit;
   font: inherit;
   cursor: pointer;
   outline: none;
+  position: relative;
   text-align: left;
   user-select: none;
 }
 
+.chat-work-group-header::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 1px;
+  background: color-mix(in srgb, var(--border-subtle) 36%, transparent);
+  pointer-events: none;
+}
+
 .chat-work-group-header:hover,
 .chat-work-group-header:focus-visible {
-  background: color-mix(in srgb, var(--hover) 78%, transparent);
+  background: transparent;
   color: var(--text-primary);
 }
 
@@ -4401,7 +4412,7 @@ button.chat-hub-skill-name:disabled {
 }
 
 .chat-work-group-open .chat-work-group-header {
-  background: color-mix(in srgb, var(--hover) 52%, transparent);
+  background: transparent;
   color: var(--text-primary);
 }
 

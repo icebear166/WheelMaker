@@ -136,21 +136,34 @@ describe('chat turn groups', () => {
     const group = styles.match(/\.chat-work-group \{([\s\S]*?)\}/)?.[1] ?? '';
     const chevron = styles.match(/\.chat-work-group-chevron \{([\s\S]*?)\}/)?.[1] ?? '';
     const label = styles.match(/\.chat-work-group-label \{([\s\S]*?)\}/)?.[1] ?? '';
+    const separator =
+      styles.match(/\.chat-work-group-header::after \{([\s\S]*?)\}/)?.[1] ?? '';
+    const hover =
+      styles.match(
+        /\.chat-work-group-header:hover,\s*\.chat-work-group-header:focus-visible\s*\{([\s\S]*?)\}/,
+      )?.[1] ?? '';
+    const open =
+      styles.match(/\.chat-work-group-open \.chat-work-group-header\s*\{([\s\S]*?)\}/)?.[1] ?? '';
 
     expect(header).toContain('height: 28px;');
+    expect(header).toContain('position: relative;');
     expect(header).toContain('background: transparent;');
-    expect(header).toContain('border-radius: 6px;');
-    expect(header).toContain('border-bottom: 1px solid var(--border-subtle);');
+    expect(header).toContain('border-radius: 0;');
+    expect(header).not.toContain('border-bottom:');
     expect(header).toContain('padding: 0 6px;');
     expect(header).toContain('font: inherit;');
+    expect(separator).toContain(
+      'background: color-mix(in srgb, var(--border-subtle) 36%, transparent);',
+    );
+    expect(separator).toContain('pointer-events: none;');
+    expect(hover).toContain('background: transparent;');
+    expect(hover).toContain('color: var(--text-primary);');
+    expect(open).toContain('background: transparent;');
     expect(group).not.toContain('accent-primary');
     expect(chevron).toContain('color: var(--text-tertiary);');
     expect(label).toContain('font-weight: 500;');
     expect(label).toContain('font-size: 13px;');
     expect(label).toContain('font-variant-numeric: tabular-nums;');
-    expect(styles).toMatch(
-      /\.chat-work-group-header:hover,[\s\S]*?\.chat-work-group-header:focus-visible\s*\{[^}]*background:\s*color-mix\(in srgb, var\(--hover\) 78%, transparent\);/,
-    );
     expect(styles).toMatch(
       /\.chat-work-group-header:focus-visible\s*\{[^}]*outline:\s*1px solid color-mix\(in srgb, var\(--border-strong\) 56%, transparent\);/,
     );

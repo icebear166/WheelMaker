@@ -39,7 +39,7 @@ Chat 对话以 raw turns 为源数据，Display Index 负责生成适合 `react-
 
 ## Completed Work 与 Changed Files
 
-- Completed Work 使用中性、轻量的单行折叠栏：显示耗时标签和右向 chevron，使用底部分隔线与后续回答内容建立层级；点击后展开原有工作内容。
+- Completed Work 使用中性、无填充的单行折叠栏：显示耗时标签和右向 chevron，使用低对比度分割线与后续回答内容建立层级；点击后展开原有工作内容。
 - Prompt 完成产生 Changed Files 时，列表默认只展示前 3 个文件；剩余文件通过 `Show N more files` 操作展开，再次操作可收起。文件行仍可单独打开对应 diff，摘要操作仍打开完整 diff。
 - 聊天 Markdown 的 blockquote 使用左侧竖线、低对比度底色、内边距和轻微圆角表达引用层级，不改变 Markdown 源文本或复制内容。
 
