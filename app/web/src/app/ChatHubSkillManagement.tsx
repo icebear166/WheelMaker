@@ -29,6 +29,8 @@ export interface ChatHubSkillActions {
   onInspectRepo: (target: SkillScopeTarget, source: string) => Promise<RegistrySkillRepoSnapshot>;
   onAddRepo: (target: SkillScopeTarget, source: string) => void;
   onDetail: (target: SkillDetailTarget) => void;
+  onUpdateScope: (target: SkillScopeTarget) => void;
+  onInstallAllScope: (target: SkillScopeTarget) => void;
   onRefreshSource: (target: SkillSourceTarget) => void;
   onUpdateSource: (target: SkillSourceTarget) => void;
   onInstallAll: (target: SkillSourceTarget) => void;

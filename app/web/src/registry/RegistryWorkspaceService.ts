@@ -1287,9 +1287,19 @@ export class RegistryWorkspaceService {
     return this.repository.updateSkillRepo(payload);
   }
 
+  async updateSkillScope(payload: RegistrySkillScopePayload): Promise<RegistrySkillCommandResponse> {
+    if (!this.repository) throw new Error('session is not ready');
+    return this.repository.updateSkillScope(payload);
+  }
+
   async installAllSkills(payload: RegistrySkillInstallAllPayload): Promise<RegistrySkillCommandResponse> {
     if (!this.repository) throw new Error('session is not ready');
     return this.repository.installAllSkills(payload);
+  }
+
+  async installAllSkillsInScope(payload: RegistrySkillScopePayload): Promise<RegistrySkillCommandResponse> {
+    if (!this.repository) throw new Error('session is not ready');
+    return this.repository.installAllSkillsInScope(payload);
   }
 
   async removeSkillRepo(payload: RegistrySkillRepoPayload): Promise<RegistrySkillCommandResponse> {

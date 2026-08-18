@@ -2973,8 +2973,16 @@ export class RegistryRepository {
     return this.runSkillRepoAction('updateRepo', payload);
   }
 
+  async updateSkillScope(payload: RegistrySkillScopePayload): Promise<RegistrySkillCommandResponse> {
+    return this.runSkillScopeAction('updateScope', payload);
+  }
+
   async installAllSkills(payload: RegistrySkillInstallAllPayload): Promise<RegistrySkillCommandResponse> {
     return this.runSkillRepoAction('installAll', payload);
+  }
+
+  async installAllSkillsInScope(payload: RegistrySkillScopePayload): Promise<RegistrySkillCommandResponse> {
+    return this.runSkillScopeAction('installAllScope', payload);
   }
 
   async removeSkillRepo(payload: RegistrySkillRepoPayload): Promise<RegistrySkillCommandResponse> {
@@ -3030,6 +3038,21 @@ export class RegistryRepository {
       ok: false,
       hubId,
       source: payload.source,
+      errorSummary: 'missing hub state response',
+    };
+  }
+
+  private async runSkillScopeAction(
+    action: 'updateScope' | 'installAllScope',
+    payload: RegistrySkillScopePayload,
+  ): Promise<RegistrySkillCommandResponse> {
+    const {hubId, ...params} = payload;
+    const response = await this.runHubStateAction(hubId, 'skills', action, params);
+    return hubStateActionResult<RegistrySkillCommandResponse>(response) ?? {
+      ok: false,
+      hubId,
+      scope: payload.scope,
+      projectName: payload.projectName,
       errorSummary: 'missing hub state response',
     };
   }

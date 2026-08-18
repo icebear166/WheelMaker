@@ -65,7 +65,7 @@
 
   Expected result: existing clone path, lock path, migration, Global link and Project copy tests remain green.
 
-- [ ] **Step 6: Git checkpoint**
+- [x] **Step 6: Git checkpoint**
 
   After the focused tests pass, checkpoint only the Task 1 server files and record the commit hash and subject.
 
@@ -120,7 +120,7 @@
 
   Expected result: existing Repo operations, concurrent-operation rejection and operation lifecycle tests remain green.
 
-- [ ] **Step 6: Git checkpoint**
+- [x] **Step 6: Git checkpoint**
 
   After verification passes, checkpoint only the Task 2 server action and test files and record the commit hash and subject.
 
@@ -135,7 +135,7 @@
 
 **Acceptance:** The frontend can submit current-Scope Update and Install all payloads without a source, while existing Repo-level actions continue to submit their source payloads and all operation callbacks reach the active Hub menu.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
   Extend `RegistryWorkspaceService.test.ts` with request-shape tests:
 
@@ -144,7 +144,7 @@
 
   Update the existing action type test fixtures so Repo Update and Repo Install all still include source/sourceKey.
 
-- [ ] **Step 2: Run the focused tests to verify RED**
+- [x] **Step 2: Run the focused tests to verify RED**
 
   Run from `app`:
 
@@ -154,18 +154,18 @@
 
   Expected result: the new repository methods or request actions are missing, so the tests fail before implementation.
 
-- [ ] **Step 3: Write the minimal implementation**
+- [x] **Step 3: Write the minimal implementation**
 
   - Add the Scope operation action types and repository methods using the existing HubState `skills` command path.
   - Keep Repo action payloads and methods unchanged except for the new latest-install semantics already owned by the server.
   - Add Workspace callbacks that create Scope targets and dispatch the two new actions.
   - Thread the callbacks through `ChatHubMenu` without changing unrelated Hub actions.
 
-- [ ] **Step 4: Run the focused tests to verify GREEN**
+- [x] **Step 4: Run the focused tests to verify GREEN**
 
   Run the Registry test command again. Expected result: both source-less request-shape tests and existing Registry tests pass.
 
-- [ ] **Step 5: Run type regression checks**
+- [x] **Step 5: Run type regression checks**
 
   Run from `app`:
 

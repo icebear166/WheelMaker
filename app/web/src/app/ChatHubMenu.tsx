@@ -249,6 +249,8 @@ export interface ChatHubMenuProps {
   onInspectSkillRepo: (target: SkillScopeTarget, source: string) => Promise<RegistrySkillRepoSnapshot>;
   onAddSkillRepo: (target: SkillScopeTarget, source: string) => void;
   onRequestSkillDetail: (target: SkillDetailTarget) => void;
+  onUpdateSkillScope: (target: SkillScopeTarget) => void;
+  onInstallAllSkillScope: (target: SkillScopeTarget) => void;
   onRefreshSkillSource: (target: SkillSourceTarget) => void;
   onUpdateSkillSource: (target: SkillSourceTarget) => void;
   onInstallAllSkillSource: (target: SkillSourceTarget) => void;
@@ -1032,6 +1034,8 @@ function ChatHubBlock(props: ChatHubMenuProps & {hubId: string}): React.JSX.Elem
     onInspectSkillRepo,
     onAddSkillRepo,
     onRequestSkillDetail,
+    onUpdateSkillScope,
+    onInstallAllSkillScope,
     onRefreshSkillSource,
     onUpdateSkillSource,
     onInstallAllSkillSource,
@@ -1060,6 +1064,8 @@ function ChatHubBlock(props: ChatHubMenuProps & {hubId: string}): React.JSX.Elem
     onInspectRepo: onInspectSkillRepo,
     onAddRepo: onAddSkillRepo,
     onDetail: onRequestSkillDetail,
+    onUpdateScope: onUpdateSkillScope,
+    onInstallAllScope: onInstallAllSkillScope,
     onRefreshSource: onRefreshSkillSource,
     onUpdateSource: onUpdateSkillSource,
     onInstallAll: onInstallAllSkillSource,

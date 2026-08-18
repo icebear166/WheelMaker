@@ -1026,8 +1026,10 @@ type SkillOperationAction =
   | 'addRepo'
   | 'refreshRepo'
   | 'updateRepo'
+  | 'updateScope'
   | 'install'
   | 'installAll'
+  | 'installAllScope'
   | 'uninstall'
   | 'removeRepo';
 type SkillOperationTarget = SkillScopeTarget & {
@@ -6962,6 +6964,8 @@ export function App() {
         onInspectSkillRepo={inspectSkillRepo}
         onAddSkillRepo={requestSkillAddRepo}
         onRequestSkillDetail={requestSkillDetail}
+        onUpdateSkillScope={requestSkillScopeUpdate}
+        onInstallAllSkillScope={requestSkillScopeInstallAll}
         onRefreshSkillSource={requestSkillSourceRefresh}
         onUpdateSkillSource={requestSkillSourceUpdate}
         onInstallAllSkillSource={requestSkillSourceInstallAll}
@@ -13835,8 +13839,14 @@ export function App() {
         case 'updateRepo':
           result = await service.updateSkillRepo(sourcePayload);
           break;
+        case 'updateScope':
+          result = await service.updateSkillScope(scopePayload);
+          break;
         case 'installAll':
           result = await service.installAllSkills(sourcePayload);
+          break;
+        case 'installAllScope':
+          result = await service.installAllSkillsInScope(scopePayload);
           break;
         case 'removeRepo':
           result = await service.removeSkillRepo(sourcePayload);
@@ -13883,6 +13893,14 @@ export function App() {
 
   const requestSkillSourceRefresh = useCallback((target: SkillSourceTarget) => {
     void executeSkillOperation({...target, kind: 'skillOperation', action: 'refreshRepo'});
+  }, [executeSkillOperation]);
+
+  const requestSkillScopeUpdate = useCallback((target: SkillScopeTarget) => {
+    void executeSkillOperation({...target, kind: 'skillOperation', action: 'updateScope'});
+  }, [executeSkillOperation]);
+
+  const requestSkillScopeInstallAll = useCallback((target: SkillScopeTarget) => {
+    void executeSkillOperation({...target, kind: 'skillOperation', action: 'installAllScope'});
   }, [executeSkillOperation]);
 
   const requestSkillSourceUpdate = useCallback((target: SkillSourceTarget) => {

@@ -49,6 +49,8 @@ function createActions(): ChatHubSkillActions {
     }),
     onAddRepo: jest.fn(),
     onDetail: jest.fn(),
+    onUpdateScope: jest.fn(),
+    onInstallAllScope: jest.fn(),
     onRefreshSource: jest.fn(),
     onUpdateSource: jest.fn(),
     onInstallAll: jest.fn(),

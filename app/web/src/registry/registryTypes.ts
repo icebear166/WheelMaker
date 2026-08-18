@@ -1241,7 +1241,7 @@ export interface RegistrySkillOperationItemResult {
 export interface RegistrySkillOperation {
   id?: string;
   running: boolean;
-  action: 'addRepo' | 'refreshRepo' | 'updateRepo' | 'install' | 'installAll' | 'uninstall' | 'removeRepo' | string;
+  action: 'addRepo' | 'refreshRepo' | 'updateRepo' | 'updateScope' | 'install' | 'installAll' | 'installAllScope' | 'uninstall' | 'removeRepo' | string;
   scope?: RegistrySkillScope;
   projectName?: string;
   source?: string;

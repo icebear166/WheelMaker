@@ -1,5 +1,6 @@
 import type {RegistryClient} from './RegistryClient';
 import {RegistryRepository} from './RegistryRepository';
+import {RegistryMethods} from './registryMethods';
 import {hubStateRefreshBatches} from './RegistryWorkspaceService';
 
 test('keeps normal Hub refreshes combined', () => {
@@ -142,5 +143,50 @@ test('normalizes MCP HubState runtime status and keeps errors bounded to strings
       {serverId: 'neo4j-id', name: 'neo4j', state: 'failed', error: 'connection refused', updatedAt: undefined},
       {serverId: 'bad-id', name: 'bad', state: 'not_started', error: undefined, updatedAt: undefined},
     ],
+  });
+});
+
+test('submits a current scope skills update without a source', async () => {
+  const request = jest.fn().mockResolvedValue({
+    payload: {accepted: true, result: {ok: true, hubId: 'hub-skills'}},
+  });
+  const repository = new RegistryRepository({request} as unknown as RegistryClient);
+
+  await expect(repository.updateSkillScope({
+    hubId: 'hub-skills',
+    scope: 'project',
+    projectName: 'WheelMaker',
+  })).resolves.toEqual({ok: true, hubId: 'hub-skills'});
+  expect(request).toHaveBeenCalledWith({
+    method: RegistryMethods.HubStateAction,
+    hubId: 'hub-skills',
+    payload: {
+      section: 'skills',
+      action: 'updateScope',
+      params: {scope: 'project', projectName: 'WheelMaker'},
+    },
+    timeoutMs: 60000,
+  });
+});
+
+test('submits current scope install all without a source', async () => {
+  const request = jest.fn().mockResolvedValue({
+    payload: {accepted: true, result: {ok: true, hubId: 'hub-skills'}},
+  });
+  const repository = new RegistryRepository({request} as unknown as RegistryClient);
+
+  await expect(repository.installAllSkillsInScope({
+    hubId: 'hub-skills',
+    scope: 'hub',
+  })).resolves.toEqual({ok: true, hubId: 'hub-skills'});
+  expect(request).toHaveBeenCalledWith({
+    method: RegistryMethods.HubStateAction,
+    hubId: 'hub-skills',
+    payload: {
+      section: 'skills',
+      action: 'installAllScope',
+      params: {scope: 'hub'},
+    },
+    timeoutMs: 60000,
   });
 });
