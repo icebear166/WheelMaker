@@ -6,10 +6,44 @@ import (
 	"encoding/json"
 	"fmt"
 	"os/exec"
+	"path/filepath"
 	"strings"
 
 	"github.com/swm8023/wheelmaker/internal/shared"
+	"golang.org/x/sys/windows"
 )
+
+const stillActiveProcessExitCode = 259 // Windows STILL_ACTIVE
+
+func workerProcessAlive(pid int, exePath string) (bool, error) {
+	if pid <= 0 || strings.TrimSpace(exePath) == "" {
+		return false, nil
+	}
+
+	handle, err := windows.OpenProcess(windows.PROCESS_QUERY_LIMITED_INFORMATION, false, uint32(pid))
+	if err != nil {
+		return false, err
+	}
+	defer windows.CloseHandle(handle)
+
+	var exitCode uint32
+	if err := windows.GetExitCodeProcess(handle, &exitCode); err != nil {
+		return false, err
+	}
+	if exitCode != stillActiveProcessExitCode {
+		return false, nil
+	}
+
+	buffer := make([]uint16, 32*1024)
+	length := uint32(len(buffer))
+	if err := windows.QueryFullProcessImageName(handle, 0, &buffer[0], &length); err != nil {
+		return false, err
+	}
+
+	actualPath := filepath.Clean(windows.UTF16ToString(buffer[:length]))
+	expectedPath := filepath.Clean(exePath)
+	return strings.EqualFold(actualPath, expectedPath), nil
+}
 
 func listWorkerProcesses(exeName, markerFlag string) ([]daemonProcess, error) {
 	exeName = strings.TrimSpace(exeName)

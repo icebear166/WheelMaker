@@ -242,6 +242,73 @@ func TestChooseKeepPID(t *testing.T) {
 	}
 }
 
+func TestReconcileWorkersReusesLivePreferredPID(t *testing.T) {
+	originalAlive := workerProcessAliveFunc
+	originalList := listWorkerProcessesFunc
+	t.Cleanup(func() {
+		workerProcessAliveFunc = originalAlive
+		listWorkerProcessesFunc = originalList
+	})
+
+	workerProcessAliveFunc = func(pid int, exePath string) (bool, error) {
+		if pid != 42 || exePath != `C:\Users\me\.wheelmaker\bin\wheelmaker.exe` {
+			t.Fatalf("workerProcessAliveFunc(%d, %q)", pid, exePath)
+		}
+		return true, nil
+	}
+	listWorkerProcessesFunc = func(string, string) ([]daemonProcess, error) {
+		t.Fatal("listWorkerProcessesFunc was called for a live preferred PID")
+		return nil, nil
+	}
+
+	got, err := reconcileWorkers(
+		`C:\Users\me\.wheelmaker\bin\wheelmaker.exe`,
+		"wheelmaker.exe",
+		hubWorkerArg,
+		nil,
+		42,
+	)
+	if err != nil {
+		t.Fatalf("reconcileWorkers() error = %v", err)
+	}
+	if got != 42 {
+		t.Fatalf("reconcileWorkers() PID = %d, want 42", got)
+	}
+}
+
+func TestReconcileWorkersScansWhenPreferredPIDIsNotAlive(t *testing.T) {
+	originalAlive := workerProcessAliveFunc
+	originalList := listWorkerProcessesFunc
+	t.Cleanup(func() {
+		workerProcessAliveFunc = originalAlive
+		listWorkerProcessesFunc = originalList
+	})
+
+	workerProcessAliveFunc = func(int, string) (bool, error) {
+		return false, nil
+	}
+	listWorkerProcessesFunc = func(exeName, markerFlag string) ([]daemonProcess, error) {
+		if exeName != "wheelmaker.exe" || markerFlag != hubWorkerArg {
+			t.Fatalf("listWorkerProcessesFunc(%q, %q)", exeName, markerFlag)
+		}
+		return []daemonProcess{{PID: 7}}, nil
+	}
+
+	got, err := reconcileWorkers(
+		`C:\Users\me\.wheelmaker\bin\wheelmaker.exe`,
+		"wheelmaker.exe",
+		hubWorkerArg,
+		nil,
+		42,
+	)
+	if err != nil {
+		t.Fatalf("reconcileWorkers() error = %v", err)
+	}
+	if got != 7 {
+		t.Fatalf("reconcileWorkers() PID = %d, want scanned PID 7", got)
+	}
+}
+
 func TestParseWorkerProcessesFromPSAcceptsPathComm(t *testing.T) {
 	out := []byte(`123 /Users/me/.wheelmaker/bin/wheelmaker /Users/me/.wheelmaker/bin/wheelmaker --hub-worker
 124 /Users/me/.wheelmaker/bin/wheelmaker /Users/me/.wheelmaker/bin/wheelmaker --registry-worker

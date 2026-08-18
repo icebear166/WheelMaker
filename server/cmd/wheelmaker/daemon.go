@@ -27,6 +27,9 @@ type workerSpec struct {
 	keepPID    int
 }
 
+var listWorkerProcessesFunc = listWorkerProcesses
+var workerProcessAliveFunc = workerProcessAlive
+
 func runGuardian(workerArgs []string, stateDir string, localDev bool) error {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
@@ -128,7 +131,14 @@ func workerArgsWithStateDir(args []string, stateDir string) []string {
 }
 
 func reconcileWorkers(exePath, exeName, markerFlag string, workerArgs []string, preferredPID int) (int, error) {
-	workers, err := listWorkerProcesses(exeName, markerFlag)
+	if preferredPID > 0 {
+		alive, checkErr := workerProcessAliveFunc(preferredPID, exePath)
+		if checkErr == nil && alive {
+			return preferredPID, nil
+		}
+	}
+
+	workers, err := listWorkerProcessesFunc(exeName, markerFlag)
 	if err != nil {
 		if preferredPID > 0 {
 			hubScopedLogger.Warn("daemon list %s workers failed keep_previous_pid=%d err=%v", markerFlag, preferredPID, err)
