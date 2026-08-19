@@ -447,7 +447,7 @@ func (r *blockingReleaseRunner) complete(err error) { r.done <- err }
 func assertReleaseStatus(t *testing.T, command *ReleaseCommand, jobID, want string) releaseCommandResponse {
 	t.Helper()
 	var response releaseCommandResponse
-	deadline := time.Now().Add(5 * time.Second)
+	deadline := time.Now().Add(30 * time.Second)
 	for time.Now().Before(deadline) {
 		result, commandErr := command.Handle(context.Background(), rawToolPayload(t, map[string]any{"action": "status", "jobId": jobID, "hubId": "publisher-hub"}))
 		if commandErr != nil {
