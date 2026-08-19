@@ -68,7 +68,7 @@ func (s *Server) handleServerConfigGet(peer *peerConn, in envelope) {
 		_ = s.writeError(peer, in.RequestID, in.Method, codeInternal, "read server config failed", nil)
 		return
 	}
-	_ = s.writeResponse(peer, in.RequestID, in.Method, "", serverConfigResponse(snapshot))
+	_ = s.writeResponse(peer, in.RequestID, in.Method, "", serverConfigResponse(snapshot, s.cfg.KnowledgeRegistryPublicURL))
 }
 
 func (s *Server) handleServerConfigUpdate(peer *peerConn, in envelope) {
@@ -124,7 +124,7 @@ func (s *Server) handleServerConfigUpdate(peer *peerConn, in envelope) {
 		return
 	}
 	registryLogger("").Info("server config update section=%s field=%s action=%s success=true", payload.Section, payload.Field, payload.Action)
-	_ = s.writeResponse(peer, in.RequestID, in.Method, "", serverConfigResponse(snapshot))
+	_ = s.writeResponse(peer, in.RequestID, in.Method, "", serverConfigResponse(snapshot, s.cfg.KnowledgeRegistryPublicURL))
 }
 
 func (s *Server) handleAndroidSpeechCredentialGet(peer *peerConn, state *connectionState, in envelope) {
@@ -227,8 +227,8 @@ func (s *Server) serverDataSnapshot() (serverdata.Snapshot, error) {
 	return s.serverData.Snapshot()
 }
 
-func serverConfigResponse(snapshot serverdata.Snapshot) rp.ServerConfigResponse {
-	return rp.ServerConfigResponse{
+func serverConfigResponse(snapshot serverdata.Snapshot, knowledgeRegistryPublicURL string) rp.ServerConfigResponse {
+	response := rp.ServerConfigResponse{
 		VoiceInput: rp.ServerVoiceInputConfig{
 			ServerFeatureConfig: rp.ServerFeatureConfig{Configured: snapshot.VoiceInput.Configured, UpdatedAt: snapshot.VoiceInput.UpdatedAt},
 			Model:               snapshot.VoiceInput.Model,
@@ -240,6 +240,10 @@ func serverConfigResponse(snapshot serverdata.Snapshot) rp.ServerConfigResponse 
 		},
 		DeepSeek: rp.ServerFeatureConfig{Configured: snapshot.DeepSeek.Configured, UpdatedAt: snapshot.DeepSeek.UpdatedAt},
 	}
+	if publicURL := strings.TrimSpace(knowledgeRegistryPublicURL); publicURL != "" {
+		response.KnowledgeRegistry = &rp.ServerKnowledgeRegistryConfig{PublicURL: publicURL}
+	}
+	return response
 }
 
 func (s *Server) resolveVolcengineASRSecret() (string, error) {

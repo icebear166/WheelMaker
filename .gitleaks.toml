@@ -8,6 +8,7 @@ description = "Generated release outputs and dependency/compiler caches"
 paths = [
   '''^\.release-out([\\/]|$)''',
   '''^\.release-work([\\/]|$)''',
+  '''^personal-wiki-kit[\\/](node_modules|reader-dist|coverage)([\\/]|$)''',
 ]
 
 [[allowlists]]

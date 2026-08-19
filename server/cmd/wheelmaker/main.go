@@ -112,7 +112,7 @@ func runRegistryServer(addr, stateDir string) error {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	s := registry.New(registryServerConfig(loopbackAddr, cfg.Token, baseDir, cfg.Registry.RelayPort))
+	s := registry.New(registryServerConfig(loopbackAddr, cfg.Token, baseDir, cfg.Registry.RelayPort, cfg.KnowledgeRegistry.PublicURL))
 	return s.Run(ctx)
 }
 
@@ -240,7 +240,7 @@ func runRegistryWorker(stateDir string, localDev bool) error {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 	registryScopedLogger.Info("worker start addr=%s", addr)
-	s := registry.New(registryServerConfig(addr, cfg.Token, baseDir, cfg.Registry.RelayPort))
+	s := registry.New(registryServerConfig(addr, cfg.Token, baseDir, cfg.Registry.RelayPort, cfg.KnowledgeRegistry.PublicURL))
 	if err := s.Run(ctx); err != nil {
 		registryScopedLogger.Error("worker run failed err=%v", err)
 		return err
@@ -249,15 +249,16 @@ func runRegistryWorker(stateDir string, localDev bool) error {
 	return nil
 }
 
-func registryServerConfig(addr, token, stateDir string, relayPort int) registry.Config {
+func registryServerConfig(addr, token, stateDir string, relayPort int, knowledgeRegistryPublicURL string) registry.Config {
 	return registry.Config{
-		Addr:               addr,
-		Token:              token,
-		RelayPort:          relayPort,
-		LogDir:             filepath.Join(stateDir, "log"),
-		StateDir:           stateDir,
-		ServerData:         serverdata.New(filepath.Join(stateDir, "db", "server-data.json")),
-		IPLocationResolver: registry.NewIPWhoisLocationResolver(),
+		Addr:                       addr,
+		Token:                      token,
+		RelayPort:                  relayPort,
+		KnowledgeRegistryPublicURL: knowledgeRegistryPublicURL,
+		LogDir:                     filepath.Join(stateDir, "log"),
+		StateDir:                   stateDir,
+		ServerData:                 serverdata.New(filepath.Join(stateDir, "db", "server-data.json")),
+		IPLocationResolver:         registry.NewIPWhoisLocationResolver(),
 	}
 }
 

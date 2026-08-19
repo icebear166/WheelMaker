@@ -184,10 +184,15 @@ type ServerTextToSpeechConfig struct {
 	Voice string `json:"voice"`
 }
 
+type ServerKnowledgeRegistryConfig struct {
+	PublicURL string `json:"publicUrl,omitempty"`
+}
+
 type ServerConfigResponse struct {
-	VoiceInput   ServerVoiceInputConfig   `json:"voiceInput"`
-	TextToSpeech ServerTextToSpeechConfig `json:"textToSpeech"`
-	DeepSeek     ServerFeatureConfig      `json:"deepSeek"`
+	VoiceInput        ServerVoiceInputConfig         `json:"voiceInput"`
+	TextToSpeech      ServerTextToSpeechConfig       `json:"textToSpeech"`
+	DeepSeek          ServerFeatureConfig            `json:"deepSeek"`
+	KnowledgeRegistry *ServerKnowledgeRegistryConfig `json:"knowledgeRegistry,omitempty"`
 }
 
 type ServerConfigUpdatePayload struct {

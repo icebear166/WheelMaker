@@ -5,6 +5,7 @@ $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $serverRoot = Join-Path $repoRoot 'server'
 $appRoot = Join-Path $repoRoot 'app'
 $androidRoot = Join-Path $repoRoot 'mobile\android'
+$wikiKitRoot = Join-Path $repoRoot 'personal-wiki-kit'
 $deferredDependencyPath = Join-Path $repoRoot 'docs/security-dependency-deferred.md'
 
 function Write-Gate([string]$Name) {
@@ -155,9 +156,32 @@ $nodeTests = @(
     Get-ChildItem -LiteralPath (Join-Path $repoRoot 'scripts\release') -Filter '*.test.mjs' -File
     Get-ChildItem -LiteralPath (Join-Path $repoRoot 'scripts\deploy') -Filter '*.test.mjs' -File
     Get-Item -LiteralPath (Join-Path $repoRoot 'scripts\disable-nginx.test.mjs')
+    Get-Item -LiteralPath (Join-Path $repoRoot 'scripts\personal-wiki-kit-release.test.mjs')
 ) | ForEach-Object { $_.FullName }
 & node --test @nodeTests
 Assert-ExitCode 'Node release and deployment tests' $LASTEXITCODE
+
+Write-Gate 'Personal Wiki Kit security'
+Push-Location $wikiKitRoot
+try {
+    & npm test
+    Assert-ExitCode 'Personal Wiki Kit tests' $LASTEXITCODE
+    & npm run typecheck
+    Assert-ExitCode 'Personal Wiki Kit typecheck' $LASTEXITCODE
+    & npm run build
+    Assert-ExitCode 'Personal Wiki Kit build' $LASTEXITCODE
+    & npm run check:public
+    Assert-ExitCode 'Personal Wiki Kit public boundary' $LASTEXITCODE
+    Push-Location (Join-Path $wikiKitRoot 'server')
+    try {
+        & go test ./...
+        Assert-ExitCode 'Personal Wiki Kit server tests' $LASTEXITCODE
+    } finally {
+        Pop-Location
+    }
+} finally {
+    Pop-Location
+}
 
 Write-Gate 'Publish and deployment script tests'
 $powerShellExecutable = (Get-Process -Id $PID).Path

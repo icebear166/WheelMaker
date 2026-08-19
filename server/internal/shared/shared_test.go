@@ -100,6 +100,24 @@ func TestLoadConfig_AllowsSharePublicURL(t *testing.T) {
 	}
 }
 
+func TestLoadConfig_AllowsKnowledgeRegistryPublicURL(t *testing.T) {
+	path := writeTempConfig(t, `{"knowledgeRegistry":{"publicUrl":"https://wiki.example.com"},"projects":[]}`)
+	cfg, err := LoadConfig(path)
+	if err != nil {
+		t.Fatalf("LoadConfig() error = %v", err)
+	}
+	if cfg.KnowledgeRegistry.PublicURL != "https://wiki.example.com" {
+		t.Fatalf("knowledgeRegistry.publicUrl = %q", cfg.KnowledgeRegistry.PublicURL)
+	}
+}
+
+func TestLoadConfig_RejectsKnowledgeRegistryCredentials(t *testing.T) {
+	path := writeTempConfig(t, `{"knowledgeRegistry":{"publicUrl":"https://wiki.example.com","password":"secret"},"projects":[]}`)
+	if _, err := LoadConfig(path); err == nil || !strings.Contains(err.Error(), `unknown field "password"`) {
+		t.Fatalf("LoadConfig() error = %v, want credential field rejected", err)
+	}
+}
+
 func TestLoadConfig_FeishuFieldIsAcceptedAsIgnoredLegacyConfig(t *testing.T) {
 	path := writeTempConfig(t, `{
 		"projects": [{

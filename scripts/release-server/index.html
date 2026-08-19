@@ -61,11 +61,12 @@
     }
 
     @media (prefers-reduced-motion: no-preference) {
-      .hero, .commands, .latest-clients {
+      .hero, .commands, .latest-clients, .personal-wiki {
         animation: enter 0.55s cubic-bezier(0.16, 1, 0.3, 1) both;
       }
       .commands { animation-delay: 0.08s; }
       .latest-clients { animation-delay: 0.16s; }
+      .personal-wiki { animation-delay: 0.24s; }
       .copy, .client-action {
         transition: background-color 0.15s ease, transform 0.1s ease;
       }
@@ -331,6 +332,121 @@
       color: var(--text-secondary);
       font-size: 14.5px;
     }
+    .personal-wiki {
+      margin-top: clamp(28px, 4vh, 44px);
+      padding-top: clamp(24px, 3.5vh, 36px);
+      border-top: 1px solid var(--border);
+    }
+    .wiki-heading {
+      display: grid;
+      gap: 10px;
+      max-width: 760px;
+    }
+    .wiki-kicker {
+      margin: 0;
+      color: var(--accent);
+      font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.09em;
+      text-transform: uppercase;
+    }
+    .wiki-heading h2 {
+      margin: 0;
+      font-size: clamp(28px, 3vw, 38px);
+      font-weight: 670;
+      letter-spacing: -0.03em;
+      line-height: 1.08;
+    }
+    .wiki-intro {
+      margin: 0;
+      color: var(--text-secondary);
+      font-size: 16px;
+      line-height: 1.6;
+    }
+    .wiki-flow {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr);
+      margin: clamp(22px, 3vh, 30px) 0 0;
+      padding: 0;
+      border-top: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
+      list-style: none;
+    }
+    .wiki-step {
+      display: grid;
+      grid-template-columns: 36px minmax(0, 1fr);
+      gap: 14px;
+      padding: 20px 0;
+    }
+    .wiki-step + .wiki-step { border-top: 1px solid var(--border); }
+    .wiki-step-number {
+      width: 32px;
+      height: 32px;
+      display: grid;
+      place-items: center;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--accent);
+      font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+      font-size: 13px;
+      font-weight: 700;
+    }
+    .wiki-step h3 {
+      margin: 3px 0 0;
+      font-size: 17px;
+      font-weight: 650;
+      letter-spacing: -0.015em;
+    }
+    .wiki-step p {
+      margin: 8px 0 0;
+      color: var(--text-secondary);
+      font-size: 14.5px;
+      line-height: 1.65;
+    }
+    .wiki-step code, .wiki-privacy code {
+      padding: 2px 5px;
+      border: 1px solid var(--border);
+      border-radius: 5px;
+      background: var(--surface);
+      color: var(--text);
+      font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+      font-size: 0.9em;
+      overflow-wrap: anywhere;
+    }
+    .wiki-link {
+      display: inline-flex;
+      align-items: center;
+      margin-top: 11px;
+      color: var(--accent);
+      font-size: 14px;
+      font-weight: 640;
+      text-underline-offset: 3px;
+    }
+    .wiki-link:hover { color: var(--accent-hover); }
+    .wiki-link:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 3px;
+    }
+    .wiki-privacy {
+      margin: 20px 0 0;
+      padding: 2px 0 2px 15px;
+      border-left: 3px solid var(--accent);
+      color: var(--text-secondary);
+      font-size: 14.5px;
+      line-height: 1.65;
+    }
+    .wiki-privacy strong { color: var(--text); }
+    @media (min-width: 900px) {
+      .wiki-flow { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+      .wiki-step { padding: 22px clamp(20px, 2.5vw, 34px); }
+      .wiki-step:first-child { padding-left: 0; }
+      .wiki-step:last-child { padding-right: 0; }
+      .wiki-step + .wiki-step {
+        border-top: 0;
+        border-left: 1px solid var(--border);
+      }
+    }
     .site-foot {
       margin-top: auto;
       border-top: 1px solid var(--border);
@@ -475,6 +591,41 @@
 
       <p id="clients-status" role="status" aria-live="polite" hidden></p>
       <code id="cmd-desktop-install" hidden>$ErrorActionPreference='Stop'; $d=Join-Path $HOME '.wheelmaker'; New-Item -ItemType Directory -Force -Path $d | Out-Null; $m=Join-Path $d 'deploy.mjs'; if (!(Test-Path -LiteralPath $m)) { Invoke-WebRequest 'https://release.wheelmaker.top/deploy.mjs' -OutFile $m }; &amp; node $m; &amp; node $m desktop-update; $e=Join-Path $d 'desktop\WheelMakerDesktop.exe'; $w=New-Object -ComObject WScript.Shell; $desktopLink=Join-Path ([Environment]::GetFolderPath('Desktop')) 'WheelMaker.lnk'; $programs=Join-Path ([Environment]::GetFolderPath('Programs')) 'WheelMaker'; New-Item -ItemType Directory -Force -Path $programs | Out-Null; $links=@($desktopLink,(Join-Path $programs 'WheelMaker.lnk')); foreach ($link in $links) { $s=$w.CreateShortcut($link); $s.TargetPath=$e; $s.WorkingDirectory=Split-Path -Parent $e; $s.IconLocation="$e,0"; $s.Save() }</code>
+    </section>
+
+    <section class="personal-wiki" aria-labelledby="personal-wiki-title">
+      <div class="wiki-heading">
+        <p class="wiki-kicker">Optional knowledge workflow</p>
+        <h2 id="personal-wiki-title">Build your own Personal Wiki</h2>
+        <p class="wiki-intro">Personal Wiki Kit adds a private, Git-backed knowledge base that WheelMaker and other AI tools can query and update through reusable skills. WheelMaker does not store your articles.</p>
+      </div>
+
+      <ol class="wiki-flow">
+        <li class="wiki-step">
+          <span class="wiki-step-number" aria-hidden="true">01</span>
+          <div>
+            <h3>Install the public Kit</h3>
+            <p>Download and run <code>setup-wiki.bat</code>. It selects the stable Windows Kit, verifies its size and SHA-256, then creates a separate private Git repository and local user configuration. The new repository already contains <code>open-wiki.bat</code>, <code>publish-wiki.bat</code>, and <code>update-wiki-kit.bat</code>.</p>
+            <a class="wiki-link" href="/setup-wiki.bat" download>Download setup-wiki.bat</a>
+          </div>
+        </li>
+        <li class="wiki-step">
+          <span class="wiki-step-number" aria-hidden="true">02</span>
+          <div>
+            <h3>Map your projects</h3>
+            <p>Edit <code>~/.personal-wiki/project-routing.json</code> to map local source folders to Wiki project IDs. Multiple local projects can share the same Wiki project ID. To show the WheelMaker header shortcut, set <code>knowledgeRegistry.publicUrl</code> on your WheelMaker server.</p>
+          </div>
+        </li>
+        <li class="wiki-step">
+          <span class="wiki-step-number" aria-hidden="true">03</span>
+          <div>
+            <h3>Read, approve, publish</h3>
+            <p>Use <code>open-wiki.bat</code> for local reading. AI agents use the installed lookup and publishing skills; you approve knowledge changes before they are written. Run <code>publish-wiki.bat</code> when you are ready to publish.</p>
+          </div>
+        </li>
+      </ol>
+
+      <p class="wiki-privacy"><strong>Private by design.</strong> Articles and attachments stay in your private Git repository; machine-specific paths and project mappings stay under <code>~/.personal-wiki/</code>. The public Kit contains only reusable code, templates, and skills—never your content, credentials, or server secrets.</p>
     </section>
 
     <span id="copy-status" role="status" aria-live="polite" hidden></span>

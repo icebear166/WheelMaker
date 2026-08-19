@@ -1,0 +1,6 @@
+.wiki-kit-out/
+coverage/
+node_modules/
+reader-dist/
+server/wiki-server
+server/wiki-server.exe

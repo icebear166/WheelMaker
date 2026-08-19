@@ -9,22 +9,24 @@ import (
 
 // AppConfig is the top-level config.json structure.
 type AppConfig struct {
-	PublicURL string          `json:"publicUrl,omitempty"`
-	Token     string          `json:"token,omitempty"`
-	HubID     string          `json:"hubId,omitempty"`
-	Projects  []ProjectConfig `json:"projects"`
-	Registry  RegistryConfig  `json:"registry,omitempty"`
-	Log       LogConfig       `json:"log,omitempty"`
+	PublicURL         string                  `json:"publicUrl,omitempty"`
+	Token             string                  `json:"token,omitempty"`
+	HubID             string                  `json:"hubId,omitempty"`
+	Projects          []ProjectConfig         `json:"projects"`
+	Registry          RegistryConfig          `json:"registry,omitempty"`
+	KnowledgeRegistry KnowledgeRegistryConfig `json:"knowledgeRegistry,omitempty"`
+	Log               LogConfig               `json:"log,omitempty"`
 }
 
 type appConfigInput struct {
-	PublicURL         string          `json:"publicUrl,omitempty"`
-	Token             string          `json:"token,omitempty"`
-	HubID             string          `json:"hubId,omitempty"`
-	Projects          []ProjectConfig `json:"projects"`
-	Registry          RegistryConfig  `json:"registry,omitempty"`
-	Log               LogConfig       `json:"log,omitempty"`
-	DeprecatedAPIKeys json.RawMessage `json:"api_keys,omitempty"`
+	PublicURL         string                  `json:"publicUrl,omitempty"`
+	Token             string                  `json:"token,omitempty"`
+	HubID             string                  `json:"hubId,omitempty"`
+	Projects          []ProjectConfig         `json:"projects"`
+	Registry          RegistryConfig          `json:"registry,omitempty"`
+	KnowledgeRegistry KnowledgeRegistryConfig `json:"knowledgeRegistry,omitempty"`
+	Log               LogConfig               `json:"log,omitempty"`
+	DeprecatedAPIKeys json.RawMessage         `json:"api_keys,omitempty"`
 }
 
 // ShareConfig configures the optional anonymous public document origin.
@@ -93,6 +95,12 @@ type RegistryConfig struct {
 	Share     ShareConfig `json:"share,omitempty"`
 }
 
+// KnowledgeRegistryConfig points to the reviewed personal knowledge site.
+// Credentials remain outside config.json.
+type KnowledgeRegistryConfig struct {
+	PublicURL string `json:"publicUrl,omitempty"`
+}
+
 // LoadConfig reads and parses the config file at path.
 func LoadConfig(path string) (*AppConfig, error) {
 	data, err := os.ReadFile(path)
@@ -117,12 +125,13 @@ func LoadConfig(path string) (*AppConfig, error) {
 		Warn("config api_keys is deprecated and ignored; configure Hub API keys in Hub settings")
 	}
 	return &AppConfig{
-		PublicURL: input.PublicURL,
-		Token:     input.Token,
-		HubID:     input.HubID,
-		Projects:  input.Projects,
-		Registry:  input.Registry,
-		Log:       input.Log,
+		PublicURL:         input.PublicURL,
+		Token:             input.Token,
+		HubID:             input.HubID,
+		Projects:          input.Projects,
+		Registry:          input.Registry,
+		KnowledgeRegistry: input.KnowledgeRegistry,
+		Log:               input.Log,
 	}, nil
 }
 

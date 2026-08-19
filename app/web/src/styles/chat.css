@@ -183,6 +183,10 @@
   cursor: default;
 }
 
+.chat-knowledge-registry-link {
+  text-decoration: none;
+}
+
 .chat-title-prompt-icon-button:disabled {
   opacity: 0.52;
   cursor: default;

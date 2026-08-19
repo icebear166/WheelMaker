@@ -1,0 +1,8 @@
+{{DOMAIN}} {
+  encode zstd gzip
+  header {
+    X-Robots-Tag "noindex, nofollow, noarchive"
+    -Server
+  }
+  reverse_proxy 127.0.0.1:{{LISTEN_PORT}}
+}

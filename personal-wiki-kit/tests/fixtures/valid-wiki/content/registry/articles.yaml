@@ -1,0 +1,7 @@
+schema: 1
+articles:
+  - id: example-article
+    section: software-development
+    category: architecture
+    projects: [example-project]
+    order: 10

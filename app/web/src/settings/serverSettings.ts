@@ -1,3 +1,5 @@
+import {normalizeKnowledgeRegistryURL} from '../knowledge/knowledgeRegistry';
+
 export type SpeechModelId = 'doubao-streaming-asr-2.0';
 
 export type TtsModelId =
@@ -20,6 +22,7 @@ export type TtsVoiceId =
 export type ServerSettings = {
   voiceInput: {configured: boolean; updatedAt?: string; model: SpeechModelId};
   textToSpeech: {configured: boolean; updatedAt?: string; model: TtsModelId; voice: TtsVoiceId};
+  knowledgeRegistry: {publicUrl?: string};
 };
 
 export type ServerSettingsUpdate = {
@@ -57,6 +60,7 @@ export const TTS_VOICE_OPTIONS: Array<{id: TtsVoiceId; label: string}> = [
 export const DEFAULT_SERVER_SETTINGS: ServerSettings = {
   voiceInput: {configured: false, model: 'doubao-streaming-asr-2.0'},
   textToSpeech: {configured: false, model: 'mimo-v2.5-tts', voice: 'Mia'},
+  knowledgeRegistry: {},
 };
 
 function recordOf(value: unknown): Record<string, unknown> {
@@ -81,6 +85,7 @@ export function normalizeServerSettings(value: unknown): ServerSettings {
   const root = recordOf(value);
   const voiceInput = recordOf(root.voiceInput);
   const textToSpeech = recordOf(root.textToSpeech);
+  const knowledgeRegistryURL = normalizeKnowledgeRegistryURL(recordOf(root.knowledgeRegistry).publicUrl);
   const voiceUpdatedAt = updatedAtOf(voiceInput.updatedAt);
   const ttsUpdatedAt = updatedAtOf(textToSpeech.updatedAt);
   return {
@@ -101,6 +106,7 @@ export function normalizeServerSettings(value: unknown): ServerSettings {
         ? textToSpeech.voice
         : DEFAULT_SERVER_SETTINGS.textToSpeech.voice,
     },
+    knowledgeRegistry: knowledgeRegistryURL ? {publicUrl: knowledgeRegistryURL} : {},
   };
 }
 

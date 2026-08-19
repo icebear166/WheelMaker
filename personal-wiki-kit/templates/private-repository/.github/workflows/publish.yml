@@ -1,0 +1,62 @@
+name: Publish Personal Wiki
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - content/**
+      - attachments/**
+      - wiki.config.json
+      - wiki-kit.lock.json
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build with pinned Personal Wiki Kit
+        env:
+          KIT_SOURCE: "{{KIT_SOURCE}}"
+          KIT_SHA256: "{{KIT_SHA256}}"
+        run: |
+          set -euo pipefail
+          kit_archive="$RUNNER_TEMP/personal-wiki-kit-v{{KIT_VERSION}}-linux-x64.tar.gz"
+          curl --fail --location --proto '=https' --tlsv1.2 "$KIT_SOURCE" --output "$kit_archive"
+          printf '%s  %s\n' "$KIT_SHA256" "$kit_archive" | sha256sum --check --strict
+          if tar -tzf "$kit_archive" | grep -Eq '(^/|(^|/)\.\.(/|$))'; then
+            echo "Kit archive contains an unsafe path" >&2
+            exit 1
+          fi
+          mkdir "$RUNNER_TEMP/personal-wiki-kit"
+          tar -xzf "$kit_archive" -C "$RUNNER_TEMP/personal-wiki-kit" --no-same-owner --no-same-permissions
+          kit_root="$(find "$RUNNER_TEMP/personal-wiki-kit" -mindepth 1 -maxdepth 1 -type d -name 'personal-wiki-kit-v{{KIT_VERSION}}-linux-x64' -print -quit)"
+          test -n "$kit_root"
+          "$kit_root/runtime/bin/node" "$kit_root/src/cli.mjs" build --repository "$GITHUB_WORKSPACE" --reader "$kit_root/reader-dist" --output "$RUNNER_TEMP/personal-wiki-site"
+          mkdir -p "$RUNNER_TEMP/personal-wiki-bundle/kit" "$RUNNER_TEMP/personal-wiki-bundle/site" dist
+          cp -a "$kit_root/." "$RUNNER_TEMP/personal-wiki-bundle/kit/"
+          cp -a "$RUNNER_TEMP/personal-wiki-site/." "$RUNNER_TEMP/personal-wiki-bundle/site/"
+          archive="dist/personal-wiki-release-${GITHUB_SHA}.tar.gz"
+          tar --sort=name --mtime='@0' --owner=0 --group=0 --numeric-owner -czf "$archive" -C "$RUNNER_TEMP/personal-wiki-bundle" kit site
+      - name: Deploy authenticated candidate
+        env:
+          WIKI_DEPLOY_KEY: ${{ secrets.WIKI_DEPLOY_KEY }}
+          WIKI_SSH_KNOWN_HOSTS: ${{ secrets.WIKI_SSH_KNOWN_HOSTS }}
+          WIKI_DEPLOY_HOST: ${{ secrets.WIKI_DEPLOY_HOST }}
+          WIKI_DEPLOY_PORT: ${{ secrets.WIKI_DEPLOY_PORT }}
+        run: |
+          set -euo pipefail
+          archive="dist/personal-wiki-release-${GITHUB_SHA}.tar.gz"
+          digest="$(sha256sum "$archive" | awk '{print $1}')"
+          ssh_port="${WIKI_DEPLOY_PORT:-{{SSH_PORT}}}"
+          [[ "$ssh_port" =~ ^[0-9]+$ ]] && (( ssh_port >= 1 && ssh_port <= 65535 ))
+          install -d -m 0700 "$RUNNER_TEMP/wiki-ssh"
+          printf '%s\n' "$WIKI_DEPLOY_KEY" > "$RUNNER_TEMP/wiki-ssh/id"
+          printf '%s\n' "$WIKI_SSH_KNOWN_HOSTS" > "$RUNNER_TEMP/wiki-ssh/known_hosts"
+          chmod 0600 "$RUNNER_TEMP/wiki-ssh/id" "$RUNNER_TEMP/wiki-ssh/known_hosts"
+          remote_archive="{{INSTALL_ROOT}}/incoming/$(basename "$archive")"
+          scp -P "$ssh_port" -i "$RUNNER_TEMP/wiki-ssh/id" -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$RUNNER_TEMP/wiki-ssh/known_hosts" "$archive" "{{SSH_USER}}@$WIKI_DEPLOY_HOST:$remote_archive"
+          ssh -i "$RUNNER_TEMP/wiki-ssh/id" -p "$ssh_port" -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$RUNNER_TEMP/wiki-ssh/known_hosts" "{{SSH_USER}}@$WIKI_DEPLOY_HOST" "sudo {{INSTALL_ROOT}}/activate-release.sh '$remote_archive' '$digest' '$GITHUB_SHA'"

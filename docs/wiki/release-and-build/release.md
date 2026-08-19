@@ -1,4 +1,4 @@
-> 摘要：本页维护 WheelMaker 公共与 Hub 驱动发布控制面，以及目标机本地部署 MJS 的职责、命令、状态机和平台注册边界。
+> 摘要：本页维护 WheelMaker 公共与 Hub 驱动发布控制面、独立 Personal Wiki Kit 发布通道，以及目标机本地部署 MJS 的职责、命令、状态机和平台注册边界。
 
 # 发布
 
@@ -53,6 +53,25 @@ Registry/Share 的 `sync_hub` 模式和 Release 运行参数。
 Gateway schema 1 不迁移或自动覆盖，旧文件会使部署与启动明确失败并保持原内容不变。
 
 发布服务器另有两个需要发布 Token 的维护端点：`GET /api/storage` 返回 `public/releases/` 的总占用与可清理占用；`POST /api/prune` 只保留 `stable.json` 引用的版本（stable 版本及其 Desktop/Android 指针版本），删除其余 `v1.x` 版本目录，并先把 `releases.json` 截断到只剩被保留版本的条目（历史列表因此不会出现死链）；`stable.json` 不变。发布页面通过发布 Hub 查询占用并触发清理，发布 Hub 复用本地发布 Token 调用这两个端点。
+
+### Personal Wiki Kit 独立发布通道
+
+Personal Wiki Kit 使用独立于 WheelMaker `v1.x` 的语义版本和稳定指针，但复用同一个 Release Token 与发布服务器会话认证。它不改变 WheelMaker 的 `stable.json`、版本目录、历史或 Gateway 指针；Kit 发布失败也不会回滚或推进 WheelMaker 正式版本。
+
+公开命名空间固定为：
+
+```text
+/setup-wiki.bat
+/personal-wiki-kit/stable.json
+/personal-wiki-kit/releases/v<semver>/personal-wiki-kit-v<semver>-windows-x64.zip
+/personal-wiki-kit/releases/v<semver>/personal-wiki-kit-v<semver>-linux-x64.tar.gz
+```
+
+版本目录不可变，同一版本不能覆盖。发布器先构建 Windows 与 Linux 两个平台包，声明文件名、大小和 SHA-256，使用认证会话上传并提交到独立 Kit 版本目录；服务端在版本目录和固定安装器写入完成后，最后原子更新 Kit `stable.json`。发布完成后必须经 `config.json.publicUrl` 匿名验证固定安装器、稳定指针、两个版本包及其摘要链。任一步失败时保留旧 Kit stable，并且不留下可见的半发布版本。
+
+`setup-wiki.bat` 是无需 GitHub 登录的 Windows 固定入口：它读取 Kit stable，下载精确 Windows 包，校验大小和 SHA-256 后启动设置向导。Linux 包供私人 Wiki 的服务器部署使用。公共包只能包含可复用程序、模板和 Skills，不得包含私人文章、本机配置、项目路由、凭据或服务器秘密。
+
+已安装用户通过私人仓库中的 `update-wiki-kit.bat` 更新。更新器先显示当前与目标版本并要求确认，再在临时目录完成下载、摘要校验、兼容性检查与迁移；只有全部成功才原子切换活动版本、版本锁、用户启动器和 Kit Skills，失败或取消则回滚并保留文章、registry、用户配置和项目路由。
 
 ### Release Server 目标机部署
 

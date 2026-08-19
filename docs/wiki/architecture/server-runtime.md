@@ -87,6 +87,7 @@ Keep ACP payload unchanged while enabling true multi-session concurrency and cle
   `urlMode: "sync_hub"` 读取上述 Hub 地址，Release 运行参数位于 `wm_sites.release`，
   三类站点共用 `wm_sites.tls`。Gateway schema 1 不迁移，读取失败时保持原文件和上一份
   有效 Caddy 配置不变；这与 Hub 主配置既有的 Go 迁移流程相互独立。
+- `knowledgeRegistry.publicUrl` is the optional public address of the reviewed personal knowledge site. It is only a non-secret locator; passwords and other credentials are rejected from this section.
 - The listener always binds loopback. Gateway/Nginx is responsible for exposing `/` and `/ws` through `publicUrl`.
 - Go owns legacy config migration. MJS preserves legacy fields on existing installations; it only writes the canonical top-level shape for new installations or an explicitly supplied public URL.
 

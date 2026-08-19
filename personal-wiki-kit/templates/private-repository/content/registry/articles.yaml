@@ -1,0 +1,7 @@
+schema: 1
+articles:
+  - id: welcome-to-personal-wiki
+    section: general-knowledge
+    category: getting-started
+    projects: []
+    order: 10

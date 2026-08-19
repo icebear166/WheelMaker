@@ -203,6 +203,48 @@ test('debug web client uses its isolated authenticated API without stable reads'
   }
 });
 
+test('Personal Wiki Kit client uses an independent authenticated session and anonymous stable', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'wheelmaker-kit-api-'));
+  const assetPath = join(root, 'personal-wiki-kit-v0.1.0-windows-x64.zip');
+  const bytes = Buffer.from('kit archive');
+  const digest = createHash('sha256').update(bytes).digest('hex');
+  await writeFile(assetPath, bytes);
+  const requests = [];
+  const stable = {schema: 1, version: '0.1.0'};
+  const api = new ReleaseServerApi({
+    baseUrl: 'https://release.wheelmaker.top',
+    token: 'same-token',
+    requestImpl: recordingHttpsRequest(requests, [
+      {statusCode: 200, body: JSON.stringify(stable)},
+      {statusCode: 201, body: JSON.stringify({schema: 1, sessionId: '9'.repeat(32), version: '0.1.0'})},
+      {statusCode: 204},
+      {statusCode: 200, body: JSON.stringify(stable)},
+      {statusCode: 204},
+    ]),
+  });
+  try {
+    assert.deepEqual(await api.readKitStable(), stable);
+    const session = await api.startKit({publisher: 'local', sourceSha: '1'.repeat(40), version: '0.1.0'});
+    await api.uploadKit(session.sessionId, {name: 'personal-wiki-kit-v0.1.0-windows-x64.zip', path: assetPath, size: bytes.length, sha256: digest});
+    await api.commitKit(session.sessionId);
+    await api.cancelKit(session.sessionId);
+    assert.deepEqual(
+      requests.map(request => `${request.options.method} ${new URL(request.url).pathname}`),
+      [
+        'GET /personal-wiki-kit/stable.json',
+        'POST /api/personal-wiki-kit/start',
+        `PUT /api/personal-wiki-kit/${'9'.repeat(32)}/files/personal-wiki-kit-v0.1.0-windows-x64.zip`,
+        `POST /api/personal-wiki-kit/${'9'.repeat(32)}/commit`,
+        `DELETE /api/personal-wiki-kit/${'9'.repeat(32)}`,
+      ],
+    );
+    assert.equal('Authorization' in requests[0].options.headers, false);
+    assert.ok(requests.slice(1).every(request => request.options.headers.Authorization === 'Bearer same-token'));
+  } finally {
+    await rm(root, {force: true, recursive: true});
+  }
+});
+
 test('stable 404 is empty, while conflict and authentication failures are actionable', async () => {
   const requests = [];
   const api = new ReleaseServerApi({

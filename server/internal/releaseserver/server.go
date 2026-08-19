@@ -20,18 +20,19 @@ var errPublisherNotConfigured = errors.New("publisher is not configured")
 var errUnauthorized = errors.New("publisher authentication failed")
 
 type Server struct {
-	config         Config
-	now            func() time.Time
-	random         io.Reader
-	diskFree       func(string) (uint64, error)
-	writeJSON      func(string, any, os.FileMode) error
-	verifyPublic   func(stableDocument, publishSession) error
-	randomMu       sync.Mutex
-	sessionLocksMu sync.Mutex
-	sessionLocks   map[string]*sync.Mutex
-	statusMu       sync.Mutex
-	commitMu       sync.Mutex
-	debugWebMu     sync.Mutex
+	config          Config
+	now             func() time.Time
+	random          io.Reader
+	diskFree        func(string) (uint64, error)
+	writeJSON       func(string, any, os.FileMode) error
+	verifyPublic    func(stableDocument, publishSession) error
+	verifyPublicKit func(kitStableDocument, kitPublishSession) error
+	randomMu        sync.Mutex
+	sessionLocksMu  sync.Mutex
+	sessionLocks    map[string]*sync.Mutex
+	statusMu        sync.Mutex
+	commitMu        sync.Mutex
+	debugWebMu      sync.Mutex
 }
 
 func New(cfg Config) (*Server, error) {
@@ -54,6 +55,9 @@ func newServer(cfg Config, dependencies serverDependencies) (*Server, error) {
 	if dependencies.verifyPublic == nil {
 		dependencies.verifyPublic = func(stableDocument, publishSession) error { return nil }
 	}
+	if dependencies.verifyPublicKit == nil {
+		dependencies.verifyPublicKit = func(kitStableDocument, kitPublishSession) error { return nil }
+	}
 	for path, mode := range map[string]os.FileMode{
 		filepath.Join(cfg.DataRoot, "public"):  0o750,
 		filepath.Join(cfg.DataRoot, "staging"): 0o700,
@@ -64,13 +68,14 @@ func newServer(cfg Config, dependencies serverDependencies) (*Server, error) {
 		}
 	}
 	return &Server{
-		config:       cfg,
-		now:          dependencies.now,
-		random:       dependencies.random,
-		diskFree:     dependencies.diskFree,
-		writeJSON:    dependencies.writeJSON,
-		verifyPublic: dependencies.verifyPublic,
-		sessionLocks: map[string]*sync.Mutex{},
+		config:          cfg,
+		now:             dependencies.now,
+		random:          dependencies.random,
+		diskFree:        dependencies.diskFree,
+		writeJSON:       dependencies.writeJSON,
+		verifyPublic:    dependencies.verifyPublic,
+		verifyPublicKit: dependencies.verifyPublicKit,
+		sessionLocks:    map[string]*sync.Mutex{},
 	}, nil
 }
 
@@ -156,7 +161,7 @@ func (s *Server) servePublicFile(w http.ResponseWriter, r *http.Request) {
 }
 
 func immutablePublicPath(value string) bool {
-	if strings.HasPrefix(value, "/releases/") {
+	if strings.HasPrefix(value, "/releases/") || strings.HasPrefix(value, "/personal-wiki-kit/releases/") {
 		return true
 	}
 	return strings.HasPrefix(value, "/gateway/current/wheelmaker-gateway-")
