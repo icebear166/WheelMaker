@@ -120,8 +120,8 @@ var (
 		Args:                   []string{"acp"},
 		InstallHint:            "@moonshot-ai/kimi-code",
 		MissingPathErrTemplate: "kimi: binary not found in PATH: %v",
-		SkillProjectDirs:       []string{".agents/skills"},
-		SkillUserDirs:          []string{"~/.agents/skills"},
+		SkillProjectDirs:       []string{".agents/skills", ".kimi-code/skills"},
+		SkillUserDirs:          []string{"~/.agents/skills", "~/.kimi-code/skills"},
 	}
 	QoderACPProviderPreset = ACPProviderPreset{
 		Name:                   "qoder",

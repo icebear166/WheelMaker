@@ -28,7 +28,6 @@ export interface ChatHubSkillActions {
   onAddRepo: (target: SkillScopeTarget, source: string) => void;
   onDetail: (target: SkillDetailTarget) => void;
   onUpdateScope: (target: SkillScopeTarget) => void;
-  onInstallAllScope: (target: SkillScopeTarget) => void;
   onRefreshSource: (target: SkillSourceTarget) => void;
   onUpdateSource: (target: SkillSourceTarget) => void;
   onInstallAll: (target: SkillSourceTarget) => void;
@@ -400,15 +399,6 @@ export function ChatHubSkillScopeDetail({
             onClick={() => actions.onUpdateScope(target)}
           >
             <Icon name="circleArrowUp" />
-          </button>
-          <button
-            type="button"
-            className="chat-hub-skill-toolbar-button"
-            aria-label={`Install all ${scopeLabel} skills`}
-            disabled={busy}
-            onClick={() => actions.onInstallAllScope(target)}
-          >
-            <Icon name="cloudDownload" />
           </button>
           <label className="chat-hub-skill-uninstalled-toggle">
             <input

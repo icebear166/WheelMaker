@@ -18,10 +18,16 @@ export interface RegistrySkillInventoryItem {
   sync?: {status?: 'aligned' | 'contentMismatch' | 'unknown'};
 }
 
+export interface RegistryDiscoveredSkillItem {
+  name: string;
+  description?: string;
+}
+
 export interface RegistrySkillsStateSnapshot {
   hubInventory?: Record<string, RegistrySkillInventoryItem>;
   projectLocalInventories?: Record<string, Record<string, RegistrySkillInventoryItem>>;
   effectiveSkills?: Record<string, Record<string, RegistrySkillInventoryItem[]>>;
+  discoveredSkills?: Record<string, Record<string, RegistryDiscoveredSkillItem[]>>;
   hubSources?: RegistrySkillSourceScopeSnapshot;
   projectSources?: Record<string, RegistrySkillSourceScopeSnapshot>;
   operation?: RegistrySkillOperation | null;
@@ -56,7 +62,9 @@ export function selectComposerSkills(
 ): Array<{name: string; description: string}> {
   const state = hubForProject(snapshot, projectId);
   const skills = selectSkills<RegistrySkillsStateSnapshot>(state);
-  const byAgent = skills?.effectiveSkills?.[projectId] ?? {};
+  const byAgent = skills?.discoveredSkills
+    ? (skills.discoveredSkills[projectId] ?? {})
+    : (skills?.effectiveSkills?.[projectId] ?? {});
   const key = Object.keys(byAgent).find(name => name.toLowerCase() === agent.trim().toLowerCase());
   return (key ? byAgent[key] : [])
     .map(item => ({name: item.name.trim(), description: item.description?.trim() ?? ''}))

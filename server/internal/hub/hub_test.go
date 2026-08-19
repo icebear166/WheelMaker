@@ -1315,6 +1315,39 @@ func TestSkillsStateBuildsLocationsSyncAndEffectiveSkills(t *testing.T) {
 	}
 }
 
+func TestSkillsDiscoveryIsSeparateFromManagedInventory(t *testing.T) {
+	root := t.TempDir()
+	writeCanonicalSkillFixture(t, filepath.Join(root, ".agents", "skills", "kimi-only"), "Kimi Only", "runtime discovery")
+
+	managed, err := scanSkillsInventory(
+		context.Background(),
+		[]string{"codex", "claude"},
+		root,
+		agent.SkillScanScopeProject,
+	)
+	if err != nil {
+		t.Fatalf("managed scan: %v", err)
+	}
+	managedItem, ok := managed["kimi-only"]
+	if !ok {
+		t.Fatalf("managed inventory unexpectedly omitted shared skill: %#v", managed)
+	}
+	if containsFold(managedItem.Agents, "kimi") {
+		t.Fatalf("managed inventory leaked discovery-only provider: %#v", managedItem)
+	}
+
+	discovered, err := scanSkillsDiscovery(
+		context.Background(),
+		[]string{"kimi"},
+		root,
+		agent.SkillScanScopeProject,
+	)
+	if err != nil {
+		t.Fatalf("discovery scan: %v", err)
+	}
+	assertDiscoveredSkillNames(t, discovered["kimi"], "kimi-only")
+}
+
 func TestSkillsStateAggregatesLinkedClaudeSkillDirectory(t *testing.T) {
 	root := t.TempDir()
 	agentsSkillDir := filepath.Join(root, ".agents", "skills", "scope")
@@ -1477,6 +1510,41 @@ func TestSkillsStateAddsSourceCatalogsWithoutChangingEffectiveSkills(t *testing.
 	}
 }
 
+func TestSkillsStatePublishesDiscoverySeparatelyFromManagedEffectiveSkills(t *testing.T) {
+	coordinator := newSkillsStateCoordinator(skillsStateCoordinatorOptions{
+		ScanHub: func(context.Context) (map[string]skillInventoryItem, error) {
+			return map[string]skillInventoryItem{
+				"managed": {Name: "managed", Agents: []string{"codex"}},
+			}, nil
+		},
+		ScanProject: func(context.Context, projectSkillsTarget) (map[string]skillInventoryItem, error) {
+			return map[string]skillInventoryItem{
+				"managed-local": {Name: "managed-local", Agents: []string{"codex"}},
+			}, nil
+		},
+		ScanHubDiscovery: func(context.Context, []string) (map[string][]discoveredSkillItem, error) {
+			return map[string][]discoveredSkillItem{
+				"kimi": {{Name: "global-kimi", Description: "global"}},
+			}, nil
+		},
+		ScanProjectDiscovery: func(context.Context, projectSkillsTarget) (map[string][]discoveredSkillItem, error) {
+			return map[string][]discoveredSkillItem{
+				"kimi": {{Name: "project-kimi", Description: "project"}},
+			}, nil
+		},
+	})
+	coordinator.SetTargets([]projectSkillsTarget{{ProjectID: "p1", Agents: []string{"kimi"}}})
+
+	snapshot, err := coordinator.RefreshAll(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertDiscoveredSkillNames(t, snapshot.DiscoveredSkills["p1"]["kimi"], "global-kimi", "project-kimi")
+	if got := snapshot.EffectiveSkills["p1"]["kimi"]; len(got) != 0 {
+		t.Fatalf("managed effective skills leaked into Kimi: %#v", got)
+	}
+}
+
 func writeCanonicalSkillFixture(t *testing.T, dir, name, description string) {
 	t.Helper()
 	if err := os.MkdirAll(dir, 0o755); err != nil {
@@ -1498,6 +1566,20 @@ func assertCanonicalSkillNames(t *testing.T, skills []skillInventoryItem, want .
 	slices.Sort(want)
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("skill names=%v, want %v", got, want)
+	}
+}
+
+func assertDiscoveredSkillNames(t *testing.T, skills []discoveredSkillItem, want ...string) {
+	t.Helper()
+	got := make([]string, 0, len(skills))
+	for _, skill := range skills {
+		got = append(got, skill.Name)
+	}
+	slices.Sort(got)
+	want = append([]string(nil), want...)
+	slices.Sort(want)
+	if !slices.Equal(got, want) {
+		t.Fatalf("discovered skill names = %v, want %v", got, want)
 	}
 }
 
@@ -2957,6 +3039,33 @@ func TestHubStateSkillsRefreshBuildsCanonicalProjectInventories(t *testing.T) {
 		projectID := rp.ProjectID("hub-skills-reindex", projectName)
 		wantSkill := projectName + "-skill"
 		assertCanonicalSkillNames(t, snapshot.EffectiveSkills[projectID]["codex"], wantSkill)
+	}
+}
+
+func TestHubSkillsDiscoveryIncludesKimiWithoutExpandingManagedInventory(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	projectRoot := t.TempDir()
+	writeCanonicalSkillFixture(t, filepath.Join(projectRoot, ".agents", "skills", "shared-kimi"), "Shared Kimi", "shared")
+	writeCanonicalSkillFixture(t, filepath.Join(projectRoot, ".kimi-code", "skills", "native-kimi"), "Native Kimi", "native")
+
+	reporter := NewReporter(
+		ReporterConfig{HubID: "hub-kimi-discovery", StateDir: t.TempDir()},
+		[]ProjectInfo{{Name: "kimi-project", Path: projectRoot, Online: true, Agents: []string{"kimi"}}},
+	)
+	data, err := reporter.hubStateSectionHandlers()[hubStateSectionSkills].Refresh(
+		context.Background(),
+		hubStateRefreshInput{HubID: "hub-kimi-discovery"},
+	)
+	if err != nil {
+		t.Fatalf("refresh: %v", err)
+	}
+	snapshot := data.(skillsStateSnapshot)
+	projectID := rp.ProjectID("hub-kimi-discovery", "kimi-project")
+	assertDiscoveredSkillNames(t, snapshot.DiscoveredSkills[projectID]["kimi"], "shared-kimi", "native-kimi")
+	if item := snapshot.ProjectLocalInventories[projectID]["native-kimi"]; item.Name != "" {
+		t.Fatalf("native Kimi skill entered managed inventory: %#v", item)
 	}
 }
 

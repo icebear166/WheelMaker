@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
+	"github.com/swm8023/wheelmaker/internal/hub/agent"
 	"github.com/swm8023/wheelmaker/internal/hub/tools"
 	"github.com/swm8023/wheelmaker/internal/hub/usage"
 	"github.com/swm8023/wheelmaker/internal/hubconfig"
@@ -2137,6 +2138,12 @@ func (r *Reporter) ensureSkillsStateCoordinator() *skillsStateCoordinator {
 				return scanHubSkillsInventory(ctx, r.skillsAgents())
 			},
 			ScanProject: scanProjectSkillsInventory,
+			ScanHubDiscovery: func(ctx context.Context, providers []string) (map[string][]discoveredSkillItem, error) {
+				return scanSkillsDiscovery(ctx, providers, "", agent.SkillScanScopeUser)
+			},
+			ScanProjectDiscovery: func(ctx context.Context, target projectSkillsTarget) (map[string][]discoveredSkillItem, error) {
+				return scanSkillsDiscovery(ctx, target.Agents, target.Path, agent.SkillScanScopeProject)
+			},
 			ScanHubSources: func(ctx context.Context, inventory map[string]skillInventoryItem) (tools.SkillsSourceScopeSnapshot, error) {
 				return tools.ScanSkillsSourceScope(ctx, tools.SkillsSourceScopeInput{
 					GlobalLockPath: managedSkillsLockPath(""),

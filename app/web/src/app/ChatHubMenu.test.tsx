@@ -44,7 +44,6 @@ function createHarness(overrides: Partial<ChatHubMenuProps> = {}) {
     onAddSkillRepo: jest.fn(),
     onRequestSkillDetail: jest.fn(),
     onUpdateSkillScope: jest.fn(),
-    onInstallAllSkillScope: jest.fn(),
     onRefreshSkillSource: jest.fn(),
     onUpdateSkillSource: jest.fn(),
     onInstallAllSkillSource: jest.fn(),

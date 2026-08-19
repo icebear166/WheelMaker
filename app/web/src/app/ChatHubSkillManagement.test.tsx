@@ -43,7 +43,6 @@ function createActions(): ChatHubSkillActions {
     onAddRepo: jest.fn(),
     onDetail: jest.fn(),
     onUpdateScope: jest.fn(),
-    onInstallAllScope: jest.fn(),
     onRefreshSource: jest.fn(),
     onUpdateSource: jest.fn(),
     onInstallAll: jest.fn(),
@@ -97,21 +96,20 @@ test('renders source-first hierarchy and hides uninstalled skills by default per
   expect(renderer.root.findByProps({'data-skill-name': 'local-only'})).toBeTruthy();
 });
 
-test('renders scope Update and Install all controls', async () => {
+test('renders scope Update without a duplicate Install all control', async () => {
   const {renderer, actions} = await renderScope({target: projectTarget});
 
   act(() => renderer.root.findByProps({'aria-label': 'Update Project skills'}).props.onClick());
-  act(() => renderer.root.findByProps({'aria-label': 'Install all Project skills'}).props.onClick());
 
   expect(actions.onUpdateScope).toHaveBeenCalledWith(projectTarget);
-  expect(actions.onInstallAllScope).toHaveBeenCalledWith(projectTarget);
+  expect(renderer.root.findAllByProps({'aria-label': 'Install all Project skills'})).toHaveLength(0);
 });
 
 test('disables scope and repository actions while a skill operation is running', async () => {
   const {renderer} = await renderScope({operationRunning: true});
 
   expect(renderer.root.findByProps({'aria-label': 'Update Hub skills'}).props.disabled).toBe(true);
-  expect(renderer.root.findByProps({'aria-label': 'Install all Hub skills'}).props.disabled).toBe(true);
+  expect(renderer.root.findAllByProps({'aria-label': 'Install all Hub skills'})).toHaveLength(0);
   expect(renderer.root.findByProps({'aria-label': 'Update acme/skills'}).props.disabled).toBe(true);
   expect(renderer.root.findByProps({'aria-label': 'Install all acme/skills skills'}).props.disabled).toBe(true);
 });

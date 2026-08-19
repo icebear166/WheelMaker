@@ -7074,7 +7074,6 @@ export function App() {
         onAddSkillRepo={requestSkillAddRepo}
         onRequestSkillDetail={requestSkillDetail}
         onUpdateSkillScope={requestSkillScopeUpdate}
-        onInstallAllSkillScope={requestSkillScopeInstallAll}
         onRefreshSkillSource={requestSkillSourceRefresh}
         onUpdateSkillSource={requestSkillSourceUpdate}
         onInstallAllSkillSource={requestSkillSourceInstallAll}
@@ -14371,10 +14370,6 @@ export function App() {
 
   const requestSkillScopeUpdate = useCallback((target: SkillScopeTarget) => {
     void executeSkillOperation({...target, kind: 'skillOperation', action: 'updateScope'});
-  }, [executeSkillOperation]);
-
-  const requestSkillScopeInstallAll = useCallback((target: SkillScopeTarget) => {
-    void executeSkillOperation({...target, kind: 'skillOperation', action: 'installAllScope'});
   }, [executeSkillOperation]);
 
   const requestSkillSourceUpdate = useCallback((target: SkillSourceTarget) => {

@@ -8416,16 +8416,73 @@ func TestKimiProviderPreset(t *testing.T) {
 	if !strings.Contains(preset.MissingPathErrTemplate, "%v") {
 		t.Fatalf("missing-path template must consume the underlying error: %q", preset.MissingPathErrTemplate)
 	}
-	if !reflect.DeepEqual(preset.SkillProjectDirs, []string{".agents/skills"}) {
-		t.Fatalf("project skill dirs = %v, want [.agents/skills]", preset.SkillProjectDirs)
+	if !reflect.DeepEqual(preset.SkillProjectDirs, []string{".agents/skills", ".kimi-code/skills"}) {
+		t.Fatalf("project skill dirs = %v, want [.agents/skills .kimi-code/skills]", preset.SkillProjectDirs)
 	}
-	if !reflect.DeepEqual(preset.SkillUserDirs, []string{"~/.agents/skills"}) {
-		t.Fatalf("user skill dirs = %v, want [~/.agents/skills]", preset.SkillUserDirs)
+	if !reflect.DeepEqual(preset.SkillUserDirs, []string{"~/.agents/skills", "~/.kimi-code/skills"}) {
+		t.Fatalf("user skill dirs = %v, want [~/.agents/skills ~/.kimi-code/skills]", preset.SkillUserDirs)
 	}
 
 	provider := NewKimiProvider()
 	if provider.Name() != "kimi" {
 		t.Fatalf("provider name=%q, want kimi", provider.Name())
+	}
+}
+
+func TestListSkillsForProviders_KimiIncludesNativeDiscoveryRoots(t *testing.T) {
+	homeDir := t.TempDir()
+	t.Setenv("HOME", homeDir)
+	t.Setenv("USERPROFILE", homeDir)
+	projectRoot := t.TempDir()
+	projectSkill := filepath.Join(projectRoot, ".kimi-code", "skills", "project-native", "SKILL.md")
+	userSkill := filepath.Join(homeDir, ".kimi-code", "skills", "user-native", "SKILL.md")
+	for _, path := range []string{projectSkill, userSkill} {
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatalf("MkdirAll %s: %v", path, err)
+		}
+		if err := os.WriteFile(path, []byte("---\ndescription: native\n---\n"), 0o600); err != nil {
+			t.Fatalf("WriteFile %s: %v", path, err)
+		}
+	}
+
+	discovered, err := ListSkillsForProviders(context.Background(), []string{"kimi"}, projectRoot, SkillScanScopeAll)
+	if err != nil {
+		t.Fatalf("ListSkillsForProviders: %v", err)
+	}
+	if len(discovered) != 2 {
+		t.Fatalf("discovered skills = %#v, want project and user native skills", discovered)
+	}
+	for _, item := range discovered {
+		if !containsFold(item.Locations, "kimi") {
+			t.Fatalf("locations = %v, want kimi", item.Locations)
+		}
+	}
+}
+
+func TestListSkillsForProviders_KimiHonorsHomeOverride(t *testing.T) {
+	homeDir := t.TempDir()
+	customHome := t.TempDir()
+	projectRoot := t.TempDir()
+	t.Setenv("HOME", homeDir)
+	t.Setenv("USERPROFILE", homeDir)
+	t.Setenv("KIMI_CODE_HOME", customHome)
+	path := filepath.Join(customHome, "skills", "custom-home", "SKILL.md")
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	if err := os.WriteFile(path, []byte("---\ndescription: custom home\n---\n"), 0o600); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	discovered, err := ListSkillsForProviders(context.Background(), []string{"kimi"}, projectRoot, SkillScanScopeUser)
+	if err != nil {
+		t.Fatalf("ListSkillsForProviders: %v", err)
+	}
+	if len(discovered) != 1 || discovered[0].Skill.Name != "custom-home" {
+		t.Fatalf("discovered skills = %#v, want custom-home", discovered)
+	}
+	if !containsFold(discovered[0].Locations, "kimi") {
+		t.Fatalf("locations = %v, want kimi", discovered[0].Locations)
 	}
 }
 
@@ -8543,7 +8600,7 @@ func TestCanonicalAndNativeSkillPresets(t *testing.T) {
 	}{
 		{name: "codex", preset: CodexProviderPreset, projectDirs: []string{".agents/skills"}, userDirs: []string{"~/.agents/skills"}},
 		{name: "copilot", preset: CopilotACPProviderPreset, projectDirs: []string{".agents/skills"}, userDirs: []string{"~/.agents/skills"}},
-		{name: "kimi", preset: KimiACPProviderPreset, projectDirs: []string{".agents/skills"}, userDirs: []string{"~/.agents/skills"}},
+		{name: "kimi", preset: KimiACPProviderPreset, projectDirs: []string{".agents/skills", ".kimi-code/skills"}, userDirs: []string{"~/.agents/skills", "~/.kimi-code/skills"}},
 		{name: "codebuddy", preset: CodeBuddyACPProviderPreset, projectDirs: []string{".codebuddy/skills"}, userDirs: []string{"~/.codebuddy/skills"}},
 		{name: "mimo", preset: MimoACPProviderPreset, projectDirs: []string{".mimocode/skills"}, userDirs: []string{"~/.mimocode/skills"}},
 		{name: "qoder", preset: QoderACPProviderPreset, projectDirs: []string{".qoder/skills"}, userDirs: []string{"~/.qoder/skills"}},

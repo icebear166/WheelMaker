@@ -42,12 +42,13 @@ type skillInventoryItem struct {
 }
 
 type skillsStateSnapshot struct {
-	HubInventory            map[string]skillInventoryItem              `json:"hubInventory"`
-	ProjectLocalInventories map[string]map[string]skillInventoryItem   `json:"projectLocalInventories"`
-	EffectiveSkills         map[string]map[string][]skillInventoryItem `json:"effectiveSkills"`
-	HubSources              tools.SkillsSourceScopeSnapshot            `json:"hubSources"`
-	ProjectSources          map[string]tools.SkillsSourceScopeSnapshot `json:"projectSources"`
-	Operation               *tools.SkillsOperationSnapshot             `json:"operation,omitempty"`
+	HubInventory            map[string]skillInventoryItem               `json:"hubInventory"`
+	ProjectLocalInventories map[string]map[string]skillInventoryItem    `json:"projectLocalInventories"`
+	EffectiveSkills         map[string]map[string][]skillInventoryItem  `json:"effectiveSkills"`
+	DiscoveredSkills        map[string]map[string][]discoveredSkillItem `json:"discoveredSkills"`
+	HubSources              tools.SkillsSourceScopeSnapshot             `json:"hubSources"`
+	ProjectSources          map[string]tools.SkillsSourceScopeSnapshot  `json:"projectSources"`
+	Operation               *tools.SkillsOperationSnapshot              `json:"operation,omitempty"`
 }
 
 type projectSkillsTarget struct {
@@ -196,31 +197,37 @@ func managedSkillsLockPath(root string) string {
 }
 
 type skillsStateCoordinatorOptions struct {
-	ScanHub            func(context.Context) (map[string]skillInventoryItem, error)
-	ScanProject        func(context.Context, projectSkillsTarget) (map[string]skillInventoryItem, error)
-	ScanHubSources     func(context.Context, map[string]skillInventoryItem) (tools.SkillsSourceScopeSnapshot, error)
-	ScanProjectSources func(context.Context, projectSkillsTarget, map[string]skillInventoryItem) (tools.SkillsSourceScopeSnapshot, error)
-	Targets            func() []projectSkillsTarget
+	ScanHub              func(context.Context) (map[string]skillInventoryItem, error)
+	ScanProject          func(context.Context, projectSkillsTarget) (map[string]skillInventoryItem, error)
+	ScanHubDiscovery     func(context.Context, []string) (map[string][]discoveredSkillItem, error)
+	ScanProjectDiscovery func(context.Context, projectSkillsTarget) (map[string][]discoveredSkillItem, error)
+	ScanHubSources       func(context.Context, map[string]skillInventoryItem) (tools.SkillsSourceScopeSnapshot, error)
+	ScanProjectSources   func(context.Context, projectSkillsTarget, map[string]skillInventoryItem) (tools.SkillsSourceScopeSnapshot, error)
+	Targets              func() []projectSkillsTarget
 }
 
 type skillsStateCoordinator struct {
-	mu             sync.Mutex
-	options        skillsStateCoordinatorOptions
-	hub            map[string]skillInventoryItem
-	projects       map[string]map[string]skillInventoryItem
-	hubSources     tools.SkillsSourceScopeSnapshot
-	projectSources map[string]tools.SkillsSourceScopeSnapshot
-	targets        map[string]projectSkillsTarget
-	operation      *tools.SkillsOperationSnapshot
+	mu                 sync.Mutex
+	options            skillsStateCoordinatorOptions
+	hub                map[string]skillInventoryItem
+	projects           map[string]map[string]skillInventoryItem
+	discoveredHub      map[string][]discoveredSkillItem
+	discoveredProjects map[string]map[string][]discoveredSkillItem
+	hubSources         tools.SkillsSourceScopeSnapshot
+	projectSources     map[string]tools.SkillsSourceScopeSnapshot
+	targets            map[string]projectSkillsTarget
+	operation          *tools.SkillsOperationSnapshot
 }
 
 func newSkillsStateCoordinator(options skillsStateCoordinatorOptions) *skillsStateCoordinator {
 	return &skillsStateCoordinator{
-		options:        options,
-		hub:            map[string]skillInventoryItem{},
-		projects:       map[string]map[string]skillInventoryItem{},
-		projectSources: map[string]tools.SkillsSourceScopeSnapshot{},
-		targets:        map[string]projectSkillsTarget{},
+		options:            options,
+		hub:                map[string]skillInventoryItem{},
+		projects:           map[string]map[string]skillInventoryItem{},
+		discoveredHub:      map[string][]discoveredSkillItem{},
+		discoveredProjects: map[string]map[string][]discoveredSkillItem{},
+		projectSources:     map[string]tools.SkillsSourceScopeSnapshot{},
+		targets:            map[string]projectSkillsTarget{},
 	}
 }
 
@@ -237,6 +244,11 @@ func (c *skillsStateCoordinator) SetTargets(targets []projectSkillsTarget) {
 	for projectID := range c.projects {
 		if _, ok := next[projectID]; !ok {
 			delete(c.projects, projectID)
+		}
+	}
+	for projectID := range c.discoveredProjects {
+		if _, ok := next[projectID]; !ok {
+			delete(c.discoveredProjects, projectID)
 		}
 	}
 	for projectID := range c.projectSources {
@@ -265,7 +277,12 @@ func (c *skillsStateCoordinator) seedProject(projectID string, inventory map[str
 }
 
 func (c *skillsStateCoordinator) RefreshAll(ctx context.Context) (skillsStateSnapshot, error) {
+	targets := c.currentTargets()
 	hub, err := c.options.ScanHub(ctx)
+	if err != nil {
+		return skillsStateSnapshot{}, err
+	}
+	discoveredHub, err := c.scanHubDiscovery(ctx, discoveryProvidersForTargets(targets))
 	if err != nil {
 		return skillsStateSnapshot{}, err
 	}
@@ -273,8 +290,8 @@ func (c *skillsStateCoordinator) RefreshAll(ctx context.Context) (skillsStateSna
 	if err != nil {
 		return skillsStateSnapshot{}, err
 	}
-	targets := c.currentTargets()
 	projects := make(map[string]map[string]skillInventoryItem, len(targets))
+	discoveredProjects := make(map[string]map[string][]discoveredSkillItem, len(targets))
 	projectSources := make(map[string]tools.SkillsSourceScopeSnapshot, len(targets))
 	for _, target := range targets {
 		inventory, scanErr := c.options.ScanProject(ctx, target)
@@ -282,6 +299,11 @@ func (c *skillsStateCoordinator) RefreshAll(ctx context.Context) (skillsStateSna
 			return skillsStateSnapshot{}, scanErr
 		}
 		projects[target.ProjectID] = inventory
+		discovered, scanErr := c.scanProjectDiscovery(ctx, target)
+		if scanErr != nil {
+			return skillsStateSnapshot{}, scanErr
+		}
+		discoveredProjects[target.ProjectID] = discovered
 		sources, scanErr := c.scanProjectSources(ctx, target, inventory)
 		if scanErr != nil {
 			return skillsStateSnapshot{}, scanErr
@@ -291,6 +313,8 @@ func (c *skillsStateCoordinator) RefreshAll(ctx context.Context) (skillsStateSna
 	c.mu.Lock()
 	c.hub = cloneSkillInventory(hub)
 	c.projects = cloneProjectSkillInventories(projects)
+	c.discoveredHub = cloneDiscoveredSkills(discoveredHub)
+	c.discoveredProjects = cloneProjectDiscoveredSkills(discoveredProjects)
 	c.hubSources = cloneSkillsSourceScopeSnapshot(hubSources)
 	c.projectSources = cloneProjectSkillsSourceSnapshots(projectSources)
 	snapshot := c.snapshotLocked()
@@ -299,7 +323,12 @@ func (c *skillsStateCoordinator) RefreshAll(ctx context.Context) (skillsStateSna
 }
 
 func (c *skillsStateCoordinator) RefreshHub(ctx context.Context) (skillsStateSnapshot, error) {
+	targets := c.currentTargets()
 	hub, err := c.options.ScanHub(ctx)
+	if err != nil {
+		return skillsStateSnapshot{}, err
+	}
+	discoveredHub, err := c.scanHubDiscovery(ctx, discoveryProvidersForTargets(targets))
 	if err != nil {
 		return skillsStateSnapshot{}, err
 	}
@@ -309,6 +338,7 @@ func (c *skillsStateCoordinator) RefreshHub(ctx context.Context) (skillsStateSna
 	}
 	c.mu.Lock()
 	c.hub = cloneSkillInventory(hub)
+	c.discoveredHub = cloneDiscoveredSkills(discoveredHub)
 	c.hubSources = cloneSkillsSourceScopeSnapshot(sources)
 	snapshot := c.snapshotLocked()
 	c.mu.Unlock()
@@ -324,12 +354,17 @@ func (c *skillsStateCoordinator) RefreshProject(ctx context.Context, projectID s
 	if err != nil {
 		return skillsStateSnapshot{}, err
 	}
+	discovered, err := c.scanProjectDiscovery(ctx, target)
+	if err != nil {
+		return skillsStateSnapshot{}, err
+	}
 	sources, err := c.scanProjectSources(ctx, target, inventory)
 	if err != nil {
 		return skillsStateSnapshot{}, err
 	}
 	c.mu.Lock()
 	c.projects[projectID] = cloneSkillInventory(inventory)
+	c.discoveredProjects[projectID] = cloneDiscoveredSkills(discovered)
 	c.projectSources[projectID] = cloneSkillsSourceScopeSnapshot(sources)
 	snapshot := c.snapshotLocked()
 	c.mu.Unlock()
@@ -404,10 +439,25 @@ func (c *skillsStateCoordinator) snapshotLocked() skillsStateSnapshot {
 		HubInventory:            hub,
 		ProjectLocalInventories: projects,
 		EffectiveSkills:         effective,
+		DiscoveredSkills:        effectiveDiscoveredSkills(c.discoveredHub, c.discoveredProjects, c.targets),
 		HubSources:              cloneSkillsSourceScopeSnapshot(c.hubSources),
 		ProjectSources:          cloneProjectSkillsSourceSnapshots(c.projectSources),
 		Operation:               cloneSkillsStateOperation(c.operation),
 	}
+}
+
+func (c *skillsStateCoordinator) scanHubDiscovery(ctx context.Context, providers []string) (map[string][]discoveredSkillItem, error) {
+	if c.options.ScanHubDiscovery == nil {
+		return map[string][]discoveredSkillItem{}, nil
+	}
+	return c.options.ScanHubDiscovery(ctx, providers)
+}
+
+func (c *skillsStateCoordinator) scanProjectDiscovery(ctx context.Context, target projectSkillsTarget) (map[string][]discoveredSkillItem, error) {
+	if c.options.ScanProjectDiscovery == nil {
+		return map[string][]discoveredSkillItem{}, nil
+	}
+	return c.options.ScanProjectDiscovery(ctx, cloneProjectSkillsTarget(target))
 }
 
 func (c *skillsStateCoordinator) scanHubSources(ctx context.Context, inventory map[string]skillInventoryItem) (tools.SkillsSourceScopeSnapshot, error) {

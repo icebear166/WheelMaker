@@ -237,7 +237,9 @@ func skillScanRootsForPresets(presets []ACPProviderPreset, cwd string, scope Ski
 		}
 		if scope == SkillScanScopeAll || scope == SkillScanScopeUser {
 			for _, dir := range preset.SkillUserDirs {
-				appendRoot(expandHomePath(dir), provider)
+				for _, userRoot := range skillUserRootsForPreset(preset, dir) {
+					appendRoot(userRoot, provider)
+				}
 			}
 		}
 	}
@@ -246,6 +248,12 @@ func skillScanRootsForPresets(presets []ACPProviderPreset, cwd string, scope Ski
 
 func skillLocationForRoot(path string) string {
 	normalized := strings.TrimRight(strings.ToLower(filepath.ToSlash(filepath.Clean(path))), "/")
+	if home := strings.TrimSpace(os.Getenv("KIMI_CODE_HOME")); home != "" {
+		kimiHomeSkills := strings.TrimRight(strings.ToLower(filepath.ToSlash(filepath.Clean(filepath.Join(home, "skills")))), "/")
+		if normalized == kimiHomeSkills {
+			return "kimi"
+		}
+	}
 	locations := []struct {
 		suffix string
 		name   string
@@ -254,6 +262,7 @@ func skillLocationForRoot(path string) string {
 		{suffix: "/.claude/skills", name: "claude"},
 		{suffix: "/.codebuddy/skills", name: "codebuddy"},
 		{suffix: "/.mimocode/skills", name: "mimo"},
+		{suffix: "/.kimi-code/skills", name: "kimi"},
 		{suffix: "/.qoder/skills", name: "qoder"},
 	}
 	for _, location := range locations {
@@ -262,6 +271,18 @@ func skillLocationForRoot(path string) string {
 		}
 	}
 	return ""
+}
+
+func skillUserRootsForPreset(preset ACPProviderPreset, rawDir string) []string {
+	roots := []string{expandHomePath(rawDir)}
+	if !strings.EqualFold(strings.TrimSpace(preset.Name), KimiACPProviderPreset.Name) ||
+		!strings.EqualFold(strings.TrimSpace(rawDir), "~/.kimi-code/skills") {
+		return roots
+	}
+	if home := strings.TrimSpace(os.Getenv("KIMI_CODE_HOME")); home != "" {
+		roots = append(roots, filepath.Join(home, "skills"))
+	}
+	return roots
 }
 
 func containsFold(values []string, candidate string) bool {
