@@ -219,6 +219,7 @@ import {useChatComposerMenu} from '../chat/composer/useChatComposerMenu';
 import {ChatIcon} from '../chat/ChatIcon';
 import {AgentTag} from '../chat/AgentTag';
 import {Icon} from '../common/Icon';
+import {KnowledgeRegistryLink} from '../knowledge/KnowledgeRegistryLink';
 import {contextMenuSurfaceProps, useContextMenuTargetGesture} from '../common/useContextMenuGesture';
 import {ContextMenu, ContextMenuItems} from '../common/ContextMenu';
 import {RetryToast} from '../common/RetryToast';
@@ -19116,6 +19117,7 @@ export function App() {
             >
               <SessionIcon name="files" />
             </button>
+            <KnowledgeRegistryLink publicUrl={serverSettings.knowledgeRegistry.publicUrl} />
             <button
               type="button"
               className={`chat-drawer-toggle${chatPreviewOpen && previewWorkbench.drawerMode === 'git' ? ' active' : ''}`}

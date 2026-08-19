@@ -156,9 +156,10 @@ func TestServerConfigMethodsAndSerializationAreSetOnly(t *testing.T) {
 		}
 	}
 	encoded, err := json.Marshal(ServerConfigResponse{
-		VoiceInput:   ServerVoiceInputConfig{ServerFeatureConfig: ServerFeatureConfig{Configured: true, UpdatedAt: "2026-07-13T00:00:00Z"}, Model: "doubao-streaming-asr-2.0"},
-		TextToSpeech: ServerTextToSpeechConfig{Model: "mimo-v2.5-tts", Voice: "Mia"},
-		DeepSeek:     ServerFeatureConfig{Configured: true},
+		VoiceInput:        ServerVoiceInputConfig{ServerFeatureConfig: ServerFeatureConfig{Configured: true, UpdatedAt: "2026-07-13T00:00:00Z"}, Model: "doubao-streaming-asr-2.0"},
+		TextToSpeech:      ServerTextToSpeechConfig{Model: "mimo-v2.5-tts", Voice: "Mia"},
+		DeepSeek:          ServerFeatureConfig{Configured: true},
+		KnowledgeRegistry: &ServerKnowledgeRegistryConfig{PublicURL: "https://wiki.example.com"},
 	})
 	if err != nil {
 		t.Fatalf("Marshal(): %v", err)
@@ -167,6 +168,9 @@ func TestServerConfigMethodsAndSerializationAreSetOnly(t *testing.T) {
 		if strings.Contains(string(encoded), forbidden) {
 			t.Fatalf("server config contains %q: %s", forbidden, encoded)
 		}
+	}
+	if !strings.Contains(string(encoded), `"knowledgeRegistry":{"publicUrl":"https://wiki.example.com"}`) {
+		t.Fatalf("server config omitted personal Wiki URL: %s", encoded)
 	}
 }
 

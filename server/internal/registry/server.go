@@ -50,16 +50,17 @@ const codeBusy = "busy"
 
 // Config configures the project registry server.
 type Config struct {
-	Addr               string
-	Token              string
-	ProtocolVersion    string
-	ServerVersion      string
-	RelayPort          int
-	RelayPortProvider  portrelay.RelayPortProvider
-	LogDir             string
-	StateDir           string
-	ServerData         ServerDataStore
-	IPLocationResolver IPLocationResolver
+	Addr                       string
+	Token                      string
+	ProtocolVersion            string
+	ServerVersion              string
+	RelayPort                  int
+	RelayPortProvider          portrelay.RelayPortProvider
+	KnowledgeRegistryPublicURL string
+	LogDir                     string
+	StateDir                   string
+	ServerData                 ServerDataStore
+	IPLocationResolver         IPLocationResolver
 }
 
 type peerConn struct {

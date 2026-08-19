@@ -121,11 +121,11 @@ func TestLoadValidatedRuntimeConfigMigratesBeforeStrictLoad(t *testing.T) {
 
 func TestRunRegistryConfigIncludesStateDir(t *testing.T) {
 	stateDir := filepath.Join(t.TempDir(), ".wheelmaker")
-	cfg := registryServerConfig("127.0.0.1:9630", "token", stateDir, 28810)
+	cfg := registryServerConfig("127.0.0.1:9630", "token", stateDir, 28810, "https://wiki.example.com")
 	if cfg.Addr != "127.0.0.1:9630" || cfg.Token != "token" || cfg.StateDir != stateDir || cfg.LogDir != filepath.Join(stateDir, "log") || cfg.ServerData == nil {
 		t.Fatalf("registryServerConfig()=%+v", cfg)
 	}
-	if cfg.RelayPort != 28810 {
+	if cfg.RelayPort != 28810 || cfg.KnowledgeRegistryPublicURL != "https://wiki.example.com" {
 		t.Fatalf("registry ownership config=%+v", cfg)
 	}
 	if err := cfg.ServerData.UpdateSecret(serverdata.SecretDeepSeek, "set", "short", time.Now()); err != nil {
