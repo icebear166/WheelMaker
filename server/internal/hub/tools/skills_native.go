@@ -19,14 +19,14 @@ func normalizeNativeSkillSource(raw string) (string, string, *skillsCommandError
 	if raw == "" {
 		return "", "", &skillsCommandError{Code: rp.CodeInvalidArgument, Message: "source is required"}
 	}
-	if strings.ContainsAny(raw, "#\r\n\x00") {
-		return "", "", &skillsCommandError{Code: rp.CodeInvalidArgument, Message: "skill source refs are unsupported; use the repository default branch"}
+	if strings.ContainsAny(raw, "\r\n\x00") {
+		return "", "", &skillsCommandError{Code: rp.CodeInvalidArgument, Message: "skill source contains invalid characters"}
 	}
-	normalized, sourceKey, err := normalizeSkillGitSource(raw)
+	identity, err := normalizeSkillSourceInput(raw)
 	if err != nil {
 		return "", "", &skillsCommandError{Code: rp.CodeForbidden, Message: err.Error()}
 	}
-	return normalized, sourceKey, nil
+	return identity.Source, identity.SourceKey, nil
 }
 
 func (c *SkillsCommand) nativeStore() *skillSourceStore {
@@ -397,6 +397,9 @@ func (c *SkillsCommand) nativeAddRepo(ctx context.Context, target skillsCommandT
 			return nil
 		}
 		return c.nativeStore().withUpdatedRepo(ctx, skillSourceSnapshot{Source: source, SourceKey: sourceKey}, func(checkout skillSourceCheckout) error {
+			if nativeSourceIndex(lock, checkout.SourceKey) >= 0 {
+				return nil
+			}
 			lock.Sources = append(lock.Sources, nativeSnapshotFromCheckout(checkout, c.now(), nil))
 			sortSkillSourceLock(&lock)
 			_, err := writeSkillSourceLockFile(c.sourceLockFile(target), revision, lock)
@@ -457,11 +460,11 @@ func (c *SkillsCommand) nativeInstall(ctx context.Context, target skillsCommandT
 		}
 		index := nativeSourceIndex(lock, sourceKey)
 		if index < 0 {
-			return errors.New("skill source is not installed in this scope; add the repository first")
+			return errors.New("skill source is not added to this scope; add it first")
 		}
 		sourceSnapshot := lock.Sources[index]
 		return c.nativeStore().withUpdatedRepo(ctx, sourceSnapshot, func(checkout skillSourceCheckout) error {
-			if err := ensureSkillSourceCheckoutClean(ctx, checkout.Path); err != nil {
+			if err := ensureNativeSkillSourceCheckoutReady(ctx, checkout); err != nil {
 				return err
 			}
 			available := nativeSkillNames(checkout.Skills)
@@ -547,7 +550,7 @@ func (c *SkillsCommand) nativeUninstall(ctx context.Context, target skillsComman
 		managedRemoved := map[string]struct{}{}
 		lockChanged := false
 		for index := range lock.Sources {
-			if sourceKey != "" && !strings.EqualFold(lock.Sources[index].SourceKey, sourceKey) {
+			if sourceKey != "" && !skillSourceKeysEqual(lock.Sources[index].SourceKey, sourceKey) {
 				continue
 			}
 			kept := lock.Sources[index].ManagedSkills[:0]
@@ -672,13 +675,13 @@ func nativeSnapshotFromCheckout(checkout skillSourceCheckout, now time.Time, man
 	return skillSourceSnapshot{
 		Source: checkout.Source, SourceKey: checkout.SourceKey, Branch: checkout.Branch,
 		Commit: checkout.Commit, UpdatedAt: updated, ResolvedCommit: checkout.Commit, RefreshedAt: updated,
-		ManagedSkills: append([]string(nil), managed...), SkillList: append([]skillSourceSkillSnapshot(nil), checkout.Skills...),
+		ManagedSkills: append([]string(nil), managed...),
 	}
 }
 
 func nativeSourceIndex(lock skillSourceLock, sourceKey string) int {
 	for index, source := range lock.Sources {
-		if strings.EqualFold(source.SourceKey, sourceKey) {
+		if skillSourceKeysEqual(source.SourceKey, sourceKey) {
 			return index
 		}
 	}
@@ -686,15 +689,22 @@ func nativeSourceIndex(lock skillSourceLock, sourceKey string) int {
 }
 
 func nativeSourceKeyFromLock(lock skillSourceLock, source string) (string, error) {
-	if _, key, err := normalizeSkillGitSource(source); err == nil {
-		return key, nil
+	if identity, err := normalizeSkillSourceInput(source); err == nil && identity.SourceKey != "" {
+		return identity.SourceKey, nil
 	}
 	for _, candidate := range lock.Sources {
-		if strings.EqualFold(candidate.Source, strings.TrimSpace(source)) {
+		if candidate.Source == strings.TrimSpace(source) {
 			return candidate.SourceKey, nil
 		}
 	}
 	return "", errors.New("skill source is invalid or is not installed in this scope")
+}
+
+func ensureNativeSkillSourceCheckoutReady(ctx context.Context, checkout skillSourceCheckout) error {
+	if identity, err := normalizePersistedSkillSource(checkout.Source); err == nil && identity.Kind == skillSourceKindWellKnown {
+		return nil
+	}
+	return ensureSkillSourceCheckoutClean(ctx, checkout.Path)
 }
 
 func nativeSkillNames(skills []skillSourceSkillSnapshot) []string {
@@ -718,7 +728,7 @@ func canonicalNativeSkillNames(requested, available []string) ([]string, error) 
 	for _, requestedName := range requested {
 		name, ok := byName[strings.ToLower(requestedName)]
 		if !ok {
-			return nil, fmt.Errorf("skill not found in repository: %s", requestedName)
+			return nil, fmt.Errorf("skill not found in source: %s", requestedName)
 		}
 		if _, exists := seen[strings.ToLower(name)]; exists {
 			continue
@@ -755,7 +765,7 @@ func removeOwnershipFromOtherSources(lock *skillSourceLock, ownerKey string, nam
 		wanted[strings.ToLower(name)] = struct{}{}
 	}
 	for index := range lock.Sources {
-		if strings.EqualFold(lock.Sources[index].SourceKey, ownerKey) {
+		if skillSourceKeysEqual(lock.Sources[index].SourceKey, ownerKey) {
 			continue
 		}
 		kept := lock.Sources[index].ManagedSkills[:0]
@@ -781,7 +791,7 @@ func nativeManagedOwners(lock skillSourceLock) map[string]string {
 func nativeManagedOwnersExcluding(lock skillSourceLock, sourceKey string) map[string]string {
 	owners := map[string]string{}
 	for _, source := range lock.Sources {
-		if strings.EqualFold(source.SourceKey, sourceKey) {
+		if skillSourceKeysEqual(source.SourceKey, sourceKey) {
 			continue
 		}
 		for _, name := range source.ManagedSkills {
@@ -951,7 +961,7 @@ func nativeSkillRoot(checkout skillSourceCheckout, name string) (string, error) 
 			root := filepath.Join(checkout.Path, filepath.FromSlash(filepath.Dir(path)))
 			relative, err := filepath.Rel(checkout.Path, root)
 			if err != nil || relative == ".." || strings.HasPrefix(relative, ".."+string(filepath.Separator)) || filepath.IsAbs(relative) {
-				return "", fmt.Errorf("skill path escapes repository for %s", name)
+				return "", fmt.Errorf("skill path escapes source root for %s", name)
 			}
 			info, err := os.Stat(filepath.Join(root, "SKILL.md"))
 			if err != nil || info.IsDir() {
@@ -960,7 +970,7 @@ func nativeSkillRoot(checkout skillSourceCheckout, name string) (string, error) 
 			return root, nil
 		}
 	}
-	return "", fmt.Errorf("skill not found in repository: %s", name)
+	return "", fmt.Errorf("skill not found in source: %s", name)
 }
 
 type nativeDirectoryChange struct {
@@ -1241,8 +1251,8 @@ func (c *SkillsCommand) nativeDetail(ctx context.Context, payload skillsCommandP
 		if ownerKey, managed := owners[strings.ToLower(name)]; managed {
 			detail.Managed = true
 			for _, source := range lock.Sources {
-				if strings.EqualFold(source.SourceKey, ownerKey) {
-					detail.Source, detail.SourceURL, detail.SourceType = source.Source, source.Source, "git"
+				if skillSourceKeysEqual(source.SourceKey, ownerKey) {
+					detail.Source, detail.SourceURL, detail.SourceType = source.Source, source.Source, nativeSkillSourceType(source.Source)
 					break
 				}
 			}
@@ -1257,4 +1267,11 @@ func (c *SkillsCommand) nativeDetail(ctx context.Context, payload skillsCommandP
 		return nil, &skillsCommandError{Code: code, Message: err.Error()}
 	}
 	return skillsCommandResponse{OK: true, HubID: payload.HubID, UpdatedAt: c.now().Format(time.RFC3339), Scope: target.scope, ProjectName: target.projectName, Detail: detail}, nil
+}
+
+func nativeSkillSourceType(source string) string {
+	if identity, err := normalizePersistedSkillSource(source); err == nil && identity.Kind == skillSourceKindWellKnown {
+		return "well-known"
+	}
+	return "git"
 }

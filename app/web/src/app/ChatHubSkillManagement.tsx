@@ -62,6 +62,7 @@ const STATUS_COPY: Record<string, string> = {
   copies_differ: 'Copies differ',
   needs_refresh: 'Needs refresh',
   needs_clone: 'Needs clone',
+  needs_fetch: 'Needs fetch',
 };
 
 const EXCEPTIONAL_SKILL_STATUSES = new Set([
@@ -299,10 +300,10 @@ function InlineAddRepository({
     setError('');
   };
 
-  const add = () => {
-    const value = source.trim();
-    if (!value) {
-      setError('Git repository is required.');
+	const add = () => {
+		const value = source.trim();
+		if (!value) {
+			setError('Skill source is required.');
       return;
     }
     actions.onAddRepo(target, value);
@@ -319,7 +320,7 @@ function InlineAddRepository({
           onClick={() => setExpanded(true)}
         >
           <Icon name="plus" />
-          <span>Add Git repository</span>
+			<span>Add skill source</span>
         </button>
       ) : (
         <div className="chat-hub-skill-add-repository-form">
@@ -327,8 +328,8 @@ function InlineAddRepository({
             <input
               autoFocus
               value={source}
-              aria-label="Git repository URL"
-              placeholder="owner/repo or Git repository URL"
+				aria-label="Skill source URL"
+				placeholder="owner/repo or well-known URL"
               onChange={event => {
                 setSource(event.target.value);
                 setError('');
@@ -345,7 +346,7 @@ function InlineAddRepository({
           </div>
           {error ? <div className="chat-hub-skill-source-error">{error}</div> : null}
           <p className="chat-hub-skill-add-repository-hint">
-            Adding a repository does not install any skills.
+			Adding a source does not install any skills.
           </p>
         </div>
       )}
@@ -431,7 +432,7 @@ export function ChatHubSkillScopeDetail({
         </div>
       ) : null}
       {!loading && !error && sources.length === 0 && unmanaged.length === 0 ? (
-        <div className="chat-hub-skill-state">No skill sources. Add a Git repository to begin.</div>
+		<div className="chat-hub-skill-state">No skill sources. Add a source to begin.</div>
       ) : null}
 
       {operation && operationInScope && !operation.running && (operation.results?.length ?? 0) > 0 ? (

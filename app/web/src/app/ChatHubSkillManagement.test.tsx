@@ -321,30 +321,54 @@ test('collapsing a source hides its list but keeps the error visible', async () 
     .toContain('Network unavailable');
 });
 
-test('adds a repository directly from the inline form without selecting skills', async () => {
-  const {renderer, actions} = await renderScope();
-  act(() => renderer.root.findByProps({className: 'chat-hub-skill-add-repository-trigger'}).props.onClick());
-  const input = renderer.root.findByProps({'aria-label': 'Git repository URL'});
-  act(() => input.props.onChange({target: {value: 'acme/new-skills'}}));
-  act(() => renderer.root.findByProps({children: 'Add'}).props.onClick());
-  expect(actions.onAddRepo).toHaveBeenCalledWith(hubTarget, 'acme/new-skills');
-  expect(renderer.root.findByProps({className: 'chat-hub-skill-add-repository-trigger'})).toBeTruthy();
+test('adds a skill source directly from the inline form without preview or skill selection', async () => {
+	const {renderer, actions} = await renderScope();
+	expect(renderer.root.findByProps({children: 'Add skill source'})).toBeTruthy();
+	act(() => renderer.root.findByProps({className: 'chat-hub-skill-add-repository-trigger'}).props.onClick());
+	const input = renderer.root.findByProps({'aria-label': 'Skill source URL'});
+	expect(input.props.placeholder).toBe('owner/repo or well-known URL');
+	expect(renderer.root.findByProps({className: 'chat-hub-skill-add-repository-hint'}).children.join(''))
+	  .toContain('Adding a source does not install any skills.');
+	expect(renderer.root.findAll(node => typeof node.children?.[0] === 'string' && /preview|select skills/i.test(node.children.join('')))).toHaveLength(0);
+	act(() => input.props.onChange({target: {value: 'https://example.com/.well-known/skills/example/SKILL.md'}}));
+	act(() => renderer.root.findByProps({children: 'Add'}).props.onClick());
+	expect(actions.onAddRepo).toHaveBeenCalledWith(hubTarget, 'https://example.com/.well-known/skills/example/SKILL.md');
+	expect(renderer.root.findByProps({className: 'chat-hub-skill-add-repository-trigger'})).toBeTruthy();
 });
 
-test('submits the repository with Enter from the input', async () => {
-  const {renderer, actions} = await renderScope();
-  act(() => renderer.root.findByProps({className: 'chat-hub-skill-add-repository-trigger'}).props.onClick());
-  const input = renderer.root.findByProps({'aria-label': 'Git repository URL'});
-  act(() => input.props.onChange({target: {value: 'acme/new-skills'}}));
-  act(() => input.props.onKeyDown({key: 'Enter'}));
-  expect(actions.onAddRepo).toHaveBeenCalledWith(hubTarget, 'acme/new-skills');
+test('describes a missing well-known snapshot as needing fetch', async () => {
+  const snapshot = {
+    ...catalog,
+    sources: [{...catalog.sources[0], status: 'needs_fetch'}],
+  };
+  const {renderer} = await renderScope({snapshot});
+  const source = renderer.root.findByProps({'data-source-key': 'github.com/acme/skills'});
+  const statusDot = source.findByProps({className: 'chat-hub-skill-source-status-dot is-needs-fetch'});
+
+  expect(statusDot.props['aria-label']).toBe('Needs fetch source');
+  expect(statusDot.props['data-tooltip']).toBe('Needs fetch');
 });
 
-test('requires a repository URL before adding', async () => {
-  const {renderer, actions} = await renderScope();
-  act(() => renderer.root.findByProps({className: 'chat-hub-skill-add-repository-trigger'}).props.onClick());
-  act(() => renderer.root.findByProps({children: 'Add'}).props.onClick());
-  expect(actions.onAddRepo).not.toHaveBeenCalled();
-  expect(renderer.root.findByProps({className: 'chat-hub-skill-source-error'}).children.join(''))
-    .toContain('Git repository is required.');
+test('submits the skill source with Enter from the input', async () => {
+	const {renderer, actions} = await renderScope();
+	act(() => renderer.root.findByProps({className: 'chat-hub-skill-add-repository-trigger'}).props.onClick());
+	const input = renderer.root.findByProps({'aria-label': 'Skill source URL'});
+	act(() => input.props.onChange({target: {value: 'acme/new-skills'}}));
+	act(() => input.props.onKeyDown({key: 'Enter'}));
+	expect(actions.onAddRepo).toHaveBeenCalledWith(hubTarget, 'acme/new-skills');
+});
+
+test('requires a skill source URL before adding', async () => {
+	const {renderer, actions} = await renderScope();
+	act(() => renderer.root.findByProps({className: 'chat-hub-skill-add-repository-trigger'}).props.onClick());
+	act(() => renderer.root.findByProps({children: 'Add'}).props.onClick());
+	expect(actions.onAddRepo).not.toHaveBeenCalled();
+	expect(renderer.root.findByProps({className: 'chat-hub-skill-source-error'}).children.join(''))
+	  .toContain('Skill source is required.');
+});
+
+test('uses a generic empty state for Git and well-known sources', async () => {
+	const {renderer} = await renderScope({snapshot: {sources: [], unmanagedSkills: []}});
+	expect(renderer.root.findByProps({className: 'chat-hub-skill-state'}).children.join(''))
+	  .toBe('No skill sources. Add a source to begin.');
 });

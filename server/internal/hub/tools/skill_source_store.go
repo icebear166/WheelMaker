@@ -25,7 +25,9 @@ type skillSourceCheckout struct {
 }
 
 type skillSourceStore struct {
-	root string
+	root       string
+	wellKnown  *wellKnownSkillSourceProvider
+	renamePath func(string, string) error
 }
 
 func newSkillSourceStore(homeDir string) *skillSourceStore {
@@ -88,6 +90,10 @@ func (s *skillSourceStore) acquireSourceLock(ctx context.Context, sourceKey stri
 }
 
 func flatSkillSourceName(sourceKey string) string {
+	sourceKey = strings.TrimSpace(sourceKey)
+	if isCanonicalWellKnownSourceKey(sourceKey) {
+		return "well-known-" + skillSourceRevision([]byte(sourceKey))
+	}
 	parts := strings.FieldsFunc(strings.ToLower(strings.TrimSpace(sourceKey)), func(r rune) bool {
 		return r == '/' || r == '\\'
 	})
@@ -143,6 +149,13 @@ func isWindowsReservedSkillPathComponent(value string) bool {
 }
 
 func (s *skillSourceStore) ensureRepo(ctx context.Context, source skillSourceSnapshot) (skillSourceCheckout, error) {
+	identity, wellKnown, identityErr := skillSourceWellKnownIdentityForSnapshot(source)
+	if identityErr != nil {
+		return skillSourceCheckout{}, identityErr
+	}
+	if wellKnown {
+		return s.ensureLatestWellKnown(ctx, identity)
+	}
 	address, sourceKey, err := skillSourceStoreInput(source)
 	if err != nil {
 		return skillSourceCheckout{}, err
@@ -172,6 +185,13 @@ func (s *skillSourceStore) ensureRepoLocked(ctx context.Context, address, source
 }
 
 func (s *skillSourceStore) ensureLatestRepo(ctx context.Context, source skillSourceSnapshot) (skillSourceCheckout, error) {
+	identity, wellKnown, identityErr := skillSourceWellKnownIdentityForSnapshot(source)
+	if identityErr != nil {
+		return skillSourceCheckout{}, identityErr
+	}
+	if wellKnown {
+		return s.ensureLatestWellKnown(ctx, identity)
+	}
 	address, sourceKey, err := skillSourceStoreInput(source)
 	if err != nil {
 		return skillSourceCheckout{}, err
@@ -211,6 +231,13 @@ func (s *skillSourceStore) ensureLatestRepoLocked(ctx context.Context, address, 
 }
 
 func (s *skillSourceStore) withEnsuredRepo(ctx context.Context, source skillSourceSnapshot, fn func(skillSourceCheckout) error) error {
+	identity, wellKnown, identityErr := skillSourceWellKnownIdentityForSnapshot(source)
+	if identityErr != nil {
+		return identityErr
+	}
+	if wellKnown {
+		return s.withUpdatedWellKnown(ctx, identity, fn)
+	}
 	address, sourceKey, err := skillSourceStoreInput(source)
 	if err != nil {
 		return err
@@ -226,6 +253,13 @@ func (s *skillSourceStore) withEnsuredRepo(ctx context.Context, source skillSour
 }
 
 func (s *skillSourceStore) withUpdatedRepo(ctx context.Context, source skillSourceSnapshot, fn func(skillSourceCheckout) error) error {
+	identity, wellKnown, identityErr := skillSourceWellKnownIdentityForSnapshot(source)
+	if identityErr != nil {
+		return identityErr
+	}
+	if wellKnown {
+		return s.withUpdatedWellKnown(ctx, identity, fn)
+	}
 	address, sourceKey, err := skillSourceStoreInput(source)
 	if err != nil {
 		return err
@@ -241,6 +275,13 @@ func (s *skillSourceStore) withUpdatedRepo(ctx context.Context, source skillSour
 }
 
 func (s *skillSourceStore) inspectRepo(ctx context.Context, source skillSourceSnapshot) (skillSourceCheckout, error) {
+	identity, wellKnown, identityErr := skillSourceWellKnownIdentityForSnapshot(source)
+	if identityErr != nil {
+		return skillSourceCheckout{}, identityErr
+	}
+	if wellKnown {
+		return s.ensureLatestWellKnown(ctx, identity)
+	}
 	address, sourceKey, err := skillSourceStoreInput(source)
 	if err != nil {
 		return skillSourceCheckout{}, err
@@ -251,6 +292,13 @@ func (s *skillSourceStore) inspectRepo(ctx context.Context, source skillSourceSn
 }
 
 func (s *skillSourceStore) withInspectedRepo(ctx context.Context, source skillSourceSnapshot, fn func(skillSourceCheckout) error) error {
+	identity, wellKnown, identityErr := skillSourceWellKnownIdentityForSnapshot(source)
+	if identityErr != nil {
+		return identityErr
+	}
+	if wellKnown {
+		return s.withUpdatedWellKnown(ctx, identity, fn)
+	}
 	address, sourceKey, err := skillSourceStoreInput(source)
 	if err != nil {
 		return err
@@ -274,6 +322,13 @@ func (s *skillSourceStore) updateRepoLocked(ctx context.Context, address, source
 }
 
 func (s *skillSourceStore) readRepo(ctx context.Context, source skillSourceSnapshot) (skillSourceCheckout, error) {
+	identity, wellKnown, identityErr := skillSourceWellKnownIdentityForSnapshot(source)
+	if identityErr != nil {
+		return skillSourceCheckout{}, identityErr
+	}
+	if wellKnown {
+		return s.readWellKnown(ctx, identity)
+	}
 	address, sourceKey, err := skillSourceStoreInput(source)
 	if err != nil {
 		return skillSourceCheckout{}, err
@@ -293,6 +348,13 @@ func (s *skillSourceStore) readRepo(ctx context.Context, source skillSourceSnaps
 }
 
 func (s *skillSourceStore) refreshRepo(ctx context.Context, source skillSourceSnapshot) (skillSourceCheckout, error) {
+	identity, wellKnown, identityErr := skillSourceWellKnownIdentityForSnapshot(source)
+	if identityErr != nil {
+		return skillSourceCheckout{}, identityErr
+	}
+	if wellKnown {
+		return s.ensureLatestWellKnown(ctx, identity)
+	}
 	address, sourceKey, err := skillSourceStoreInput(source)
 	if err != nil {
 		return skillSourceCheckout{}, err
@@ -313,6 +375,13 @@ func (s *skillSourceStore) refreshRepo(ctx context.Context, source skillSourceSn
 }
 
 func (s *skillSourceStore) updateRepo(ctx context.Context, source skillSourceSnapshot) (skillSourceCheckout, error) {
+	identity, wellKnown, identityErr := skillSourceWellKnownIdentityForSnapshot(source)
+	if identityErr != nil {
+		return skillSourceCheckout{}, identityErr
+	}
+	if wellKnown {
+		return s.ensureLatestWellKnown(ctx, identity)
+	}
 	address, sourceKey, err := skillSourceStoreInput(source)
 	if err != nil {
 		return skillSourceCheckout{}, err

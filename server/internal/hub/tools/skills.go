@@ -178,7 +178,7 @@ func (c *SkillsCommand) SkillSourceErrors(scope, projectName string) map[string]
 
 func (c *SkillsCommand) setSkillSourceError(target skillsCommandTarget, sourceKey, message string) {
 	scopeKey := skillSourceErrorScopeKey(target.scope, target.projectName)
-	sourceKey = strings.ToLower(strings.TrimSpace(sourceKey))
+	sourceKey = skillSourceKeyMapKey(sourceKey)
 	message = strings.TrimSpace(message)
 	if sourceKey == "" {
 		return
@@ -556,7 +556,7 @@ func (c *SkillsCommand) previewSource(ctx context.Context, payload skillsCommand
 	lock := migration.Lock
 	existingIndex := -1
 	for index, source := range lock.Sources {
-		if strings.EqualFold(source.SourceKey, sourceKey) {
+		if skillSourceKeysEqual(source.SourceKey, sourceKey) {
 			existingIndex = index
 			if source.Source != normalizedSource {
 				return skillsCommandResponse{}, &skillsCommandError{
@@ -624,7 +624,7 @@ func (c *SkillsCommand) previewSource(ctx context.Context, payload skillsCommand
 		catalog := composeSkillSourceCatalog(lock, native, installed, nil)
 		eligible := map[string]bool{}
 		for _, source := range catalog.Sources {
-			if !strings.EqualFold(source.SourceKey, sourceKey) {
+			if !skillSourceKeysEqual(source.SourceKey, sourceKey) {
 				continue
 			}
 			for _, row := range source.Skills {
@@ -695,7 +695,7 @@ func (c *SkillsCommand) previewUpdate(ctx context.Context, payload skillsCommand
 	selectedCount := 0
 	var firstResolveError *skillsCommandError
 	for index, source := range lock.Sources {
-		if selectedKey != "" && !strings.EqualFold(source.SourceKey, selectedKey) {
+		if selectedKey != "" && !skillSourceKeysEqual(source.SourceKey, selectedKey) {
 			continue
 		}
 		selectedCount++
@@ -725,7 +725,7 @@ func (c *SkillsCommand) previewUpdate(ctx context.Context, payload skillsCommand
 		}
 		c.setSkillSourceError(target, source.SourceKey, "")
 		lock.Sources[index] = resolved
-		resolvedByKey[strings.ToLower(resolved.SourceKey)] = resolved
+		resolvedByKey[skillSourceKeyMapKey(resolved.SourceKey)] = resolved
 	}
 	if selectedCount == 0 {
 		return skillsCommandResponse{}, &skillsCommandError{Code: rp.CodeNotFound, Message: "skill source not found"}
@@ -748,7 +748,7 @@ func (c *SkillsCommand) previewUpdate(ctx context.Context, payload skillsCommand
 	var initialResults []skillsOperationItemResult
 	var previewSource skillSourceSnapshot
 	for _, source := range catalog.Sources {
-		resolved, refreshed := resolvedByKey[strings.ToLower(source.SourceKey)]
+		resolved, refreshed := resolvedByKey[skillSourceKeyMapKey(source.SourceKey)]
 		if !refreshed {
 			if selectedKey == "" {
 				for _, row := range source.Skills {
@@ -836,7 +836,7 @@ func (c *SkillsCommand) previewDeleteSource(payload skillsCommandPayload) (skill
 	var source skillSourceSnapshot
 	nextSources := make([]skillSourceSnapshot, 0, len(lock.Sources))
 	for _, candidate := range lock.Sources {
-		if strings.EqualFold(candidate.SourceKey, sourceKey) {
+		if skillSourceKeysEqual(candidate.SourceKey, sourceKey) {
 			found = true
 			source = candidate
 			continue
@@ -850,7 +850,7 @@ func (c *SkillsCommand) previewDeleteSource(payload skillsCommandPayload) (skill
 			address = entry.Source
 		}
 		_, ownerKey, normalizeErr := normalizeSkillGitSource(address)
-		if normalizeErr == nil && strings.EqualFold(ownerKey, sourceKey) {
+		if normalizeErr == nil && skillSourceKeysEqual(ownerKey, sourceKey) {
 			skills = append(skills, entry.Name)
 		}
 	}
