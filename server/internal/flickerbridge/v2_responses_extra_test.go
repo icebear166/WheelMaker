@@ -1,6 +1,7 @@
 package flickerbridge
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -312,5 +313,220 @@ func TestV2ResponsesEndpointResolvesPreviousResponseHistory(t *testing.T) {
 	}
 	if strings.Join(texts, ",") != "first,pong,second" {
 		t.Fatalf("resolved prompt texts = %v", texts)
+	}
+}
+
+func TestV2ResponsesEndpointResolvesPreviousFunctionCallName(t *testing.T) {
+	worker := &v2ResponsesToolHistoryWorker{}
+	proxy, err := newProxyServer(proxySettings{
+		Host:           "127.0.0.1",
+		Port:           17999,
+		MaxRequestSize: 1 << 20,
+	}, worker, []modelInfo{{
+		ID: "deepseek-v4-flash-0731", Name: "DeepSeek-V4-Flash 0731", APIFormat: "responses",
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	firstRequest := httptest.NewRequest(http.MethodPost, "/v1/responses", strings.NewReader(`{
+		"model":"deepseek-v4-flash-0731",
+		"input":"read the file",
+		"tools":[{"type":"function","name":"shell_command","parameters":{"type":"object"}}]
+	}`))
+	firstResponse := httptest.NewRecorder()
+	proxy.Handler.ServeHTTP(firstResponse, firstRequest)
+	if firstResponse.Code != http.StatusOK {
+		t.Fatalf("first status = %d, body = %s", firstResponse.Code, firstResponse.Body.String())
+	}
+	var first map[string]any
+	if err := json.Unmarshal(firstResponse.Body.Bytes(), &first); err != nil {
+		t.Fatal(err)
+	}
+	previousID := firstText(first["id"])
+	if previousID == "" {
+		t.Fatalf("first response has no id: %#v", first)
+	}
+
+	request := httptest.NewRequest(http.MethodPost, "/v1/responses", strings.NewReader(fmt.Sprintf(`{
+		"model":"deepseek-v4-flash-0731",
+		"previous_response_id":%q,
+		"input":[{"type":"function_call_output","call_id":"call_read","output":"contents"}]
+	}`, previousID)))
+	response := httptest.NewRecorder()
+	proxy.Handler.ServeHTTP(response, request)
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", response.Code, response.Body.String())
+	}
+
+	payload, _ := worker.payload.(map[string]any)
+	prompt, _ := payload["prompt"].([]any)
+	if len(prompt) != 3 {
+		t.Fatalf("resolved prompt = %#v, want previous user/tool call plus current tool result", prompt)
+	}
+	toolMessage, _ := prompt[2].(map[string]any)
+	content, _ := toolMessage["content"].([]any)
+	toolResult, _ := content[0].(map[string]any)
+	if firstText(toolResult["toolName"]) != "shell_command" {
+		t.Fatalf("resolved tool result = %#v, want inherited toolName", toolResult)
+	}
+}
+
+func TestV2ResponsesEndpointRejectsUnknownPreviousResponse(t *testing.T) {
+	worker := &v2ResponsesCaptureWorker{}
+	proxy, err := newProxyServer(proxySettings{
+		Host:           "127.0.0.1",
+		Port:           17999,
+		MaxRequestSize: 1 << 20,
+	}, worker, []modelInfo{{
+		ID: "deepseek-v4-flash-0731", Name: "DeepSeek-V4-Flash 0731", APIFormat: "responses",
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	request := httptest.NewRequest(http.MethodPost, "/v1/responses", strings.NewReader(`{
+		"model":"deepseek-v4-flash-0731",
+		"previous_response_id":"resp_missing",
+		"input":"continue"
+	}`))
+	response := httptest.NewRecorder()
+	proxy.Handler.ServeHTTP(response, request)
+	if response.Code != http.StatusBadRequest || !strings.Contains(response.Body.String(), "previous_response_id") {
+		t.Fatalf("status = %d, body = %s; want unresolved previous_response_id error", response.Code, response.Body.String())
+	}
+	if worker.requestCount != 0 {
+		t.Fatalf("worker request count = %d, want 0", worker.requestCount)
+	}
+}
+
+func TestV2ResponsesEndpointRejectsUnmatchedFunctionCallOutput(t *testing.T) {
+	worker := &v2ResponsesCaptureWorker{}
+	proxy, err := newProxyServer(proxySettings{
+		Host:           "127.0.0.1",
+		Port:           17999,
+		MaxRequestSize: 1 << 20,
+	}, worker, []modelInfo{{
+		ID: "deepseek-v4-flash-0731", Name: "DeepSeek-V4-Flash 0731", APIFormat: "responses",
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	firstRequest := httptest.NewRequest(http.MethodPost, "/v1/responses", strings.NewReader(`{
+		"model":"deepseek-v4-flash-0731",
+		"input":"hello"
+	}`))
+	firstResponse := httptest.NewRecorder()
+	proxy.Handler.ServeHTTP(firstResponse, firstRequest)
+	if firstResponse.Code != http.StatusOK {
+		t.Fatalf("first status = %d, body = %s", firstResponse.Code, firstResponse.Body.String())
+	}
+	var first map[string]any
+	if err := json.Unmarshal(firstResponse.Body.Bytes(), &first); err != nil {
+		t.Fatal(err)
+	}
+	previousID := firstText(first["id"])
+	if previousID == "" {
+		t.Fatalf("first response has no id: %#v", first)
+	}
+
+	request := httptest.NewRequest(http.MethodPost, "/v1/responses", strings.NewReader(fmt.Sprintf(`{
+		"model":"deepseek-v4-flash-0731",
+		"previous_response_id":%q,
+		"input":[{"type":"function_call_output","call_id":"call_missing","output":"contents"}]
+	}`, previousID)))
+	response := httptest.NewRecorder()
+	proxy.Handler.ServeHTTP(response, request)
+	if response.Code != http.StatusBadRequest || !strings.Contains(response.Body.String(), "call_missing") {
+		t.Fatalf("status = %d, body = %s; want unmatched function_call_output error", response.Code, response.Body.String())
+	}
+	if worker.requestCount != 1 {
+		t.Fatalf("worker request count = %d, want only the first request", worker.requestCount)
+	}
+}
+
+type v2ResponsesToolHistoryWorker struct {
+	payload      any
+	requestCount int
+}
+
+func (worker *v2ResponsesToolHistoryWorker) Request(
+	_ context.Context,
+	_, _ string,
+	payload any,
+) (<-chan workerFrame, error) {
+	worker.requestCount++
+	worker.payload = payload
+	frames := make(chan workerFrame, 8)
+	parts := []string{
+		`{"type":"text-start","id":"text_1"}`,
+		`{"type":"text-delta","id":"text_1","delta":"done"}`,
+		`{"type":"text-end","id":"text_1"}`,
+		`{"type":"finish","finishReason":{"unified":"stop","raw":"stop"}}`,
+	}
+	if worker.requestCount == 1 {
+		parts = []string{
+			`{"type":"tool-input-start","id":"call_read","toolCallId":"call_read","toolName":"shell_command"}`,
+			`{"type":"tool-input-delta","id":"call_read","delta":"{\"command\":\"Get-Content README.md\"}"}`,
+			`{"type":"tool-input-end","id":"call_read"}`,
+			`{"type":"tool-call","toolCallId":"call_read","toolName":"shell_command","input":{"command":"Get-Content README.md"}}`,
+			`{"type":"finish","finishReason":{"unified":"tool-calls","raw":"tool_use"}}`,
+		}
+	}
+	for _, part := range parts {
+		frames <- workerFrame{Type: "part", Part: json.RawMessage(part)}
+	}
+	close(frames)
+	return frames, nil
+}
+
+type v2ResponsesReasoningOnlyWorker struct{}
+
+func (*v2ResponsesReasoningOnlyWorker) Request(
+	context.Context,
+	string,
+	string,
+	any,
+) (<-chan workerFrame, error) {
+	frames := make(chan workerFrame, 4)
+	for _, part := range []string{
+		`{"type":"reasoning-start","id":"reason_1"}`,
+		`{"type":"reasoning-delta","id":"reason_1","delta":"I should call another tool."}`,
+		`{"type":"reasoning-end","id":"reason_1"}`,
+		`{"type":"finish","finishReason":{"unified":"stop","raw":"stop"}}`,
+	} {
+		frames <- workerFrame{Type: "part", Part: json.RawMessage(part)}
+	}
+	close(frames)
+	return frames, nil
+}
+
+func TestV2ResponsesEndpointRejectsReasoningOnlyTerminal(t *testing.T) {
+	for _, stream := range []bool{false, true} {
+		t.Run(map[bool]string{false: "json", true: "stream"}[stream], func(t *testing.T) {
+			proxy, err := newProxyServer(proxySettings{
+				Host:           "127.0.0.1",
+				Port:           17999,
+				MaxRequestSize: 1 << 20,
+			}, &v2ResponsesReasoningOnlyWorker{}, []modelInfo{{
+				ID: "deepseek-v4-flash-0731", Name: "DeepSeek-V4-Flash 0731", APIFormat: "responses",
+			}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			body := fmt.Sprintf(`{"model":"deepseek-v4-flash-0731","input":"answer","stream":%t}`, stream)
+			request := httptest.NewRequest(http.MethodPost, "/v1/responses", strings.NewReader(body))
+			response := httptest.NewRecorder()
+			proxy.Handler.ServeHTTP(response, request)
+			if stream {
+				if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), `"type":"response.failed"`) ||
+					strings.Contains(response.Body.String(), `"type":"response.completed"`) {
+					t.Fatalf("status = %d, body = %s; want streamed response.failed", response.Code, response.Body.String())
+				}
+				return
+			}
+			if response.Code != http.StatusBadGateway || !strings.Contains(response.Body.String(), "without assistant text or tool call") {
+				t.Fatalf("status = %d, body = %s; want terminal output error", response.Code, response.Body.String())
+			}
+		})
 	}
 }

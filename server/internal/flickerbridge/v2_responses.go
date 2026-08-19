@@ -118,6 +118,10 @@ func mergeV2ResponsePrompts(previous, current []any) []any {
 }
 
 func responsesRequestToV3(request map[string]any) (v2ResponsesRequestConversion, error) {
+	return responsesRequestToV3WithCallNames(request, nil)
+}
+
+func responsesRequestToV3WithCallNames(request map[string]any, inheritedCallNames map[string]string) (v2ResponsesRequestConversion, error) {
 	model := firstText(request["model"])
 	if model == "" {
 		return v2ResponsesRequestConversion{}, errors.New("model is required")
@@ -136,7 +140,13 @@ func responsesRequestToV3(request map[string]any) (v2ResponsesRequestConversion,
 	if !ok || input == nil {
 		return v2ResponsesRequestConversion{}, errors.New("input is required")
 	}
-	callNames := responsesFunctionCallNames(input)
+	callNames := make(map[string]string, len(inheritedCallNames))
+	for callID, name := range inheritedCallNames {
+		callNames[callID] = name
+	}
+	for callID, name := range responsesFunctionCallNames(input) {
+		callNames[callID] = name
+	}
 	compaction := false
 	convertedInput, err := responsesInputToV3(input, callNames, &compaction)
 	if err != nil {
@@ -371,13 +381,17 @@ func responsesInputToV3(raw any, callNames map[string]string, compaction *bool) 
 			if callID == "" {
 				return nil, errors.New("function_call_output requires call_id")
 			}
+			toolName := firstText(callNames[callID])
+			if toolName == "" {
+				return nil, fmt.Errorf("function_call_output %q has no matching function_call", callID)
+			}
 			output := responsesToolResultOutput(item["output"])
 			result = append(result, map[string]any{
 				"role": "tool",
 				"content": []any{map[string]any{
 					"type":       "tool-result",
 					"toolCallId": callID,
-					"toolName":   callNames[callID],
+					"toolName":   toolName,
 					"output":     output,
 				}},
 			})
@@ -1623,6 +1637,16 @@ func (writer *v2ResponsesWriter) stop(compaction bool) map[string]any {
 	return response
 }
 
+func (writer *v2ResponsesWriter) terminalError(compaction bool) error {
+	if writer.incompleteReason != "" || len(writer.toolOrder) > 0 || strings.TrimSpace(strings.Join(writer.outputText, "")) != "" {
+		return nil
+	}
+	if compaction && strings.TrimSpace(strings.Join(writer.reasoningText, "")) != "" {
+		return nil
+	}
+	return errors.New("AI SDK completed without assistant text or tool call")
+}
+
 func (writer *v2ResponsesWriter) fail(err error) {
 	response := writer.base("failed", []any{})
 	response["error"] = map[string]any{"type": fmt.Sprintf("%T", err), "message": err.Error()}
@@ -1661,21 +1685,30 @@ func (s *proxyServer) handleResponses(response http.ResponseWriter, request *htt
 		return
 	}
 	input["model"] = model.ID
-	conversion, err := responsesRequestToV3(input)
+	var previousPrompt []any
+	var inheritedCallNames map[string]string
+	var err error
+	if previousID := firstText(input["previous_response_id"]); previousID != "" {
+		history, ok := s.responses.get(previousID)
+		if !ok {
+			writeResponsesError(response, http.StatusBadRequest, fmt.Sprintf("previous_response_id %q cannot be resolved", previousID))
+			return
+		}
+		previousPrompt, err = history.promptWithOutput()
+		if err != nil {
+			writeResponsesError(response, http.StatusBadRequest, fmt.Sprintf("previous_response_id %q cannot be resolved: %v", previousID, err))
+			return
+		}
+		inheritedCallNames = responsesFunctionCallNames(history.output)
+	}
+	conversion, err := responsesRequestToV3WithCallNames(input, inheritedCallNames)
 	if err != nil {
 		writeResponsesError(response, http.StatusBadRequest, err.Error())
 		return
 	}
-	if previousID := firstText(input["previous_response_id"]); previousID != "" {
-		if history, ok := s.responses.get(previousID); ok {
-			previousPrompt, err := history.promptWithOutput()
-			if err != nil {
-				writeResponsesError(response, http.StatusBadRequest, fmt.Sprintf("previous_response_id %q cannot be resolved: %v", previousID, err))
-				return
-			}
-			currentPrompt, _ := conversion.payload["prompt"].([]any)
-			conversion.payload["prompt"] = mergeV2ResponsePrompts(previousPrompt, currentPrompt)
-		}
+	if len(previousPrompt) > 0 {
+		currentPrompt, _ := conversion.payload["prompt"].([]any)
+		conversion.payload["prompt"] = mergeV2ResponsePrompts(previousPrompt, currentPrompt)
 	}
 	frames, err := s.worker.Request(request.Context(), model.ID, conversion.effort, conversion.payload)
 	if err != nil {
@@ -1699,6 +1732,11 @@ func (s *proxyServer) handleResponses(response http.ResponseWriter, request *htt
 	}
 	if !writer.finishSeen {
 		writeResponsesError(response, http.StatusBadGateway, "AI SDK stream ended without a finish part")
+		return
+	}
+	if err := writer.terminalError(conversion.compaction); err != nil {
+		logV2WorkerFailure(s.diagnosticWriter, summarizeV2Request(model.ID, conversion.effort, conversion.payload), err)
+		writeResponsesError(response, http.StatusBadGateway, err.Error())
 		return
 	}
 	result := writer.stop(conversion.compaction)
@@ -1739,6 +1777,15 @@ func (s *proxyServer) writeResponsesStream(response http.ResponseWriter, request
 	if !writer.finishSeen {
 		if request.Context().Err() == nil {
 			writer.fail(errors.New("AI SDK stream ended without a finish part"))
+			fmt.Fprint(response, "data: [DONE]\n\n")
+			flusher.Flush()
+		}
+		return
+	}
+	if err := writer.terminalError(compaction); err != nil {
+		if request.Context().Err() == nil {
+			logV2WorkerFailure(s.diagnosticWriter, diagnostic, err)
+			writer.fail(err)
 			fmt.Fprint(response, "data: [DONE]\n\n")
 			flusher.Flush()
 		}

@@ -2,7 +2,11 @@ package flickerbridge
 
 import (
 	"context"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"os"
+	"strings"
 	"testing"
 	"time"
 )
@@ -106,4 +110,82 @@ func TestV2ResponsesDeepSeekFlashRealToolAndImageProbe(t *testing.T) {
 	if !imageFinished {
 		t.Log("real image request ended without a finish part")
 	}
+
+	proxy, err := newProxyServer(settings, worker, ready.Catalog)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tools := []any{map[string]any{
+		"type":        "function",
+		"name":        "read_file",
+		"description": "Read a UTF-8 text file.",
+		"parameters": map[string]any{"type": "object", "properties": map[string]any{
+			"path": map[string]any{"type": "string"},
+		}, "required": []string{"path"}},
+	}}
+	post := func(payload map[string]any) (int, map[string]any) {
+		raw, err := json.Marshal(payload)
+		if err != nil {
+			t.Fatal(err)
+		}
+		request := httptest.NewRequest(http.MethodPost, "/v1/responses", strings.NewReader(string(raw)))
+		response := httptest.NewRecorder()
+		proxy.Handler.ServeHTTP(response, request)
+		var decoded map[string]any
+		if err := json.Unmarshal(response.Body.Bytes(), &decoded); err != nil {
+			t.Fatalf("decode real Responses body: %v; body=%s", err, response.Body.String())
+		}
+		return response.Code, decoded
+	}
+	status, first := post(map[string]any{
+		"model":       "deepseek-v4-flash-0731",
+		"input":       "Call read_file exactly once with path README.md. After receiving its result, answer the user with a short final response.",
+		"tools":       tools,
+		"tool_choice": map[string]any{"type": "function", "name": "read_file"},
+	})
+	if status != http.StatusOK {
+		t.Fatalf("real first Responses status = %d, body=%#v", status, first)
+	}
+	previousID := firstText(first["id"])
+	callID := ""
+	firstOutput, _ := first["output"].([]any)
+	for _, rawItem := range firstOutput {
+		item, _ := rawItem.(map[string]any)
+		if firstText(item["type"]) == "function_call" {
+			callID = firstText(item["call_id"])
+			break
+		}
+	}
+	if previousID == "" || callID == "" {
+		t.Fatalf("real first Responses output omitted response/tool call: %#v", first)
+	}
+	status, second := post(map[string]any{
+		"model":                "deepseek-v4-flash-0731",
+		"previous_response_id": previousID,
+		"input": []any{map[string]any{
+			"type": "function_call_output", "call_id": callID, "output": "README contents: WheelMaker",
+		}},
+		"tools":       tools,
+		"tool_choice": "none",
+	})
+	if status != http.StatusOK {
+		t.Fatalf("real continued Responses status = %d, body=%#v", status, second)
+	}
+	finalText := ""
+	secondOutput, _ := second["output"].([]any)
+	for _, rawItem := range secondOutput {
+		item, _ := rawItem.(map[string]any)
+		if firstText(item["type"]) != "message" {
+			continue
+		}
+		content, _ := item["content"].([]any)
+		for _, rawPart := range content {
+			part, _ := rawPart.(map[string]any)
+			finalText += firstText(part["text"])
+		}
+	}
+	if strings.TrimSpace(finalText) == "" {
+		t.Fatalf("real continued Responses output has no final text: %#v", second)
+	}
+	t.Logf("real continued Responses final text=%q", finalText)
 }
