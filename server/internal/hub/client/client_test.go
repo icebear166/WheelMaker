@@ -10212,8 +10212,10 @@ func TestCodexFamilyRecoveryUsesIsolatedHomes(t *testing.T) {
 	t.Setenv("USERPROFILE", userDir)
 	nativeHome := filepath.Join(userDir, ".codex")
 	cxHome := filepath.Join(stateDir, ".data", "cx-deepseek")
+	cxFlickerHome := filepath.Join(stateDir, ".data", "cx-flicker")
 	writeCodexSessionFixtureAtHome(t, nativeHome, "native-session", cwd, "Native", "native reply")
 	writeCodexSessionFixtureAtHome(t, cxHome, "cx-session", cwd, "DeepSeek", "cx reply")
+	writeCodexSessionFixtureAtHome(t, cxFlickerHome, "cx-flicker-session", cwd, "Flicker", "cx flicker reply")
 
 	store, err := NewStore(filepath.Join(t.TempDir(), "client.sqlite3"))
 	if err != nil {
@@ -10235,10 +10237,21 @@ func TestCodexFamilyRecoveryUsesIsolatedHomes(t *testing.T) {
 	if sessions := cx["sessions"].([]recoverySession); sessions[0].AgentType != "cx-deepseek" {
 		t.Fatalf("cx session AgentType = %q", sessions[0].AgentType)
 	}
+	cxFlicker, err := client.recovery().ListResumableSessions(context.Background(), "cx-flicker")
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertRecoverySessionIDs(t, cxFlicker, "cx-flicker-session")
+	if sessions := cxFlicker["sessions"].([]recoverySession); sessions[0].AgentType != "cx-flicker" {
+		t.Fatalf("cx-flicker session AgentType = %q", sessions[0].AgentType)
+	}
 
 	withoutState := &sessionRecovery{client: &Client{}}
 	if _, err := withoutState.sourceFor("cx-deepseek"); err == nil || !strings.Contains(err.Error(), "state directory") {
 		t.Fatalf("sourceFor(cx-deepseek) error = %v, want missing state directory", err)
+	}
+	if _, err := withoutState.sourceFor("cx-flicker"); err == nil || !strings.Contains(err.Error(), "state directory") {
+		t.Fatalf("sourceFor(cx-flicker) error = %v, want missing state directory", err)
 	}
 }
 

@@ -312,6 +312,9 @@ const QAQ = {
             epModelName: "DeepSeek-V4-Flash 0731",
             apiFormat: "openai",
             defaultThinkingLevel: "high",
+            inputModalities: ["text"],
+            supportsTools: true,
+            supportsParallelToolCalls: true,
             variants: {high: {reasoning: {enabled: true, effort: "high"}}}
           }
         },
@@ -348,6 +351,17 @@ LQ();var UM4=H0(l4(),1);import vd2 from"fs";
 		ready.Catalog[0].ID != "claude-opus-5" ||
 		!slices.Equal(v2StringSlice(ready.Catalog[0].Metadata["effortLevels"]), []string{"low", "medium", "high", "xhigh", "max"}) {
 		t.Fatalf("worker catalog = %#v, want Claude and DeepSeek 0.3.16 catalog", ready.Catalog)
+	}
+	var flash modelInfo
+	for _, model := range ready.Catalog {
+		if model.ID == "deepseek-v4-flash-0731" {
+			flash = model
+			break
+		}
+	}
+	if !slices.Equal(v2StringSlice(flash.Metadata["inputModalities"]), []string{"text"}) ||
+		flash.Metadata["supportsTools"] != true || flash.Metadata["supportsParallelToolCalls"] != true {
+		t.Fatalf("flash capabilities = %#v", flash.Metadata)
 	}
 	index, err := buildModelIndex(ready.Catalog, nil)
 	if err != nil {

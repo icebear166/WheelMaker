@@ -5725,6 +5725,9 @@ func TestHubReloadAgentRuntimePublishesCCFlickerOnlyWhileBridgeIsReady(t *testin
 			factory.Register(rp.ACPProviderCCFlicker, func(context.Context, string) (agent.Instance, error) {
 				return nil, nil
 			})
+			factory.Register(rp.ACPProviderCXFlicker, func(context.Context, string) (agent.Instance, error) {
+				return nil, nil
+			})
 		}
 		return factory
 	}
@@ -5737,8 +5740,8 @@ func TestHubReloadAgentRuntimePublishesCCFlickerOnlyWhileBridgeIsReady(t *testin
 	if options.KimiAPIKey != "kimi-live-key" || options.FlickerAPIKey != defaultFlickerBridgeAPIKey {
 		t.Fatalf("factory options = %+v, want latest Kimi key and ready Flicker gate", options)
 	}
-	if !slices.Contains(sharedFactory.Names(), "cc-flicker") {
-		t.Fatalf("shared factory names = %v, want ready cc-flicker", sharedFactory.Names())
+	if !slices.Contains(sharedFactory.Names(), "cc-flicker") || !slices.Contains(sharedFactory.Names(), "cx-flicker") {
+		t.Fatalf("shared factory names = %v, want ready Flicker providers", sharedFactory.Names())
 	}
 
 	bridge.mu.Lock()
@@ -5747,8 +5750,8 @@ func TestHubReloadAgentRuntimePublishesCCFlickerOnlyWhileBridgeIsReady(t *testin
 	if err := h.reloadAgentRuntime(context.Background(), map[hubconfig.APIKeyName]string{}); err != nil {
 		t.Fatal(err)
 	}
-	if options.FlickerAPIKey != "" || slices.Contains(sharedFactory.Names(), "cc-flicker") {
-		t.Fatalf("stopped Bridge reload kept cc-flicker: options=%+v names=%v", options, sharedFactory.Names())
+	if options.FlickerAPIKey != "" || slices.Contains(sharedFactory.Names(), "cc-flicker") || slices.Contains(sharedFactory.Names(), "cx-flicker") {
+		t.Fatalf("stopped Bridge reload kept Flicker providers: options=%+v names=%v", options, sharedFactory.Names())
 	}
 }
 

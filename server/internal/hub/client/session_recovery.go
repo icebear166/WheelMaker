@@ -208,7 +208,7 @@ func (r *sessionRecovery) sourceFor(agentType string) (recoverySource, error) {
 			return nil, err
 		}
 		return codexRecoverySource{agentType: agentType, homeDir: filepath.Join(home, ".codex")}, nil
-	case "cx-deepseek":
+	case "cx-deepseek", "cx-flicker":
 		if r.client.stateDir == "" {
 			return nil, fmt.Errorf("state directory is required for %s recovery", agentType)
 		}

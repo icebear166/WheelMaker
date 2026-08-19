@@ -81,6 +81,23 @@ func TestCXDeepSeekProviderIdentity(t *testing.T) {
 	}
 }
 
+func TestCXFlickerProviderIdentity(t *testing.T) {
+	provider, ok := ParseACPProvider(" CX-Flicker ")
+	if !ok || provider != ACPProviderCXFlicker {
+		t.Fatalf("ParseACPProvider() = (%q, %v), want (%q, true)", provider, ok, ACPProviderCXFlicker)
+	}
+
+	count := 0
+	for _, name := range ACPProviderNames() {
+		if name == string(ACPProviderCXFlicker) {
+			count++
+		}
+	}
+	if count != 1 {
+		t.Fatalf("ACPProviderNames() = %v, want one %q", ACPProviderNames(), ACPProviderCXFlicker)
+	}
+}
+
 func TestSessionUpdateParams_JSONParity(t *testing.T) {
 	in := SessionUpdateParams{SessionID: "s1"}
 	b, err := json.Marshal(in)

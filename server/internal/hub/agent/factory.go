@@ -149,6 +149,10 @@ func newACPFactoryWithOptions(options ACPFactoryOptions, available func(ACPProvi
 		}
 	}
 	if flickerKey := strings.TrimSpace(options.FlickerAPIKey); flickerKey != "" {
+		cxFlickerProvider := NewCXFlickerProviderWithMCP(options.StateDir, flickerKey, options.FlickerModelStore, options.MCPServers)
+		if available(cxFlickerProvider) {
+			f.Register(protocol.ACPProviderCXFlicker, codexappInstanceCreator(cxFlickerProvider))
+		}
 		flickerProvider := NewCCFlickerProvider(options.StateDir, flickerKey, options.FlickerModelStore)
 		if available(flickerProvider) {
 			f.Register(protocol.ACPProviderCCFlicker, ccFlickerInstanceCreator(flickerProvider))

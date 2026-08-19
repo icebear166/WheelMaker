@@ -69,6 +69,8 @@ func providerPresetByName(name string) (ACPProviderPreset, bool) {
 		return CodexProviderPreset, true
 	case CXDeepSeekProviderPreset.Name:
 		return CXDeepSeekProviderPreset, true
+	case CXFlickerProviderPreset.Name:
+		return CXFlickerProviderPreset, true
 	case ClaudeACPProviderPreset.Name:
 		return ClaudeACPProviderPreset, true
 	case CopilotACPProviderPreset.Name:

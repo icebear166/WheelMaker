@@ -6,6 +6,7 @@
 const AGENT_TAG_VARIANT_INDEX: Record<string, number> = {
   codex: 0,
   'cx-deepseek': 0,
+  'cx-flicker': 0,
   copilot: 1,
   claude: 2,
   opencode: 3,

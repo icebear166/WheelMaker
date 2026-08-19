@@ -35,6 +35,13 @@ describe('cx.deepseek agent presentation', () => {
   });
 });
 
+describe('cx.flicker agent presentation', () => {
+  it('uses the short display label and Codex behavior', () => {
+    expect(agentDisplayLabel('cx-flicker')).toBe('cx.flicker');
+    expect(isCodexAppAgentType(' CX-Flicker ')).toBe(true);
+  });
+});
+
 describe('agent capsule labels', () => {
   it('normalizes capsule labels to lowercase', () => {
     expect(agentDisplayLabel('Codex')).toBe('codex');

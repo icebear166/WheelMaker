@@ -6,7 +6,7 @@ function normalizeAgentTypeName(value?: string | null): string {
 
 export function isCodexAppAgentType(agentType?: string | null): boolean {
   const normalized = normalizeAgentTypeName(agentType).toLowerCase();
-  return normalized === 'codex' || normalized === 'cx-deepseek';
+  return normalized === 'codex' || normalized === 'cx-deepseek' || normalized === 'cx-flicker';
 }
 
 export type AgentChoiceNode = {agentType: string; label: string};
@@ -20,6 +20,9 @@ export function agentDisplayLabel(agentType?: string | null): string {
       break;
     case 'cx-deepseek':
       label = 'cx.deepseek';
+      break;
+    case 'cx-flicker':
+      label = 'cx.flicker';
       break;
     case 'cc-deepseek':
       label = 'cc · deepseek';

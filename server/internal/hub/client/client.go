@@ -2724,7 +2724,7 @@ func (c *Client) syncNativeArchiveState(ctx context.Context, agentType, sessionI
 
 func isCodexAppAgentType(agentType string) bool {
 	switch strings.ToLower(normalizeAgentType(agentType)) {
-	case string(acp.ACPProviderCodex), string(acp.ACPProviderCXDeepSeek):
+	case string(acp.ACPProviderCodex), string(acp.ACPProviderCXDeepSeek), string(acp.ACPProviderCXFlicker):
 		return true
 	default:
 		return false

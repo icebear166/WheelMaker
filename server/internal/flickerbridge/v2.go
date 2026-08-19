@@ -561,11 +561,16 @@ function catalogEntry(id, metadata) {
     effortLevels: Object.keys(variants),
     defaultThinkingLevel: String(source.defaultThinkingLevel || ""),
   };
-  for (const key of ["contextWindow", "maxOutputTokens", "supportsReasoning", "supportsTools"]) {
+  for (const key of ["contextWindow", "maxOutputTokens", "supportsReasoning", "supportsTools", "supportsParallelToolCalls"]) {
     if (source[key] !== undefined &&
         (typeof source[key] === "string" || typeof source[key] === "number" || typeof source[key] === "boolean")) {
       capabilities[key] = source[key];
     }
+  }
+  const inputModalities = stringArray(source.inputModalities || source.input_modalities);
+  if (inputModalities.length > 0) capabilities.inputModalities = inputModalities;
+  for (const key of ["supportsImages", "supportsFiles"]) {
+    if (typeof source[key] === "boolean") capabilities[key] = source[key];
   }
   return {
     id,
@@ -1780,25 +1785,22 @@ func streamAnthropicSSE(requestedModel string, frames <-chan workerFrame, events
 	}
 
 	for frame := range frames {
-		if frame.Type == "error" {
-			return &workerRequestError{frame: frame}
-		}
-		if frame.Type != "part" {
-			continue
-		}
-		part, err := decodeV3Part(frame.Part)
+		part, err := decodeV2StreamPart(frame)
 		if err != nil {
 			return err
 		}
-		partType := v2StringValue(part["type"])
-		partID := v2StringValue(part["id"])
+		if part.typeName == "error" {
+			return &workerRequestError{frame: frame}
+		}
+		partType := part.typeName
+		partID := part.id
 		switch partType {
 		case "response-metadata":
-			if value := v2StringValue(part["id"]); value != "" {
-				messageID = value
+			if part.id != "" {
+				messageID = part.id
 			}
-			if value := v2StringValue(part["modelId"]); value != "" {
-				model = value
+			if part.model != "" {
+				model = part.model
 			}
 			startMessage()
 		case "stream-start", "tool-call":
@@ -1827,7 +1829,7 @@ func streamAnthropicSSE(requestedModel string, frames <-chan workerFrame, events
 			if block == nil {
 				return fmt.Errorf("%s arrived before its start event", partType)
 			}
-			if delta := v2StringValue(part["delta"]); delta != "" {
+			if delta := part.delta; delta != "" {
 				deltaType := "text_delta"
 				deltaValue := map[string]any{"type": deltaType, "text": delta}
 				if block.Type == "thinking" {
@@ -1842,7 +1844,7 @@ func streamAnthropicSSE(requestedModel string, frames <-chan workerFrame, events
 					},
 				}
 			}
-			if signature := providerSignature(part); signature != "" {
+			if signature := part.signature; signature != "" {
 				events <- v2SSEEvent{
 					Event: "content_block_delta",
 					Data: map[string]any{
@@ -1876,7 +1878,7 @@ func streamAnthropicSSE(requestedModel string, frames <-chan workerFrame, events
 					"content_block": map[string]any{
 						"type":  "tool_use",
 						"id":    partID,
-						"name":  mapping.Claude(v2StringValue(part["toolName"])),
+						"name":  mapping.Claude(part.toolName),
 						"input": map[string]any{},
 					},
 				},
@@ -1894,7 +1896,7 @@ func streamAnthropicSSE(requestedModel string, frames <-chan workerFrame, events
 					"index": block.Index,
 					"delta": map[string]any{
 						"type":         "input_json_delta",
-						"partial_json": v2StringValue(part["delta"]),
+						"partial_json": part.delta,
 					},
 				},
 			}
@@ -1909,8 +1911,6 @@ func streamAnthropicSSE(requestedModel string, frames <-chan workerFrame, events
 				Data:  map[string]any{"type": "content_block_stop", "index": block.Index},
 			}
 			delete(blocks, partID)
-		case "error":
-			return fmt.Errorf("AI SDK stream failed: %s", v2StringValue(part["error"]))
 		case "finish":
 			startMessage()
 			finished = true
@@ -1919,11 +1919,11 @@ func streamAnthropicSSE(requestedModel string, frames <-chan workerFrame, events
 				Data: map[string]any{
 					"type": "message_delta",
 					"delta": map[string]any{
-						"stop_reason":   finishStopReason(part["finishReason"]),
+						"stop_reason":   finishStopReason(part.finish),
 						"stop_sequence": nil,
 					},
 					"usage": map[string]any{
-						"output_tokens": usageTotal(nestedValue(part, "usage", "outputTokens")),
+						"output_tokens": usageTotal(part.usage["outputTokens"]),
 					},
 				},
 			}
@@ -1949,25 +1949,22 @@ func anthropicMessageFromV3(requestedModel string, frames <-chan workerFrame, ma
 	completedTools := make(map[string]struct{})
 	finished := false
 	for frame := range frames {
-		if frame.Type == "error" {
-			return anthropicMessage{}, errors.New(frame.Error)
-		}
-		if frame.Type != "part" {
-			continue
-		}
-		part, err := decodeV3Part(frame.Part)
+		part, err := decodeV2StreamPart(frame)
 		if err != nil {
 			return anthropicMessage{}, err
 		}
-		partType := v2StringValue(part["type"])
-		partID := v2StringValue(part["id"])
+		if part.typeName == "error" {
+			return anthropicMessage{}, errors.New(part.errorString)
+		}
+		partType := part.typeName
+		partID := part.id
 		switch partType {
 		case "response-metadata":
-			if value := v2StringValue(part["id"]); value != "" {
-				message.ID = value
+			if part.id != "" {
+				message.ID = part.id
 			}
-			if value := v2StringValue(part["modelId"]); value != "" {
-				message.Model = value
+			if part.model != "" {
+				message.Model = part.model
 			}
 		case "text-start":
 			block := map[string]any{"type": "text", "text": ""}
@@ -1978,7 +1975,7 @@ func anthropicMessageFromV3(requestedModel string, frames <-chan workerFrame, ma
 			if state == nil {
 				return anthropicMessage{}, errors.New("text-delta arrived before text-start")
 			}
-			state.Block["text"] = v2StringValue(state.Block["text"]) + v2StringValue(part["delta"])
+			state.Block["text"] = v2StringValue(state.Block["text"]) + part.delta
 		case "reasoning-start":
 			block := map[string]any{"type": "thinking", "thinking": "", "signature": ""}
 			blocks[partID] = &outputBlockState{Type: "thinking", Block: block}
@@ -1988,15 +1985,15 @@ func anthropicMessageFromV3(requestedModel string, frames <-chan workerFrame, ma
 			if state == nil {
 				return anthropicMessage{}, errors.New("reasoning-delta arrived before reasoning-start")
 			}
-			state.Block["thinking"] = v2StringValue(state.Block["thinking"]) + v2StringValue(part["delta"])
-			if signature := providerSignature(part); signature != "" {
+			state.Block["thinking"] = v2StringValue(state.Block["thinking"]) + part.delta
+			if signature := part.signature; signature != "" {
 				state.Block["signature"] = signature
 			}
 		case "tool-input-start":
 			block := map[string]any{
 				"type":  "tool_use",
 				"id":    partID,
-				"name":  mapping.Claude(v2StringValue(part["toolName"])),
+				"name":  mapping.Claude(part.toolName),
 				"input": map[string]any{},
 			}
 			blocks[partID] = &outputBlockState{Type: "tool_use", Block: block}
@@ -2006,7 +2003,7 @@ func anthropicMessageFromV3(requestedModel string, frames <-chan workerFrame, ma
 			if state == nil {
 				return anthropicMessage{}, errors.New("tool-input-delta arrived before tool-input-start")
 			}
-			state.PartialJSON.WriteString(v2StringValue(part["delta"]))
+			state.PartialJSON.WriteString(part.delta)
 		case "tool-input-end":
 			state := blocks[partID]
 			if state == nil {
@@ -2021,11 +2018,11 @@ func anthropicMessageFromV3(requestedModel string, frames <-chan workerFrame, ma
 			state.Block["input"] = input
 			completedTools[partID] = struct{}{}
 		case "tool-call":
-			toolCallID := v2StringValue(part["toolCallId"])
+			toolCallID := part.toolCallID
 			if _, exists := completedTools[toolCallID]; exists {
 				continue
 			}
-			input := part["input"]
+			input := part.input
 			if encoded, ok := input.(string); ok {
 				if err := json.Unmarshal([]byte(encoded), &input); err != nil {
 					return anthropicMessage{}, fmt.Errorf("invalid tool-call input: %w", err)
@@ -2037,18 +2034,16 @@ func anthropicMessageFromV3(requestedModel string, frames <-chan workerFrame, ma
 			message.Content = append(message.Content, map[string]any{
 				"type":  "tool_use",
 				"id":    toolCallID,
-				"name":  mapping.Claude(v2StringValue(part["toolName"])),
+				"name":  mapping.Claude(part.toolName),
 				"input": input,
 			})
 			completedTools[toolCallID] = struct{}{}
-		case "error":
-			return anthropicMessage{}, fmt.Errorf("AI SDK stream failed: %s", v2StringValue(part["error"]))
 		case "finish":
 			finished = true
-			message.StopReason = finishStopReason(part["finishReason"])
+			message.StopReason = finishStopReason(part.finish)
 			message.Usage = anthropicUsage{
-				InputTokens:  usageTotal(nestedValue(part, "usage", "inputTokens")),
-				OutputTokens: usageTotal(nestedValue(part, "usage", "outputTokens")),
+				InputTokens:  usageTotal(part.usage["inputTokens"]),
+				OutputTokens: usageTotal(part.usage["outputTokens"]),
 			}
 		}
 	}
@@ -2151,6 +2146,8 @@ func newProxyServer(settings proxySettings, worker workerBackend, catalog []mode
 	mux.HandleFunc("/v1/models", server.handleModels)
 	mux.HandleFunc("/v1/messages", server.handleMessages)
 	mux.HandleFunc("/v1/messages/count_tokens", server.handleCountTokens)
+	mux.HandleFunc("/v1/responses", server.handleResponses)
+	mux.HandleFunc("/responses", server.handleResponses)
 	return &http.Server{
 		Addr:              net.JoinHostPort(settings.Host, strconv.Itoa(settings.Port)),
 		Handler:           mux,

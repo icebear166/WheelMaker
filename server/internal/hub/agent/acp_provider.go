@@ -18,6 +18,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/swm8023/wheelmaker/internal/hub/agent/cxflicker"
 	"github.com/swm8023/wheelmaker/internal/protocol"
 	"github.com/swm8023/wheelmaker/internal/shared"
 )
@@ -50,6 +51,13 @@ var (
 	}
 	CXDeepSeekProviderPreset = ACPProviderPreset{
 		Name:             string(protocol.ACPProviderCXDeepSeek),
+		BinaryName:       "codex",
+		InstallHint:      "@openai/codex",
+		SkillProjectDirs: []string{".agents/skills"},
+		SkillUserDirs:    []string{"~/.agents/skills"},
+	}
+	CXFlickerProviderPreset = ACPProviderPreset{
+		Name:             string(protocol.ACPProviderCXFlicker),
 		BinaryName:       "codex",
 		InstallHint:      "@openai/codex",
 		SkillProjectDirs: []string{".agents/skills"},
@@ -372,10 +380,17 @@ type claudeCompatibleProfile struct {
 
 // claudeModelEntry is one entry of the settings["models"] object array.
 type claudeModelEntry struct {
-	ID            string
-	Name          string
-	EffortLevels  []string
-	DefaultEffort string
+	ID                        string
+	Name                      string
+	APIFormat                 string
+	Aliases                   []string
+	EffortLevels              []string
+	DefaultEffort             string
+	InputModalities           []string
+	ContextWindow             int
+	MaxContextWindow          int
+	SupportsTools             bool
+	SupportsParallelToolCalls bool
 }
 
 var claudeCompatibleConfigMu sync.Mutex
@@ -439,9 +454,9 @@ func claudeCompatibleDeepSeekProfile(stateDir string) claudeCompatibleProfile {
 
 func claudeCompatibleGLMProfile(stateDir string) claudeCompatibleProfile {
 	return claudeCompatibleProfile{
-		configDir:       filepath.Join(stateDir, ".data", ClaudeCompatibleGLMProviderPreset.Name),
-		endpoint:        "https://api.z.ai/api/anthropic",
-		authName:        "ANTHROPIC_AUTH_TOKEN",
+		configDir: filepath.Join(stateDir, ".data", ClaudeCompatibleGLMProviderPreset.Name),
+		endpoint:  "https://api.z.ai/api/anthropic",
+		authName:  "ANTHROPIC_AUTH_TOKEN",
 		// glm-5.3 is z.ai's current flagship. Unlike glm-5.2 it has no [1m]
 		// variant: the bare id already serves a 1M context window (verified live),
 		// so AUTO_COMPACT_WINDOW stays at 1_000_000. glm-5.2[1m] is kept in the
@@ -547,6 +562,36 @@ func (s *FlickerModelStore) Models() []claudeModelEntry {
 	return append([]claudeModelEntry(nil), s.models...)
 }
 
+// CXFlickerModels returns the live subset that can be exposed through Codex's
+// Responses provider. Anthropic-backed entries remain available to cc-flicker
+// but are intentionally excluded here.
+func (s *FlickerModelStore) CXFlickerModels() []cxflicker.Model {
+	if s == nil {
+		return nil
+	}
+	entries := s.Models()
+	models := make([]cxflicker.Model, 0, len(entries))
+	for _, entry := range entries {
+		if entry.APIFormat != "openai" && entry.APIFormat != "responses" {
+			continue
+		}
+		models = append(models, cxflicker.Model{
+			ID:                        entry.ID,
+			Name:                      entry.Name,
+			APIFormat:                 entry.APIFormat,
+			Aliases:                   append([]string(nil), entry.Aliases...),
+			EffortLevels:              append([]string(nil), entry.EffortLevels...),
+			DefaultEffort:             entry.DefaultEffort,
+			InputModalities:           append([]string(nil), entry.InputModalities...),
+			ContextWindow:             entry.ContextWindow,
+			MaxContextWindow:          entry.MaxContextWindow,
+			SupportsTools:             entry.SupportsTools,
+			SupportsParallelToolCalls: entry.SupportsParallelToolCalls,
+		})
+	}
+	return models
+}
+
 const flickerACPModelsEndpoint = "http://127.0.0.1:17999/v1/models"
 
 func fetchFlickerModelsFromBridge(endpoint string) []claudeModelEntry {
@@ -566,11 +611,17 @@ func fetchFlickerModelsFromBridge(endpoint string) []claudeModelEntry {
 	}
 	var payload struct {
 		Data []struct {
-			ID           string `json:"id"`
-			DisplayName  string `json:"display_name"`
+			ID           string   `json:"id"`
+			DisplayName  string   `json:"display_name"`
+			APIFormat    string   `json:"api_format"`
+			Aliases      []string `json:"aliases"`
 			Capabilities struct {
-				EffortLevels         []string `json:"effortLevels"`
-				DefaultThinkingLevel string   `json:"defaultThinkingLevel"`
+				EffortLevels              []string `json:"effortLevels"`
+				DefaultThinkingLevel      string   `json:"defaultThinkingLevel"`
+				InputModalities           []string `json:"inputModalities"`
+				ContextWindow             int      `json:"contextWindow"`
+				SupportsTools             bool     `json:"supportsTools"`
+				SupportsParallelToolCalls bool     `json:"supportsParallelToolCalls"`
 			} `json:"capabilities"`
 		} `json:"data"`
 	}
@@ -587,10 +638,16 @@ func fetchFlickerModelsFromBridge(endpoint string) []claudeModelEntry {
 			name = model.ID
 		}
 		models = append(models, claudeModelEntry{
-			ID:            model.ID,
-			Name:          name,
-			EffortLevels:  append([]string(nil), model.Capabilities.EffortLevels...),
-			DefaultEffort: model.Capabilities.DefaultThinkingLevel,
+			ID:                        model.ID,
+			Name:                      name,
+			APIFormat:                 model.APIFormat,
+			Aliases:                   append([]string(nil), model.Aliases...),
+			EffortLevels:              append([]string(nil), model.Capabilities.EffortLevels...),
+			DefaultEffort:             model.Capabilities.DefaultThinkingLevel,
+			InputModalities:           append([]string(nil), model.Capabilities.InputModalities...),
+			ContextWindow:             model.Capabilities.ContextWindow,
+			SupportsTools:             model.Capabilities.SupportsTools,
+			SupportsParallelToolCalls: model.Capabilities.SupportsParallelToolCalls,
 		})
 	}
 	return models
