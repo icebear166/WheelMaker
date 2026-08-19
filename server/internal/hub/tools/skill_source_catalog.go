@@ -138,6 +138,9 @@ func populateSkillSourceWorkingTree(ctx context.Context, homeDir string, lock *s
 		_, err := os.Stat(store.repositoryPath(source.SourceKey))
 		if errors.Is(err, os.ErrNotExist) {
 			source.Status = "needs_clone"
+			if identity, identityErr := normalizePersistedSkillSource(source.Source); identityErr == nil && identity.Kind == skillSourceKindWellKnown {
+				source.Status = "needs_fetch"
+			}
 			continue
 		} else if err != nil {
 			source.Status = "error"

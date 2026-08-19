@@ -617,16 +617,22 @@ func safeWellKnownDestination(root, relative string) (string, error) {
 
 func validateWellKnownSkillMarkdown(raw []byte) error {
 	normalized := bytes.ReplaceAll(raw, []byte("\r\n"), []byte("\n"))
-	if !bytes.HasPrefix(normalized, []byte("---\n")) {
+	lines := bytes.Split(normalized, []byte("\n"))
+	if len(lines) == 0 || !bytes.Equal(lines[0], []byte("---")) {
 		return errors.New("frontmatter is required")
 	}
-	rest := normalized[len("---\n"):]
-	end := bytes.Index(rest, []byte("\n---"))
+	end := -1
+	for index := 1; index < len(lines); index++ {
+		if bytes.Equal(lines[index], []byte("---")) {
+			end = index
+			break
+		}
+	}
 	if end < 0 {
 		return errors.New("frontmatter closing delimiter is required")
 	}
 	var fields map[string]any
-	if err := yaml.Unmarshal(rest[:end], &fields); err != nil {
+	if err := yaml.Unmarshal(bytes.Join(lines[1:end], []byte("\n")), &fields); err != nil {
 		return errors.New("frontmatter is invalid")
 	}
 	name, nameOK := fields["name"].(string)

@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
+	"encoding/binary"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -355,6 +356,139 @@ func TestWellKnownProviderAppliesInjectableOperationAndResponseLimits(t *testing
 			t.Fatalf("materialize() error=%v, want archive file limit", err)
 		}
 	})
+
+	t.Run("operation deadline", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+			response.WriteHeader(http.StatusOK)
+			if flusher, ok := response.(http.Flusher); ok {
+				flusher.Flush()
+			}
+			<-request.Context().Done()
+		}))
+		defer server.Close()
+		provider := newWellKnownSkillSourceProvider(server.Client())
+		provider.limits.operationTimeout = 20 * time.Millisecond
+		provider.limits.responseHeaderTimeout = time.Second
+		_, err := provider.materialize(context.Background(), server.URL+"/.well-known/skills/index.json", filepath.Join(t.TempDir(), "snapshot"))
+		if err == nil || !strings.Contains(strings.ToLower(err.Error()), "deadline") {
+			t.Fatalf("materialize() error=%v, want operation deadline", err)
+		}
+	})
+
+	t.Run("entry count", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+			_, _ = response.Write([]byte(`{"skills":[{"name":"alpha","description":"Alpha","files":["SKILL.md"]},{"name":"beta","description":"Beta","files":["SKILL.md"]}]}`))
+		}))
+		defer server.Close()
+		provider := newWellKnownSkillSourceProvider(server.Client())
+		provider.limits.entryMaxCount = 1
+		_, err := provider.materialize(context.Background(), server.URL+"/.well-known/skills/index.json", filepath.Join(t.TempDir(), "snapshot"))
+		if err == nil || !strings.Contains(strings.ToLower(err.Error()), "too many skills") {
+			t.Fatalf("materialize() error=%v, want entry limit", err)
+		}
+	})
+
+	t.Run("catalog files", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+			switch request.URL.Path {
+			case "/.well-known/skills/index.json":
+				_, _ = response.Write([]byte(`{"skills":[{"name":"alpha","description":"Alpha","files":["SKILL.md","extra.md"]}]}`))
+			case "/.well-known/skills/alpha/SKILL.md":
+				_, _ = response.Write([]byte("---\nname: alpha\ndescription: Alpha\n---\n"))
+			default:
+				_, _ = response.Write([]byte("extra"))
+			}
+		}))
+		defer server.Close()
+		provider := newWellKnownSkillSourceProvider(server.Client())
+		provider.limits.catalogMaxFiles = 1
+		_, err := provider.materialize(context.Background(), server.URL+"/.well-known/skills/index.json", filepath.Join(t.TempDir(), "snapshot"))
+		if err == nil || !strings.Contains(strings.ToLower(err.Error()), "catalog contains too many files") {
+			t.Fatalf("materialize() error=%v, want catalog file limit", err)
+		}
+	})
+
+	t.Run("single file bytes", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+			if request.URL.Path == "/.well-known/skills/index.json" {
+				_, _ = response.Write([]byte(`{"skills":[{"name":"alpha","description":"Alpha","files":["SKILL.md"]}]}`))
+				return
+			}
+			_, _ = response.Write([]byte("---\nname: alpha\ndescription: Alpha\n---\n"))
+		}))
+		defer server.Close()
+		provider := newWellKnownSkillSourceProvider(server.Client())
+		provider.limits.fileMaxBytes = 16
+		_, err := provider.materialize(context.Background(), server.URL+"/.well-known/skills/index.json", filepath.Join(t.TempDir(), "snapshot"))
+		if err == nil || !strings.Contains(strings.ToLower(err.Error()), "size limit") {
+			t.Fatalf("materialize() error=%v, want file size limit", err)
+		}
+	})
+
+	t.Run("compressed artifact bytes", func(t *testing.T) {
+		artifact := makeWellKnownZip(t, map[string]string{"SKILL.md": "---\nname: alpha\ndescription: Alpha\n---\n"})
+		server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+			if request.URL.Path == "/.well-known/agent-skills/index.json" {
+				_, _ = fmt.Fprintf(response, `{"$schema":%q,"skills":[{"name":"alpha","description":"Alpha","type":"archive","url":"alpha.zip","digest":%q}]}`,
+					wellKnownDiscoverySchemaV2, wellKnownDigest(artifact))
+				return
+			}
+			_, _ = response.Write(artifact)
+		}))
+		defer server.Close()
+		provider := newWellKnownSkillSourceProvider(server.Client())
+		provider.limits.artifactMaxBytes = 16
+		_, err := provider.materialize(context.Background(), server.URL+"/.well-known/agent-skills/index.json", filepath.Join(t.TempDir(), "snapshot"))
+		if err == nil || !strings.Contains(strings.ToLower(err.Error()), "size limit") {
+			t.Fatalf("materialize() error=%v, want artifact size limit", err)
+		}
+	})
+
+	t.Run("archive unpacked bytes", func(t *testing.T) {
+		artifact := makeWellKnownZip(t, map[string]string{"SKILL.md": "---\nname: alpha\ndescription: Alpha\n---\n"})
+		server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+			if request.URL.Path == "/.well-known/agent-skills/index.json" {
+				_, _ = fmt.Fprintf(response, `{"$schema":%q,"skills":[{"name":"alpha","description":"Alpha","type":"archive","url":"alpha.zip","digest":%q}]}`,
+					wellKnownDiscoverySchemaV2, wellKnownDigest(artifact))
+				return
+			}
+			_, _ = response.Write(artifact)
+		}))
+		defer server.Close()
+		provider := newWellKnownSkillSourceProvider(server.Client())
+		provider.limits.archiveMaxBytes = 16
+		_, err := provider.materialize(context.Background(), server.URL+"/.well-known/agent-skills/index.json", filepath.Join(t.TempDir(), "snapshot"))
+		if err == nil || !strings.Contains(strings.ToLower(err.Error()), "maximum unpacked size") {
+			t.Fatalf("materialize() error=%v, want unpacked size limit", err)
+		}
+	})
+
+	t.Run("catalog bytes", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+			if request.URL.Path == "/.well-known/skills/index.json" {
+				_, _ = response.Write([]byte(`{"skills":[{"name":"alpha","description":"Alpha","files":["SKILL.md"]}]}`))
+				return
+			}
+			_, _ = response.Write([]byte("---\nname: alpha\ndescription: Alpha\n---\n"))
+		}))
+		defer server.Close()
+		provider := newWellKnownSkillSourceProvider(server.Client())
+		provider.limits.catalogMaxBytes = 16
+		_, err := provider.materialize(context.Background(), server.URL+"/.well-known/skills/index.json", filepath.Join(t.TempDir(), "snapshot"))
+		if err == nil || !strings.Contains(strings.ToLower(err.Error()), "catalog exceeds maximum size") {
+			t.Fatalf("materialize() error=%v, want catalog size limit", err)
+		}
+	})
+
+	t.Run("canceled context", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+		provider := newWellKnownSkillSourceProvider(http.DefaultClient)
+		_, err := provider.materialize(ctx, "https://example.invalid/.well-known/skills/index.json", filepath.Join(t.TempDir(), "snapshot"))
+		if err == nil || !strings.Contains(strings.ToLower(err.Error()), "context canceled") {
+			t.Fatalf("materialize() error=%v, want context cancellation", err)
+		}
+	})
 }
 
 func TestWellKnownProviderRedactsArtifactQueryFromRequestErrors(t *testing.T) {
@@ -411,6 +545,66 @@ func TestWellKnownProviderAllowsCrossHostArtifactRedirectWithoutCredentials(t *t
 	}
 	if receivedAuthorization != "" || receivedCookie != "" {
 		t.Fatalf("redirect credentials=(%q, %q), want empty", receivedAuthorization, receivedCookie)
+	}
+}
+
+func TestWellKnownSkillMarkdownRequiresExactFrontmatterDelimiter(t *testing.T) {
+	malformed := []byte("---\nname: alpha\ndescription: Alpha\n---not-a-delimiter\n# Alpha\n")
+	if err := validateWellKnownSkillMarkdown(malformed); err == nil {
+		t.Fatal("validateWellKnownSkillMarkdown() accepted a prefix-only closing delimiter")
+	}
+	valid := []byte("---\nname: 'alpha'\ndescription: \"Alpha\"\n---\n# Alpha\n")
+	if err := validateWellKnownSkillMarkdown(valid); err != nil {
+		t.Fatalf("validateWellKnownSkillMarkdown() valid error=%v", err)
+	}
+}
+
+func TestWellKnownArchiveRejectsEncryptionLinksAndMissingRootSkill(t *testing.T) {
+	validSkill := "---\nname: alpha\ndescription: Alpha\n---\n"
+	tests := []struct {
+		name      string
+		artifact  []byte
+		extension string
+		wantError string
+	}{
+		{
+			name:      "encrypted zip",
+			artifact:  markWellKnownZipEncrypted(t, makeWellKnownZip(t, map[string]string{"SKILL.md": validSkill})),
+			extension: ".zip",
+			wantError: "encrypted",
+		},
+		{
+			name:      "zip symlink",
+			artifact:  makeWellKnownZipWithSymlink(t, validSkill),
+			extension: ".zip",
+			wantError: "links",
+		},
+		{
+			name:      "tar symlink",
+			artifact:  makeWellKnownTarGzWithSymlink(t, validSkill),
+			extension: ".tgz",
+			wantError: "links",
+		},
+		{
+			name:      "missing root",
+			artifact:  makeWellKnownZip(t, map[string]string{"nested/SKILL.md": validSkill}),
+			extension: ".zip",
+			wantError: "missing root skill.md",
+		},
+	}
+	for _, testCase := range tests {
+		t.Run(testCase.name, func(t *testing.T) {
+			artifactPath := filepath.Join(t.TempDir(), "artifact"+testCase.extension)
+			if err := os.WriteFile(artifactPath, testCase.artifact, 0o600); err != nil {
+				t.Fatal(err)
+			}
+			limits := defaultWellKnownLimits()
+			budget := &wellKnownCatalogBudget{maxBytes: limits.catalogMaxBytes, maxFiles: limits.catalogMaxFiles}
+			err := extractWellKnownArchive(artifactPath, "https://example.com/artifact"+testCase.extension, "", filepath.Join(t.TempDir(), "skill"), limits, budget)
+			if err == nil || !strings.Contains(strings.ToLower(err.Error()), testCase.wantError) {
+				t.Fatalf("extractWellKnownArchive() error=%v, want %q", err, testCase.wantError)
+			}
+		})
 	}
 }
 
@@ -478,4 +672,71 @@ func makeWellKnownTarGz(t *testing.T, files map[string]string) []byte {
 		t.Fatal(err)
 	}
 	return buffer.Bytes()
+}
+
+func makeWellKnownZipWithSymlink(t *testing.T, skillMarkdown string) []byte {
+	t.Helper()
+	var buffer bytes.Buffer
+	writer := zip.NewWriter(&buffer)
+	skill, err := writer.Create("SKILL.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := skill.Write([]byte(skillMarkdown)); err != nil {
+		t.Fatal(err)
+	}
+	header := &zip.FileHeader{Name: "link", Method: zip.Store}
+	header.SetMode(os.ModeSymlink | 0o777)
+	link, err := writer.CreateHeader(header)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := link.Write([]byte("SKILL.md")); err != nil {
+		t.Fatal(err)
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatal(err)
+	}
+	return buffer.Bytes()
+}
+
+func makeWellKnownTarGzWithSymlink(t *testing.T, skillMarkdown string) []byte {
+	t.Helper()
+	var buffer bytes.Buffer
+	gzipWriter := gzip.NewWriter(&buffer)
+	tarWriter := tar.NewWriter(gzipWriter)
+	raw := []byte(skillMarkdown)
+	if err := tarWriter.WriteHeader(&tar.Header{Name: "SKILL.md", Mode: 0o600, Size: int64(len(raw)), Typeflag: tar.TypeReg}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tarWriter.Write(raw); err != nil {
+		t.Fatal(err)
+	}
+	if err := tarWriter.WriteHeader(&tar.Header{Name: "link", Linkname: "SKILL.md", Typeflag: tar.TypeSymlink}); err != nil {
+		t.Fatal(err)
+	}
+	if err := tarWriter.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := gzipWriter.Close(); err != nil {
+		t.Fatal(err)
+	}
+	return buffer.Bytes()
+}
+
+func markWellKnownZipEncrypted(t *testing.T, artifact []byte) []byte {
+	t.Helper()
+	result := append([]byte(nil), artifact...)
+	for offset := 0; offset+10 <= len(result); offset++ {
+		signature := binary.LittleEndian.Uint32(result[offset : offset+4])
+		switch signature {
+		case 0x04034b50:
+			flags := binary.LittleEndian.Uint16(result[offset+6 : offset+8])
+			binary.LittleEndian.PutUint16(result[offset+6:offset+8], flags|0x1)
+		case 0x02014b50:
+			flags := binary.LittleEndian.Uint16(result[offset+8 : offset+10])
+			binary.LittleEndian.PutUint16(result[offset+8:offset+10], flags|0x1)
+		}
+	}
+	return result
 }

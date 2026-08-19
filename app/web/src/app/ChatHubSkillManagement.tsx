@@ -62,6 +62,7 @@ const STATUS_COPY: Record<string, string> = {
   copies_differ: 'Copies differ',
   needs_refresh: 'Needs refresh',
   needs_clone: 'Needs clone',
+  needs_fetch: 'Needs fetch',
 };
 
 const EXCEPTIONAL_SKILL_STATUSES = new Set([

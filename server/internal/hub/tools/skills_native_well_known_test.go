@@ -180,6 +180,63 @@ func TestNativeWellKnownProjectLockFailureKeepsNewCentralAndRollsBackProject(t *
 	assertSkillMarkdownContains(t, filepath.Join(central.Path, "skills", "alpha", "SKILL.md"), "alpha v2")
 }
 
+func TestNativeWellKnownGlobalLockFailureReportsCentralMisalignment(t *testing.T) {
+	server := newMutableWellKnownCatalogServer(t, map[string]string{"alpha": "alpha v1"})
+	home := t.TempDir()
+	command := newSkillsCommandWithRunner(newFakeSkillsRunner(), skillsCommandConfig{HubID: "hub-a", HomeDir: home})
+	target := skillsCommandTarget{scope: "hub"}
+	source, sourceKey, cmdErr := normalizeNativeSkillSource(server.URL + "/entry")
+	if cmdErr != nil {
+		t.Fatal(cmdErr)
+	}
+	if err := command.nativeAddRepo(context.Background(), target, source, sourceKey); err != nil {
+		t.Fatalf("nativeAddRepo() error=%v", err)
+	}
+	canonical := server.URL + "/.well-known/skills/index.json"
+	if err := command.nativeInstall(context.Background(), target, canonical, []string{"alpha"}, false); err != nil {
+		t.Fatalf("nativeInstall() error=%v", err)
+	}
+	before, _, err := readSkillSourceLockFile(command.sourceLockFile(target))
+	if err != nil {
+		t.Fatal(err)
+	}
+	beforeCommit := before.Sources[0].Commit
+	lockPath := command.sourceLockFile(target)
+	server.Set(map[string]string{"alpha": "alpha v2"})
+	server.BeforeNextSkillResponse(func() {
+		raw, readErr := os.ReadFile(lockPath)
+		if readErr == nil {
+			_ = os.WriteFile(lockPath, append(raw, '\n'), 0o600)
+		}
+	})
+	err = command.nativeUpdateRepo(context.Background(), target, canonical)
+	if !errors.Is(err, errSkillSourceLockChanged) {
+		t.Fatalf("nativeUpdateRepo() error=%v, want lock compare-and-swap failure", err)
+	}
+	assertSkillMarkdownContains(t, filepath.Join(home, ".agents", "skills", "alpha", "SKILL.md"), "alpha v2")
+	after, _, err := readSkillSourceLockFile(lockPath)
+	if err != nil || after.Sources[0].Commit != beforeCommit {
+		t.Fatalf("lock=%#v error=%v, want old revision %q", after, err, beforeCommit)
+	}
+	server.Close()
+	snapshot, err := ScanSkillsSourceScope(context.Background(), SkillsSourceScopeInput{
+		HomeDir: home,
+		Installed: []SkillsInstalledSkillSnapshot{{
+			Name: "alpha", Managed: true,
+			Locations: []string{
+				filepath.Join(home, ".agents", "skills", "alpha", "SKILL.md"),
+				filepath.Join(home, ".claude", "skills", "alpha", "SKILL.md"),
+			},
+		}},
+	})
+	if err != nil {
+		t.Fatalf("ScanSkillsSourceScope() error=%v", err)
+	}
+	if len(snapshot.Sources) != 1 || !snapshot.Sources[0].UpdateAvailable || snapshot.Sources[0].RemoteCommit == beforeCommit {
+		t.Fatalf("snapshot=%#v, want central/scope misalignment", snapshot)
+	}
+}
+
 func TestNativeWellKnownUninstallAndRemoveSourceWorkOffline(t *testing.T) {
 	server := newMutableWellKnownCatalogServer(t, map[string]string{"alpha": "alpha v1"})
 	home := t.TempDir()
@@ -210,6 +267,28 @@ func TestNativeWellKnownUninstallAndRemoveSourceWorkOffline(t *testing.T) {
 	}
 	if _, err := os.Stat(centralPath); err != nil {
 		t.Fatalf("central snapshot was deleted: %v", err)
+	}
+}
+
+func TestNativeWellKnownPassiveScanReportsMissingSnapshotWithoutNetwork(t *testing.T) {
+	home := t.TempDir()
+	canonical := "https://example.invalid/.well-known/skills/index.json"
+	lockPath := skillSourceLockPath("", "", home)
+	if _, err := writeSkillSourceLockFile(lockPath, skillSourceMissingRevision, skillSourceLock{
+		Version: 3,
+		Sources: []skillSourceSnapshot{{
+			Source: canonical, SourceKey: canonical, Commit: strings.Repeat("a", 64),
+			UpdatedAt: "2026-08-19T12:00:00Z", ManagedSkills: []string{},
+		}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	snapshot, err := ScanSkillsSourceScope(context.Background(), SkillsSourceScopeInput{HomeDir: home})
+	if err != nil {
+		t.Fatalf("ScanSkillsSourceScope() error=%v", err)
+	}
+	if len(snapshot.Sources) != 1 || snapshot.Sources[0].Status != "needs_fetch" {
+		t.Fatalf("snapshot=%#v, want well-known needs_fetch status", snapshot)
 	}
 }
 

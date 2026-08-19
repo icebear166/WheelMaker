@@ -336,6 +336,19 @@ test('adds a skill source directly from the inline form without preview or skill
 	expect(renderer.root.findByProps({className: 'chat-hub-skill-add-repository-trigger'})).toBeTruthy();
 });
 
+test('describes a missing well-known snapshot as needing fetch', async () => {
+  const snapshot = {
+    ...catalog,
+    sources: [{...catalog.sources[0], status: 'needs_fetch'}],
+  };
+  const {renderer} = await renderScope({snapshot});
+  const source = renderer.root.findByProps({'data-source-key': 'github.com/acme/skills'});
+  const statusDot = source.findByProps({className: 'chat-hub-skill-source-status-dot is-needs-fetch'});
+
+  expect(statusDot.props['aria-label']).toBe('Needs fetch source');
+  expect(statusDot.props['data-tooltip']).toBe('Needs fetch');
+});
+
 test('submits the skill source with Enter from the input', async () => {
 	const {renderer, actions} = await renderScope();
 	act(() => renderer.root.findByProps({className: 'chat-hub-skill-add-repository-trigger'}).props.onClick());
