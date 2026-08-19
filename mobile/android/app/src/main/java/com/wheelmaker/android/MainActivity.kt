@@ -48,7 +48,7 @@ import java.util.Locale
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 
-class MainActivity : Activity(), DeepSeekLoginHost, LaunchSplashHost {
+class MainActivity : Activity(), DeepSeekLoginHost, QwenLoginHost, LaunchSplashHost {
     private lateinit var rootView: FrameLayout
     private lateinit var webView: WebView
     private lateinit var baseUrlStore: BaseUrlStore
@@ -132,6 +132,7 @@ class MainActivity : Activity(), DeepSeekLoginHost, LaunchSplashHost {
             androidWebDiagnostics,
             androidDiagnosticLogLevelStore,
             trustedNativeActionGrantStore,
+            this,
             this,
             launchSplashHost = this
         )
@@ -468,6 +469,12 @@ class MainActivity : Activity(), DeepSeekLoginHost, LaunchSplashHost {
     override fun showLogin(onResult: (token: String?) -> Unit) {
         runOnUiThread {
             DeepSeekLoginDialog(this) { token -> onResult(token) }.show()
+        }
+    }
+
+    override fun showQwenLogin(onResult: (credentialJson: String?) -> Unit) {
+        runOnUiThread {
+            QwenLoginDialog(this) { credentialJson -> onResult(credentialJson) }.show()
         }
     }
 

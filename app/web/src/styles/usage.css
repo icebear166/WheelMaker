@@ -136,6 +136,14 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.usage-provider-subtitle {
+  display: block;
+  overflow: hidden;
+  color: var(--text-tertiary);
+  font-size: 9px;
+  font-weight: 500;
+  text-overflow: ellipsis;
+}
 .usage-provider-metrics { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 .usage-compact-limit { display: grid; gap: 3px; min-width: 0; }
 .usage-compact-limit-header {
@@ -847,6 +855,36 @@
   color: var(--accent-primary);
 }
 .deepseek-usage-login-error { margin: 0; color: var(--state-danger); font-size: 11px; }
+.qwen-usage-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 12px;
+  color: var(--text-tertiary);
+  font-size: 10px;
+}
+.qwen-usage-toolbar > div { display: inline-flex; gap: 4px; }
+.usage-qwen-credits { display: grid; gap: 6px; margin-bottom: 10px; }
+.qwen-usage-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.usage-qwen-credit-line {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  min-height: 28px;
+  color: var(--text-tertiary);
+  font-size: 10px;
+}
+.usage-qwen-credit-line strong { color: var(--text-primary); font-family: 'JetBrains Mono', monospace; font-size: 11px; font-variant-numeric: tabular-nums; }
+.usage-qwen-credit-line em { color: var(--text-tertiary); font-size: 10px; font-style: normal; }
+.usage-qwen-credit-line time { color: var(--text-tertiary); font-size: 10px; white-space: nowrap; }
+.qwen-usage-summary .usage-qwen-credit-line { padding: 9px 10px; border: 1px solid var(--border-subtle); border-radius: var(--radius-control); background: var(--surface-raised); }
+.usage-qwen-plan { color: var(--text-secondary); font-size: 10px; }
+.usage-qwen-plan { margin: 4px 0 8px; }
+.qwen-usage-trend { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--border-subtle); }
+.qwen-usage-trend h3 { margin: 0 0 8px; color: var(--text-secondary); font-size: 11px; font-weight: 600; }
 @media (max-width: 620px) {
+  .qwen-usage-summary { grid-template-columns: 1fr; }
   .deepseek-usage-summary { grid-template-columns: 1fr; }
 }

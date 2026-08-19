@@ -101,27 +101,41 @@ export function UsageHistoryDialog({
           </button>
         </header>
         <div className="usage-history-body">
-          {state.status === 'loading' ? <UsageHistoryLoading /> : null}
-          {state.status === 'empty' ? (
-            <div className="usage-history-empty">
-              <strong>No history recorded yet</strong>
-              <p>Refresh Limits to add a sample, then check again.</p>
-              <button type="button" onClick={onRetry}>Check again</button>
-            </div>
-          ) : null}
-          {state.status === 'error' ? (
-            <div className="usage-history-error" role="alert">
-              <strong>History unavailable</strong>
-              <p>{state.message}</p>
-              <button type="button" aria-label="Retry usage history" onClick={onRetry}>Retry</button>
-            </div>
-          ) : null}
-          {state.status === 'ready' ? (
-            <UsageHistoryReady limit={state.limit} forecast={state.forecast} />
-          ) : null}
+          <UsageHistoryStateContent state={state} onRetry={onRetry} />
         </div>
       </section>
     </div>
+  );
+}
+
+export function UsageHistoryStateContent({
+  state,
+  onRetry,
+}: {
+  state: UsageHistoryDialogState;
+  onRetry: () => void;
+}) {
+  return (
+    <>
+      {state.status === 'loading' ? <UsageHistoryLoading /> : null}
+      {state.status === 'empty' ? (
+        <div className="usage-history-empty">
+          <strong>No history recorded yet</strong>
+          <p>Refresh Limits to add a sample, then check again.</p>
+          <button type="button" onClick={onRetry}>Check again</button>
+        </div>
+      ) : null}
+      {state.status === 'error' ? (
+        <div className="usage-history-error" role="alert">
+          <strong>History unavailable</strong>
+          <p>{state.message}</p>
+          <button type="button" aria-label="Retry usage history" onClick={onRetry}>Retry</button>
+        </div>
+      ) : null}
+      {state.status === 'ready' ? (
+        <UsageHistoryReady limit={state.limit} forecast={state.forecast} />
+      ) : null}
+    </>
   );
 }
 

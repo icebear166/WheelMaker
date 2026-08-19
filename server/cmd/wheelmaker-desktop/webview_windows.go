@@ -225,6 +225,12 @@ func bindDesktopWindowBridgeWithPreviewController(
 			}
 			return launchDeepSeekLoginWindow(hwnd)
 		}},
+		{desktopQwenLoginBinding, func() (string, error) {
+			if err := authorize(desktopBridgeQwenLogin); err != nil {
+				return "", err
+			}
+			return launchQwenLoginWindow(hwnd)
+		}},
 		{desktopEnterLocalDevBinding, func(sourcePath string) error {
 			if err := authorize(desktopBridgeEnterLocalDev); err != nil {
 				return err

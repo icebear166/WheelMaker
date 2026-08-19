@@ -1,4 +1,4 @@
-export type UsageProviderId = 'codex' | 'flicker' | 'kimi' | 'zai' | 'deepseek';
+export type UsageProviderId = 'codex' | 'flicker' | 'kimi' | 'zai' | 'deepseek' | 'qwen';
 export type UsageScanStatus = 'idle' | 'scanning' | 'ready' | 'error';
 export type UsageProviderStatus = 'ok' | 'unavailable' | 'error';
 
@@ -39,6 +39,36 @@ export interface UsageResetCredits {
   credits?: UsageResetCredit[];
 }
 
+export type UsageQwenCreditsState = 'limited' | 'unlimited' | 'unavailable';
+
+export interface UsageQwenCreditsWindow {
+  state: UsageQwenCreditsState;
+  total?: string;
+  used?: string;
+  remaining?: string;
+  remainingPercent?: number;
+  windowId?: string;
+  resetsAt?: string;
+}
+
+export interface UsageQwenSubscription {
+  instanceCode?: string;
+  specCode?: string;
+  remainingDays?: number;
+  startTime?: string;
+  endTime?: string;
+  autoRenew?: boolean;
+  status?: string;
+}
+
+export interface UsageQwenData {
+  fiveHour: UsageQwenCreditsWindow;
+  week: UsageQwenCreditsWindow;
+  subscription?: UsageQwenSubscription;
+  quota?: {fiveHour?: string; week?: string};
+  updatedAt?: string;
+}
+
 export interface UsageAccount {
   localId: string;
   identity: UsageIdentity;
@@ -48,6 +78,7 @@ export interface UsageAccount {
   limits: UsageLimit[];
   balance?: UsageBalance;
   resetCredits?: UsageResetCredits;
+  qwen?: UsageQwenData;
 }
 
 export interface UsageProviderSnapshot {
@@ -55,6 +86,7 @@ export interface UsageProviderSnapshot {
   name: string;
   status: UsageProviderStatus;
   message?: string;
+  authenticated?: boolean;
   accounts: UsageAccount[];
 }
 
@@ -84,9 +116,12 @@ export interface UsageProviderView {
   id: UsageProviderId;
   name: string;
   status: UsageProviderStatus;
+  message?: string;
+  authenticated?: boolean;
   accountCount: number;
   remainingPercent?: number;
   accounts: UsageViewAccount[];
+  hubId?: string;
   hubs?: Array<{hubId: string; status: UsageProviderStatus; message?: string}>;
 }
 

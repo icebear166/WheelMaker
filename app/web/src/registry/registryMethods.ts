@@ -81,6 +81,7 @@ export const RegistryMethods = {
   HubStateUpdated: 'hub.state.updated',
   HubConfigGet: 'hub.config.get',
   HubConfigUpdate: 'hub.config.update',
+  QwenOAuthUpdate: 'qwen.oauth.update',
   UsageHistoryGet: 'usage.history.get',
   DeepSeekUsageGet: 'deepseek.usage.get',
   ReleasePublishStart: 'release.publish.start',

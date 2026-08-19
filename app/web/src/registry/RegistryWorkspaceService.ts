@@ -35,6 +35,7 @@ import type {
   RegistryHubStateSectionName,
   RegistryHubConfigResponse,
   RegistryHubConfigUpdatePayload,
+  RegistryQwenOAuthUpdatePayload,
   RegistryUsageHistoryResponse,
   RegistryDeepSeekUsageResponse,
 	RegistryReleasePublishResponse,
@@ -1133,6 +1134,16 @@ export class RegistryWorkspaceService {
       throw new Error('session is not ready');
     }
     return this.repository.updateHubConfig(hubId, update);
+  }
+
+  async updateQwenOAuth(
+    hubId: string,
+    update: RegistryQwenOAuthUpdatePayload,
+  ): Promise<RegistryHubConfigResponse> {
+    if (!this.repository) {
+      throw new Error('session is not ready');
+    }
+    return this.repository.updateQwenOAuth(hubId, update);
   }
 
   async scanNpmPackages(hubId: string): Promise<RegistryNpmCommandResponse> {

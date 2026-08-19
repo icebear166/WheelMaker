@@ -29,6 +29,7 @@ export type NativePortRelaySiteDataResult = {
 export type NativeRuntimeBridge = {
   enabled?: boolean;
   deepSeekLogin?: () => Promise<string>;
+  qwenLogin?: () => Promise<string>;
   drainWebDiagnostics?: () => Promise<NativeWebDiagnosticsPayload> | NativeWebDiagnosticsPayload;
   setDiagnosticLogLevel?: (
     logLevel: NativeDiagnosticLogLevel,
@@ -66,6 +67,14 @@ function wrapAndroidRuntime(native: AndroidNativeRpcFacade): NativeRuntimeBridge
         throw new Error('DeepSeek login returned no token');
       }
       return parsed.token;
+    },
+    qwenLogin: async () => {
+      const raw = await native.qwenLogin();
+      const parsed = JSON.parse(raw) as {accessToken?: unknown};
+      if (typeof parsed.accessToken !== 'string' || parsed.accessToken === '') {
+        throw new Error('Qwen login returned no OAuth credential');
+      }
+      return raw;
     },
     drainWebDiagnostics: async () => parseWebDiagnostics(await native.drainWebDiagnostics()),
     setDiagnosticLogLevel: async logLevel =>

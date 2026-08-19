@@ -45,6 +45,19 @@ type DeepSeekUsageDialogView = {
   state: DeepSeekUsageDialogState;
 };
 
+type QwenUsageDialogTarget = {
+  provider: UsageProviderView;
+  account: UsageViewAccount;
+  triggerElement: HTMLElement;
+};
+
+type QwenUsageDialogView = {
+  target: QwenUsageDialogTarget;
+  busy: boolean;
+  historyState: UsageHistoryDialogState;
+  error?: string;
+};
+
 import {deriveRegistryEndpoints} from '../registry/registryBaseUrl';
 import {RegistryWebAuthClient} from '../registry/RegistryWebAuthClient';
 import {RegistryAuthController, type RegistryAuthSnapshot} from '../registry/RegistryAuthController';
@@ -515,6 +528,7 @@ import {GitBrowserStore} from '../git/gitBrowserStore';
 import {UsageHistoryDialog, type UsageHistoryDialogState} from '../usage/UsageHistoryDialog';
 import {loadUsageHistoryFromSources} from '../usage/usageHistory';
 import {DeepSeekUsageDialog, type DeepSeekUsageDialogState} from '../usage/DeepSeekUsageDialog';
+import {QwenUsageDialog} from '../usage/QwenUsageDialog';
 import {normalizeDeepSeekUsage} from '../usage/deepSeekUsage';
 import {UsageStore} from '../usage/usageStore';
 import {HubRefreshTriggers} from '../hubState/hubRefreshTriggers';
@@ -787,6 +801,7 @@ import type {
   RegistryFlickerBridgeStatus,
   RegistryHubConfig,
   RegistryHubConfigUpdatePayload,
+  RegistryQwenOAuthCredential,
   RegistryHubMCPImportPreview,
   RegistryHubMCPRuntimeStatusData,
   RegistryTerminal,
@@ -3234,6 +3249,9 @@ export function App() {
   const deepSeekUsageRequestSeqRef = useRef(0);
   const [deepSeekUsageDialogView, setDeepSeekUsageDialogView, deepSeekUsageDialogExiting] =
     useMenuExitState<DeepSeekUsageDialogView>();
+  const [qwenUsageDialogView, setQwenUsageDialogView, qwenUsageDialogExiting] =
+    useMenuExitState<QwenUsageDialogView>();
+  const qwenUsageHistoryRequestSeqRef = useRef(0);
   const modelEfficiencyStore = useMemo(
     () => new ModelEfficiencyStore(() => service.getCodexRadarEfficiency()),
     [],
@@ -13005,6 +13023,139 @@ export function App() {
     setDeepSeekUsageDialogView(null);
   }, []);
 
+  const loadQwenUsageHistory = useCallback(async (target: QwenUsageDialogTarget) => {
+    const requestSeq = ++qwenUsageHistoryRequestSeqRef.current;
+    const providerName = target.provider.name || target.provider.id;
+    const accountLabel = target.account.identity.label
+      || target.account.identity.value
+      || target.account.localId;
+    setQwenUsageDialogView(current => current ? {
+      ...current,
+      historyState: {status: 'loading', providerName, accountLabel},
+    } : null);
+    const result = await loadUsageHistoryFromSources({
+      providerId: target.provider.id,
+      sources: target.account.sources,
+      nowMillis: Date.now(),
+      request: source => service.getUsageHistory(
+        source.hubId,
+        target.provider.id,
+        source.accountLocalId,
+      ),
+    });
+    if (qwenUsageHistoryRequestSeqRef.current !== requestSeq) return;
+    const historyState: UsageHistoryDialogState = result.status === 'ready'
+      ? {
+          status: 'ready',
+          providerName,
+          accountLabel,
+          limit: result.limit,
+          forecast: result.forecast,
+        }
+      : result.status === 'empty'
+        ? {status: 'empty', providerName, accountLabel}
+        : {
+            status: 'error',
+            providerName,
+            accountLabel,
+            message: 'History could not be read from any online Hub.',
+          };
+    setQwenUsageDialogView(current => current ? {...current, historyState} : null);
+  }, [service]);
+
+  const currentQwenUsageProvider = useMemo(() => {
+    const view = qwenUsageDialogView;
+    if (!view) return null;
+    const hubId = view.target.provider.hubId ?? view.target.account.hubIds[0];
+    return usageSnapshot.providers.find(candidate =>
+      candidate.id === 'qwen' && (!hubId || candidate.hubId === hubId));
+  }, [qwenUsageDialogView, usageSnapshot.providers]);
+
+  const currentQwenUsageAccount = useMemo(() => {
+    const view = qwenUsageDialogView;
+    if (!view) return null;
+    const provider = currentQwenUsageProvider;
+    return provider?.accounts.find(account => account.localId === view.target.account.localId)
+      ?? provider?.accounts[0]
+      ?? view.target.account;
+  }, [currentQwenUsageProvider, qwenUsageDialogView]);
+
+  const openQwenUsage = useCallback((
+    provider: UsageProviderView,
+    account: UsageViewAccount,
+    triggerElement: HTMLElement,
+  ) => {
+    const target = {provider, account, triggerElement};
+    setQwenUsageDialogView({
+      target,
+      busy: false,
+      historyState: {
+        status: 'loading',
+        providerName: provider.name || provider.id,
+        accountLabel: account.identity.label || account.identity.value || account.localId,
+      },
+    });
+    void refreshUsageAcrossHubs().then(() => loadQwenUsageHistory(target));
+  }, [loadQwenUsageHistory, refreshUsageAcrossHubs]);
+
+  const closeQwenUsage = useCallback(() => {
+    qwenUsageHistoryRequestSeqRef.current += 1;
+    setQwenUsageDialogView(null);
+  }, []);
+
+  const refreshQwenUsage = useCallback(async () => {
+    const view = qwenUsageDialogView;
+    if (!view) return;
+    setQwenUsageDialogView({...view, busy: true, error: undefined});
+    try {
+      await refreshUsageAcrossHubs();
+      await loadQwenUsageHistory(view.target);
+      setQwenUsageDialogView(current => current ? {...current, busy: false} : null);
+    } catch (cause) {
+      setQwenUsageDialogView(current => current ? {
+        ...current,
+        busy: false,
+        error: cause instanceof Error ? cause.message : 'Failed to refresh Qwen usage',
+      } : null);
+    }
+  }, [loadQwenUsageHistory, qwenUsageDialogView, refreshUsageAcrossHubs]);
+
+  const saveQwenOAuth = useCallback(async (credential: RegistryQwenOAuthCredential) => {
+    const view = qwenUsageDialogView;
+    const hubId = view?.target.provider.hubId ?? view?.target.account.sources[0]?.hubId ?? view?.target.account.hubIds[0];
+    if (!view || !hubId) throw new Error('No active Qwen Hub');
+    setQwenUsageDialogView({...view, busy: true, error: undefined});
+    try {
+      await service.updateQwenOAuth(hubId, {action: 'set', credential});
+      await refreshUsageAcrossHubs();
+      await loadQwenUsageHistory(view.target);
+      setQwenUsageDialogView(current => current ? {...current, busy: false} : null);
+    } catch (cause) {
+      const error = cause instanceof Error ? cause.message : 'Failed to save Qwen login';
+      setQwenUsageDialogView(current => current ? {...current, busy: false, error} : null);
+      throw new Error(error);
+    }
+  }, [loadQwenUsageHistory, qwenUsageDialogView, refreshUsageAcrossHubs, service]);
+
+  const clearQwenOAuth = useCallback(async () => {
+    const view = qwenUsageDialogView;
+    const hubId = view?.target.provider.hubId ?? view?.target.account.sources[0]?.hubId ?? view?.target.account.hubIds[0];
+    if (!view || !hubId) return;
+    setQwenUsageDialogView({...view, busy: true, error: undefined});
+    try {
+      await service.updateQwenOAuth(hubId, {action: 'clear'});
+      await refreshUsageAcrossHubs();
+      await loadQwenUsageHistory(view.target);
+      setQwenUsageDialogView(current => current ? {...current, busy: false} : null);
+    } catch (cause) {
+      setQwenUsageDialogView(current => current ? {
+        ...current,
+        busy: false,
+        error: cause instanceof Error ? cause.message : 'Failed to disconnect Qwen',
+      } : null);
+    }
+  }, [loadQwenUsageHistory, qwenUsageDialogView, refreshUsageAcrossHubs, service]);
+
   const saveDeepSeekToken = useCallback(async (token: string) => {
     const view = deepSeekUsageDialogView;
     const source = view?.target.account.sources[0];
@@ -13043,10 +13194,12 @@ export function App() {
   ) => {
     if (provider.id === 'deepseek') {
       openDeepSeekUsage(provider, account, triggerElement);
+    } else if (provider.id === 'qwen') {
+      openQwenUsage(provider, account, triggerElement);
     } else {
       openUsageHistory(provider, account, triggerElement);
     }
-  }, [openDeepSeekUsage, openUsageHistory]);
+  }, [openDeepSeekUsage, openQwenUsage, openUsageHistory]);
 
   const agentPackageActionKey = useCallback((hubId: string, packageName: string): string => {
     return `${hubId}:${packageName}`;
@@ -22229,6 +22382,24 @@ export function App() {
       exiting={deepSeekUsageDialogExiting}
     />
   ) : null;
+  const qwenUsageOverlay = qwenUsageDialogView && currentQwenUsageAccount ? (
+    <QwenUsageDialog
+      account={currentQwenUsageAccount}
+      historyState={qwenUsageDialogView.historyState}
+        providerStatus={currentQwenUsageProvider?.status ?? qwenUsageDialogView.target.provider.status}
+        providerAuthenticated={currentQwenUsageProvider?.authenticated ?? qwenUsageDialogView.target.provider.authenticated}
+      providerMessage={currentQwenUsageProvider?.message ?? qwenUsageDialogView.target.provider.message}
+      triggerElement={qwenUsageDialogView.target.triggerElement}
+      busy={qwenUsageDialogView.busy}
+      error={qwenUsageDialogView.error}
+      onClose={closeQwenUsage}
+      onLogin={saveQwenOAuth}
+      onRefresh={refreshQwenUsage}
+      onLogout={clearQwenOAuth}
+      onHistoryRetry={() => { void loadQwenUsageHistory(qwenUsageDialogView.target); }}
+      exiting={qwenUsageDialogExiting}
+    />
+  ) : null;
   const mobileUsageOverlay = !isWide && (mobileUsageOpen || mobileUsageMounted) ? (
     <MobileUsageDialog
       snapshot={visibleUsageSnapshot}
@@ -22729,6 +22900,7 @@ export function App() {
       {previewTabContextMenuOverlay}
       {usageHistoryOverlay}
       {deepSeekUsageOverlay}
+      {qwenUsageOverlay}
       <LocalDevModePanel />
       {quickFileSearchOverlay}
       {previewSelectionContextMenu}

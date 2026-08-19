@@ -1,6 +1,6 @@
 import React from 'react';
 
-import {formatResetCountdown, formatResetLocalSecond, formatResetUTC, tightnessTone, type UsageLimit, type UsageProviderView, type UsageViewAccount, type UsageViewSnapshot} from './usageTypes';
+import {formatResetCountdown, formatResetLocalSecond, formatResetUTC, tightnessTone, type UsageLimit, type UsageProviderView, type UsageQwenCreditsWindow, type UsageViewAccount, type UsageViewSnapshot} from './usageTypes';
 
 export type UsageOpenHistory = (
   provider: UsageProviderView,
@@ -9,8 +9,29 @@ export type UsageOpenHistory = (
 ) => void;
 
 function accountLabel(account: UsageProviderView['accounts'][number]): string {
+  if (account.localId === 'bailian-token-plan') return 'Bailian Token Plan';
   const label = account.identity.label || account.identity.value || account.localId;
   return account.identity.kind === 'source' || label.toLowerCase() === 'opencode' ? 'Account' : label;
+}
+
+function qwenPlaceholderAccount(provider: UsageProviderView): UsageViewAccount {
+  const hubId = provider.hubId ?? provider.hubs?.[0]?.hubId ?? '';
+  return {
+    localId: 'bailian-token-plan',
+    identity: {kind: 'source', label: 'Bailian Token Plan'},
+    status: provider.status,
+    message: provider.message ?? provider.hubs?.find(hub => hub.hubId === hubId)?.message,
+    limits: [],
+    hubIds: hubId ? [hubId] : [],
+    sources: hubId ? [{hubId, accountLocalId: 'bailian-token-plan'}] : [],
+  };
+}
+
+function providerAccounts(provider: UsageProviderView, includeUnavailable = false): UsageViewAccount[] {
+  if (provider.id === 'qwen') {
+    return provider.accounts.length > 0 ? provider.accounts : [qwenPlaceholderAccount(provider)];
+  }
+  return provider.accounts.filter(account => includeUnavailable || account.status === 'ok');
 }
 
 function shortLimitLabel(limit: UsageLimit): string {
@@ -61,7 +82,10 @@ function AccountRail({
   const balance = balanceSummary(account);
   const content = (
     <>
-      <span className="usage-provider-name" data-tooltip={displayName}>{displayName}</span>
+      <span className="usage-provider-name" data-tooltip={displayName}>
+        {displayName}
+        {provider.id === 'qwen' ? <small className="usage-provider-subtitle">Bailian Token Plan</small> : null}
+      </span>
       {limits.some(limit => limit !== null) ? (
         <span className="usage-provider-metrics">
           {limits.map((limit, index) => (
@@ -83,11 +107,13 @@ function AccountRail({
       ) : balance ? (
         <span className="usage-provider-balance">{balance}</span>
       ) : (
-        <span className="usage-provider-empty">{provider.status === 'error' ? 'Scan failed' : 'Not connected'}</span>
+        <span className="usage-provider-empty">
+          {provider.id === 'qwen' && provider.authenticated ? 'Usage unavailable' : provider.status === 'error' ? 'Scan failed' : 'Not connected'}
+        </span>
       )}
     </>
   );
-  if ((account.limits.length > 0 || provider.id === 'deepseek') && onOpenHistory) {
+  if ((account.limits.length > 0 || provider.id === 'deepseek' || provider.id === 'qwen') && onOpenHistory) {
     return (
       <button
         type="button"
@@ -133,6 +159,7 @@ function AccountDetails({
         </span>
       </div>
       {account.message ? <div className="usage-account-message">{account.message}</div> : null}
+      {provider.id === 'qwen' && account.qwen ? <QwenCreditsDetails data={account.qwen} /> : null}
       {account.limits.map(limit => (
         <div
           className={`usage-limit-line tone-${tightnessTone(limit.remainingPercent)}`}
@@ -182,12 +209,12 @@ function ProviderDetails({
   provider: UsageProviderView;
   onOpenHistory?: UsageOpenHistory;
 }) {
-  const accounts = provider.accounts.filter(account => account.status === 'ok');
+  const accounts = providerAccounts(provider, provider.id === 'qwen');
   return (
     <section className="usage-detail-provider">
       {accounts.map(account => {
         const key = `${account.localId}:${account.hubIds.join(',')}`;
-        return (account.limits.length > 0 || provider.id === 'deepseek') && onOpenHistory ? (
+        return (account.limits.length > 0 || provider.id === 'deepseek' || provider.id === 'qwen') && onOpenHistory ? (
           <div
             role="button"
             tabIndex={0}
@@ -228,14 +255,15 @@ export function UsageDetailContent({
   if (snapshot.providers.length === 0) {
     return <div className="usage-feature-empty">Waiting for Hub limits</div>;
   }
-  const providers = snapshot.providers.filter(provider => provider.accounts.some(account => account.status === 'ok'));
+  const providers = snapshot.providers.filter(provider =>
+    provider.id === 'qwen' || provider.accounts.some(account => account.status === 'ok'));
   if (providers.length === 0) {
     return <div className="usage-detail-empty">No limit details</div>;
   }
   return (
     <div className="usage-detail-list">
       {providers.map(provider => (
-        <ProviderDetails key={provider.id} provider={provider} onOpenHistory={onOpenHistory} />
+        <ProviderDetails key={`${provider.id}:${provider.hubId ?? 'all'}`} provider={provider} onOpenHistory={onOpenHistory} />
       ))}
     </div>
   );
@@ -252,7 +280,7 @@ export function UsageCompactContent({
     return <div className="usage-feature-empty">Waiting for Hub limits</div>;
   }
   const compactAccounts = snapshot.providers.flatMap(provider => {
-    const accounts = provider.accounts.filter(account => account.status === 'ok');
+    const accounts = providerAccounts(provider);
     return accounts.map((account, index) => ({
       provider,
       account,
@@ -263,13 +291,43 @@ export function UsageCompactContent({
     <div className="usage-provider-list">
       {compactAccounts.map(({provider, account, displayName}) => (
         <AccountRail
-          key={`${provider.id}:${account.localId}:${account.hubIds.join(',')}`}
+          key={`${provider.id}:${provider.hubId ?? 'all'}:${account.localId}:${account.hubIds.join(',')}`}
           provider={provider}
           account={account}
           displayName={displayName}
           onOpenHistory={onOpenHistory}
         />
       ))}
+    </div>
+  );
+}
+
+function QwenCreditsDetails({data}: {data: NonNullable<UsageViewAccount['qwen']>}) {
+  return (
+    <div className="usage-qwen-credits" data-usage-qwen-credits={true}>
+      <QwenCreditLine label="5 hours" window={data.fiveHour} />
+      <QwenCreditLine label="7 days" window={data.week} />
+      {data.subscription?.specCode ? (
+        <div className="usage-qwen-plan">
+          Plan <strong>{data.subscription.specCode}</strong>
+          {data.subscription.remainingDays !== undefined ? ` · ${data.subscription.remainingDays} days left` : ''}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function QwenCreditLine({label, window}: {label: string; window: UsageQwenCreditsWindow}) {
+  const value = window.state === 'limited' && window.remaining && window.total
+    ? `${window.remaining} / ${window.total} Credits`
+    : window.state === 'unlimited'
+      ? 'Unlimited'
+      : 'Credits unavailable';
+  return (
+    <div className="usage-qwen-credit-line">
+      <span>{label}</span>
+      <strong>{value}</strong>
+      {window.resetsAt ? <time dateTime={window.resetsAt}>{formatResetCountdown(window.resetsAt) ?? 'reset scheduled'}</time> : null}
     </div>
   );
 }

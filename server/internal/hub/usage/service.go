@@ -199,6 +199,10 @@ func mergeProviderSnapshots(previous, current []ProviderSnapshot) []ProviderSnap
 	merged := make([]ProviderSnapshot, 0, len(current)+len(previous))
 	seen := make(map[ProviderID]struct{}, len(current))
 	for _, provider := range current {
+		if provider.Remove {
+			seen[provider.ID] = struct{}{}
+			continue
+		}
 		previousProvider, hasPrevious := previousByID[provider.ID]
 		provider, keep := mergeProviderSnapshot(previousProvider, provider, hasPrevious)
 		if !keep {
@@ -218,6 +222,15 @@ func mergeProviderSnapshots(previous, current []ProviderSnapshot) []ProviderSnap
 func mergeProviderSnapshot(previous, current ProviderSnapshot, hasPrevious bool) (ProviderSnapshot, bool) {
 	if !hasPrevious {
 		return current, current.Status != ProviderError
+	}
+	if current.ID == ProviderQwen {
+		if current.Status == ProviderUnavailable && len(current.Accounts) == 0 {
+			previous.Status = ProviderError
+			previous.Message = current.Message
+			previous.Authenticated = current.Authenticated
+			return previous, true
+		}
+		return current, true
 	}
 	if current.Status == ProviderUnavailable || len(current.Accounts) == 0 {
 		return previous, true
@@ -253,6 +266,7 @@ func cloneSnapshot(snapshot Snapshot) Snapshot {
 		copySnapshot.Providers[index].Accounts = append([]Account{}, snapshot.Providers[index].Accounts...)
 		for accountIndex := range copySnapshot.Providers[index].Accounts {
 			copySnapshot.Providers[index].Accounts[accountIndex].Limits = append([]Limit{}, snapshot.Providers[index].Accounts[accountIndex].Limits...)
+			copySnapshot.Providers[index].Accounts[accountIndex].Qwen = cloneQwenUsageData(snapshot.Providers[index].Accounts[accountIndex].Qwen)
 		}
 	}
 	return copySnapshot

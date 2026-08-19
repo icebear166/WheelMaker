@@ -265,6 +265,12 @@ export interface RegistryHubConfigDeepSeekPlatformSnapshot {
   updatedAt?: string;
 }
 
+export interface RegistryHubConfigQwenOAuthSnapshot {
+  configured: boolean;
+  updatedAt?: string;
+  expiresAt?: string;
+}
+
 export type RegistryHubMCPTransport = 'stdio' | 'http';
 
 export type RegistryHubMCPRuntimeState =
@@ -327,6 +333,7 @@ export interface RegistryHubConfig {
   flickerBridge: RegistryHubConfigFlickerBridgeSnapshot;
   apiKeys: Record<string, RegistryHubConfigAPIKeySnapshot>;
   deepSeekPlatform: RegistryHubConfigDeepSeekPlatformSnapshot;
+  qwenOAuth?: RegistryHubConfigQwenOAuthSnapshot;
   mcpServers: RegistryHubMCPServerSnapshot[];
 }
 
@@ -346,6 +353,18 @@ export type RegistryHubConfigUpdatePayload =
     action: 'add' | 'update' | 'delete' | 'enable' | 'disable' | 'import' | 'preview';
     value?: string;
   };
+
+export interface RegistryQwenOAuthCredential {
+  accessToken: string;
+  refreshToken?: string;
+  expiresAt?: string;
+  region?: string;
+  site?: string;
+}
+
+export type RegistryQwenOAuthUpdatePayload =
+  | {action: 'set'; credential: RegistryQwenOAuthCredential}
+  | {action: 'clear'};
 
 export interface RegistryDeepSeekUsageDay {
   date: string;

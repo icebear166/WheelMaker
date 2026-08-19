@@ -30,6 +30,7 @@ const (
 	desktopGetUpdateInfoBinding            = "__wheelMakerDesktopGetUpdateInfo"
 	desktopRequestUpdateBinding            = "__wheelMakerDesktopRequestUpdate"
 	desktopDeepSeekLoginBinding            = "__wheelMakerDesktopDeepSeekLogin"
+	desktopQwenLoginBinding                = "__wheelMakerDesktopQwenLogin"
 	desktopEnterLocalDevBinding            = "__wheelMakerDesktopEnterLocalDev"
 	desktopGetLocalDevStateBinding         = "__wheelMakerDesktopGetLocalDevState"
 	desktopSaveLocalDevSourceBinding       = "__wheelMakerDesktopSaveLocalDevSource"
@@ -105,6 +106,7 @@ func desktopRuntimeInitScriptWithPreviewChannel(previewChannelName string, local
 		focusPreviewWindow: invoke('` + desktopFocusPreviewWindowBinding + `'),
 		dockPreviewWindow: invoke('` + desktopDockPreviewWindowBinding + `'),
 		deepSeekLogin: invoke('` + desktopDeepSeekLoginBinding + `'),
+		qwenLogin: invoke('` + desktopQwenLoginBinding + `'),
 		showNotification: invoke('` + desktopShowNotificationBinding + `'),
     });
 	};

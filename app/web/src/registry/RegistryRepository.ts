@@ -35,6 +35,7 @@ import type {
   RegistryHubConfig,
   RegistryHubConfigResponse,
   RegistryHubConfigUpdatePayload,
+  RegistryQwenOAuthUpdatePayload,
   RegistryHubMCPImportPreview,
   RegistryHubMCPRuntimeStatusData,
   RegistryHubMCPRuntimeState,
@@ -547,6 +548,9 @@ export class RegistryRepository {
     const deepSeekPlatformInput = configInput.deepSeekPlatform && typeof configInput.deepSeekPlatform === 'object'
       ? configInput.deepSeekPlatform as Record<string, unknown>
       : {};
+    const qwenOAuthInput = configInput.qwenOAuth && typeof configInput.qwenOAuth === 'object'
+      ? configInput.qwenOAuth as Record<string, unknown>
+      : {};
     const apiKeys: RegistryHubConfig['apiKeys'] = {};
     for (const [name, value] of Object.entries(apiKeysInput)) {
       const entry = value && typeof value === 'object' ? value as Record<string, unknown> : {};
@@ -568,6 +572,11 @@ export class RegistryRepository {
           updatedAt: typeof deepSeekPlatformInput.updatedAt === 'string'
             ? deepSeekPlatformInput.updatedAt
             : undefined,
+        },
+        qwenOAuth: {
+          configured: qwenOAuthInput.configured === true,
+          updatedAt: typeof qwenOAuthInput.updatedAt === 'string' ? qwenOAuthInput.updatedAt : undefined,
+          expiresAt: typeof qwenOAuthInput.expiresAt === 'string' ? qwenOAuthInput.expiresAt : undefined,
         },
         mcpServers: normalizeMCPServerSnapshots(configInput.mcpServers),
       },
@@ -2723,6 +2732,19 @@ export class RegistryRepository {
   ): Promise<RegistryHubConfigResponse> {
     const resp = await this.client.request({
       method: RegistryMethods.HubConfigUpdate,
+      hubId,
+      payload: update,
+      timeoutMs: 15000,
+    });
+    return this.normalizeHubConfigResponse(resp.payload, hubId);
+  }
+
+  async updateQwenOAuth(
+    hubId: string,
+    update: RegistryQwenOAuthUpdatePayload,
+  ): Promise<RegistryHubConfigResponse> {
+    const resp = await this.client.request({
+      method: RegistryMethods.QwenOAuthUpdate,
       hubId,
       payload: update,
       timeoutMs: 15000,

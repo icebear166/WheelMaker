@@ -56,6 +56,7 @@ const (
 	RegistryMethodHubStateUpdated           = "hub.state.updated"
 	RegistryMethodHubConfigGet              = "hub.config.get"
 	RegistryMethodHubConfigUpdate           = "hub.config.update"
+	RegistryMethodQwenOAuthUpdate           = "qwen.oauth.update"
 	RegistryMethodUsageHistoryGet           = "usage.history.get"
 	RegistryMethodDeepSeekUsageGet          = "deepseek.usage.get"
 	RegistryMethodReleasePublishStart       = "release.publish.start"
@@ -196,6 +197,7 @@ var RegistryMethodDescriptors = map[string]RegistryMethodDescriptor{
 	RegistryMethodHubStateUpdated:                  registryMethod(RegistryMethodHubStateUpdated, RegistryRouteClientEvent, []RegistryRole{RegistryRoleHub}),
 	RegistryMethodHubConfigGet:                     registryHubStateMethod(RegistryMethodHubConfigGet),
 	RegistryMethodHubConfigUpdate:                  registryHubStateMethod(RegistryMethodHubConfigUpdate),
+	RegistryMethodQwenOAuthUpdate:                  registryHubStateMethod(RegistryMethodQwenOAuthUpdate),
 	RegistryMethodUsageHistoryGet:                  registryHubStateMethod(RegistryMethodUsageHistoryGet),
 	RegistryMethodDeepSeekUsageGet:                 registryHubStateMethod(RegistryMethodDeepSeekUsageGet),
 	RegistryMethodReleasePublishStart:              registryReleasePublishMethod(RegistryMethodReleasePublishStart, RegistryRoleClient, RegistryRouteReleasePublish),

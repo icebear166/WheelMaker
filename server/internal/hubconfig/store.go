@@ -63,12 +63,29 @@ type DeepSeekPlatformSnapshot struct {
 	UpdatedAt  string `json:"updatedAt,omitempty"`
 }
 
+// QwenOAuthCredential is the Console OAuth bundle used only inside a Hub to
+// query Bailian Token Plan usage. It is never included in Snapshot.
+type QwenOAuthCredential struct {
+	AccessToken  string     `json:"accessToken,omitempty"`
+	RefreshToken string     `json:"refreshToken,omitempty"`
+	ExpiresAt    *time.Time `json:"expiresAt,omitempty"`
+	Region       string     `json:"region,omitempty"`
+	Site         string     `json:"site,omitempty"`
+}
+
+type QwenOAuthSnapshot struct {
+	Configured bool   `json:"configured"`
+	UpdatedAt  string `json:"updatedAt,omitempty"`
+	ExpiresAt  string `json:"expiresAt,omitempty"`
+}
+
 // Snapshot is the sanitized view of the hub config: secret values never leave
 // the store, only their configured/updatedAt markers.
 type Snapshot struct {
 	FlickerBridge    FlickerBridgeSnapshot     `json:"flickerBridge"`
 	APIKeys          map[string]APIKeySnapshot `json:"apiKeys"`
 	DeepSeekPlatform DeepSeekPlatformSnapshot  `json:"deepSeekPlatform"`
+	QwenOAuth        QwenOAuthSnapshot         `json:"qwenOAuth"`
 	MCPServers       []MCPServerSnapshot       `json:"mcpServers"`
 }
 
@@ -257,6 +274,10 @@ func (s *Store) Snapshot() (Snapshot, error) {
 	if err != nil {
 		return Snapshot{}, err
 	}
+	qwenOAuthSection, err := qwenOAuthSection(root)
+	if err != nil {
+		return Snapshot{}, err
+	}
 	mcpServers, err := mcpServersFromRoot(root)
 	if err != nil {
 		return Snapshot{}, err
@@ -265,6 +286,7 @@ func (s *Store) Snapshot() (Snapshot, error) {
 		FlickerBridge:    FlickerBridgeSnapshot{Mode: mode, Enabled: enabled},
 		APIKeys:          make(map[string]APIKeySnapshot, len(APIKeyNames)),
 		DeepSeekPlatform: DeepSeekPlatformSnapshot{},
+		QwenOAuth:        QwenOAuthSnapshot{},
 		MCPServers:       make([]MCPServerSnapshot, 0, len(mcpServers)),
 	}
 	for _, name := range APIKeyNames {
@@ -279,6 +301,20 @@ func (s *Store) Snapshot() (Snapshot, error) {
 	snapshot.DeepSeekPlatform = DeepSeekPlatformSnapshot{Configured: platformEntry.Value != ""}
 	if !platformEntry.UpdatedAt.IsZero() {
 		snapshot.DeepSeekPlatform.UpdatedAt = platformEntry.UpdatedAt.UTC().Format(time.RFC3339)
+	}
+	qwenOAuthEntry := qwenOAuthSection["credential"]
+	qwenOAuth := QwenOAuthCredential{}
+	if qwenOAuthEntry.Value != "" {
+		if err := json.Unmarshal([]byte(qwenOAuthEntry.Value), &qwenOAuth); err != nil || strings.TrimSpace(qwenOAuth.AccessToken) == "" {
+			return Snapshot{}, fmt.Errorf("parse qwen OAuth credential")
+		}
+	}
+	snapshot.QwenOAuth = QwenOAuthSnapshot{Configured: qwenOAuthEntry.Value != ""}
+	if !qwenOAuthEntry.UpdatedAt.IsZero() {
+		snapshot.QwenOAuth.UpdatedAt = qwenOAuthEntry.UpdatedAt.UTC().Format(time.RFC3339)
+	}
+	if qwenOAuth.ExpiresAt != nil && !qwenOAuth.ExpiresAt.IsZero() {
+		snapshot.QwenOAuth.ExpiresAt = qwenOAuth.ExpiresAt.UTC().Format(time.RFC3339)
 	}
 	for _, server := range mcpServers {
 		snapshot.MCPServers = append(snapshot.MCPServers, mcpServerSnapshot(server))
@@ -419,6 +455,16 @@ func deepSeekPlatformSection(root map[string]json.RawMessage) (map[string]secret
 	return section, nil
 }
 
+func qwenOAuthSection(root map[string]json.RawMessage) (map[string]secretValue, error) {
+	section := map[string]secretValue{}
+	if raw := root["qwenOAuth"]; len(raw) != 0 && string(raw) != "null" {
+		if err := json.Unmarshal(raw, &section); err != nil || section == nil {
+			return nil, fmt.Errorf("parse hub config qwenOAuth section")
+		}
+	}
+	return section, nil
+}
+
 // DeepSeekPlatformToken returns the stored platform session token, or "" when unset.
 func (s *Store) DeepSeekPlatformToken() (string, error) {
 	s.mu.Lock()
@@ -465,5 +511,77 @@ func (s *Store) UpdateDeepSeekPlatformToken(action, value string, now time.Time)
 		return fmt.Errorf("encode deepSeekPlatform section: %w", err)
 	}
 	root["deepSeekPlatform"] = rawSection
+	return s.writeRootLocked(root)
+}
+
+// QwenOAuthCredential returns the stored Console OAuth bundle, or an empty
+// credential when the Hub has not completed native login.
+func (s *Store) QwenOAuthCredential() (QwenOAuthCredential, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	root, _, err := s.loadLocked()
+	if err != nil {
+		return QwenOAuthCredential{}, err
+	}
+	section, err := qwenOAuthSection(root)
+	if err != nil {
+		return QwenOAuthCredential{}, err
+	}
+	value := strings.TrimSpace(section["credential"].Value)
+	if value == "" {
+		return QwenOAuthCredential{}, nil
+	}
+	var credential QwenOAuthCredential
+	if err := json.Unmarshal([]byte(value), &credential); err != nil || strings.TrimSpace(credential.AccessToken) == "" {
+		return QwenOAuthCredential{}, fmt.Errorf("parse qwen OAuth credential")
+	}
+	return credential, nil
+}
+
+// UpdateQwenOAuthCredential sets or clears the dedicated Console OAuth
+// section. The credential JSON remains Hub-local and is never part of the
+// sanitized config response.
+func (s *Store) UpdateQwenOAuthCredential(action string, credential QwenOAuthCredential, now time.Time) error {
+	if action != "set" && action != "clear" {
+		return fmt.Errorf("unsupported qwen OAuth action %q", action)
+	}
+	var encoded string
+	if action == "set" {
+		credential.AccessToken = strings.TrimSpace(credential.AccessToken)
+		credential.RefreshToken = strings.TrimSpace(credential.RefreshToken)
+		credential.Region = strings.TrimSpace(credential.Region)
+		credential.Site = strings.TrimSpace(credential.Site)
+		if credential.AccessToken == "" {
+			return fmt.Errorf("qwen OAuth access token is required")
+		}
+		raw, err := json.Marshal(credential)
+		if err != nil {
+			return fmt.Errorf("encode qwen OAuth credential: %w", err)
+		}
+		if len(raw) > maxSecretBytes {
+			return fmt.Errorf("qwen OAuth credential exceeds 16 KiB")
+		}
+		encoded = string(raw)
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	root, _, err := s.loadLocked()
+	if err != nil {
+		return err
+	}
+	section, err := qwenOAuthSection(root)
+	if err != nil {
+		return err
+	}
+	if action == "clear" {
+		delete(section, "credential")
+	} else {
+		section["credential"] = secretValue{Value: encoded, UpdatedAt: now.UTC()}
+	}
+	rawSection, err := json.Marshal(section)
+	if err != nil {
+		return fmt.Errorf("encode qwenOAuth section: %w", err)
+	}
+	root["qwenOAuth"] = rawSection
 	return s.writeRootLocked(root)
 }

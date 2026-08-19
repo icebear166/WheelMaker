@@ -7,16 +7,22 @@ import type {
   UsageProviderSnapshot,
   UsageProviderStatus,
   UsageProviderView,
+  UsageQwenCreditsWindow,
+  UsageQwenData,
   UsageResetCredits,
   UsageViewAccount,
   UsageViewSnapshot,
 } from './usageTypes';
 import type {HubStore} from '../hubState/hubStore';
 
-const providerOrder: UsageProviderId[] = ['codex', 'flicker', 'kimi', 'zai', 'deepseek'];
+const providerOrder: UsageProviderId[] = ['codex', 'flicker', 'kimi', 'zai', 'deepseek', 'qwen'];
 
 interface UsageProviderAggregate {
+  id: UsageProviderId;
   name: string;
+  message?: string;
+  authenticated?: boolean;
+  hubId?: string;
   statuses: UsageProviderStatus[];
   accounts: Map<string, {account: UsageViewAccount; updatedAt?: string}>;
   hubs: Map<string, {hubId: string; status: UsageProviderStatus; message?: string}>;
@@ -69,20 +75,25 @@ export class UsageStore {
   }
 
   snapshot(): UsageViewSnapshot {
-    const providers = new Map<UsageProviderId, UsageProviderAggregate>();
+    const providers = new Map<string, UsageProviderAggregate>();
     let refreshing = false;
     let updatedAt = '';
     for (const [hubId, hub] of this.hubs) {
       refreshing ||= hub.status === 'scanning';
       if (hub.updatedAt && hub.updatedAt > updatedAt) updatedAt = hub.updatedAt;
       for (const provider of hub.providers) {
-        const aggregate: UsageProviderAggregate = providers.get(provider.id) ?? {
+        const providerKey = provider.id === 'qwen' ? `${provider.id}:${hubId}` : provider.id;
+        const aggregate: UsageProviderAggregate = providers.get(providerKey) ?? {
+          id: provider.id,
           name: provider.name,
+          hubId: provider.id === 'qwen' ? hubId : undefined,
           statuses: [],
           accounts: new Map<string, {account: UsageViewAccount; updatedAt?: string}>(),
           hubs: new Map(),
         };
         aggregate.name = provider.name || aggregate.name;
+        aggregate.message = provider.message || aggregate.message;
+        if (typeof provider.authenticated === 'boolean') aggregate.authenticated = provider.authenticated;
         aggregate.statuses.push(provider.status);
         aggregate.hubs.set(hubId, {hubId, status: provider.status, message: provider.message});
         for (const account of provider.accounts) {
@@ -93,7 +104,9 @@ export class UsageStore {
           const normalizedIdentityValue = normalizedIdentityKind === 'email'
             ? identityValue?.toLowerCase()
             : identityValue;
-          const identityKey = identityKind && identityValue
+          const identityKey = provider.id === 'qwen'
+            ? `${hubId}:${provider.id}:${localId}`
+            : identityKind && identityValue
             ? `${provider.id}:${normalizedIdentityKind}:${normalizedIdentityValue}`
             : normalizedIdentityKind === 'source' && localId
               ? `${provider.id}:source:${localId}`
@@ -117,15 +130,18 @@ export class UsageStore {
             existing.account.sources = sources;
           }
         }
-        providers.set(provider.id, aggregate);
+        providers.set(providerKey, aggregate);
       }
     }
-    const views = Array.from(providers, ([id, aggregate]) => summarizeProvider({
-      id,
+    const views = Array.from(providers.values(), aggregate => summarizeProvider({
+      id: aggregate.id,
       name: aggregate.name,
       status: aggregateStatus(aggregate.statuses),
+      message: aggregate.message,
+      authenticated: aggregate.authenticated,
       accounts: Array.from(aggregate.accounts.values(), value => value.account),
       hubs: Array.from(aggregate.hubs.values()),
+      hubId: aggregate.hubId,
     })).sort((left, right) => providerOrder.indexOf(left.id) - providerOrder.indexOf(right.id));
     return {refreshing, updatedAt: updatedAt || undefined, providers: views};
   }
@@ -240,9 +256,66 @@ function parseProvider(value: unknown): UsageProviderSnapshot | null {
         ? {isAvailable: rawAccount.balance.isAvailable, items: rawAccount.balance.items.filter(isRecord).map(item => ({currency: optionalString(item.currency) ?? '', total: optionalString(item.total) ?? '', granted: optionalString(item.granted), toppedUp: optionalString(item.toppedUp)}))}
         : undefined,
       resetCredits: parseResetCredits(rawAccount.resetCredits),
+      qwen: parseQwenData(rawAccount.qwen),
     });
   }
-  return {id: value.id, name: value.name, status: value.status, message: optionalString(value.message), accounts};
+  return {
+    id: value.id,
+    name: value.name,
+    status: value.status,
+    message: optionalString(value.message),
+    authenticated: typeof value.authenticated === 'boolean' ? value.authenticated : undefined,
+    accounts,
+  };
+}
+
+function parseQwenData(value: unknown): UsageQwenData | undefined {
+  if (!isRecord(value)) return undefined;
+  const fiveHour = parseQwenWindow(value.fiveHour);
+  const week = parseQwenWindow(value.week);
+  if (!fiveHour || !week) return undefined;
+  const subscription = isRecord(value.subscription)
+    ? {
+        instanceCode: optionalString(value.subscription.instanceCode),
+        specCode: optionalString(value.subscription.specCode),
+        remainingDays: typeof value.subscription.remainingDays === 'number' && Number.isFinite(value.subscription.remainingDays)
+          ? value.subscription.remainingDays
+          : undefined,
+        startTime: optionalString(value.subscription.startTime),
+        endTime: optionalString(value.subscription.endTime),
+        autoRenew: typeof value.subscription.autoRenew === 'boolean' ? value.subscription.autoRenew : undefined,
+        status: optionalString(value.subscription.status),
+      }
+    : undefined;
+  const quota = isRecord(value.quota)
+    ? {fiveHour: optionalString(value.quota.fiveHour), week: optionalString(value.quota.week)}
+    : undefined;
+  return {
+    fiveHour,
+    week,
+    subscription,
+    quota,
+    updatedAt: optionalString(value.updatedAt),
+  };
+}
+
+function parseQwenWindow(value: unknown): UsageQwenCreditsWindow | null {
+  if (!isRecord(value) || (value.state !== 'limited' && value.state !== 'unlimited' && value.state !== 'unavailable')) return null;
+  const remainingPercent = value.remainingPercent === undefined
+    ? undefined
+    : typeof value.remainingPercent === 'number' && Number.isFinite(value.remainingPercent) && value.remainingPercent >= 0 && value.remainingPercent <= 100
+      ? value.remainingPercent
+      : null;
+  if (remainingPercent === null) return null;
+  return {
+    state: value.state,
+    total: optionalString(value.total),
+    used: optionalString(value.used),
+    remaining: optionalString(value.remaining),
+    remainingPercent,
+    windowId: optionalString(value.windowId),
+    resetsAt: optionalString(value.resetsAt),
+  };
 }
 
 function parseResetCredits(value: unknown): UsageResetCredits | undefined {

@@ -42,6 +42,7 @@ const (
 	desktopBridgeCommitHTMLFileClipboard
 	desktopBridgeCancelHTMLFileClipboard
 	desktopBridgeDeepSeekLogin
+	desktopBridgeQwenLogin
 	desktopBridgeEnterLocalDev
 	desktopBridgeGetLocalDevState
 	desktopBridgeSaveLocalDevSource
@@ -63,9 +64,11 @@ const (
 )
 
 type desktopWebViewPolicy struct {
-	baseURL   *url.URL
-	localhost bool
-	localDev  bool
+	baseURL             *url.URL
+	localhost           bool
+	localDev            bool
+	trustedHosts        []string
+	trustedHostSuffixes []string
 }
 
 func newDesktopLocalhostWebViewPolicy(baseURL string) (*desktopWebViewPolicy, error) {
@@ -154,6 +157,7 @@ func (p *desktopWebViewPolicy) AllowsBridge(mode desktopPageMode, rawURL string,
 		desktopBridgeGetUpdateInfo,
 		desktopBridgeRequestUpdate,
 		desktopBridgeDeepSeekLogin,
+		desktopBridgeQwenLogin,
 		desktopBridgeShowNotification,
 		desktopBridgeOpenPreviewWindow,
 		desktopBridgeFocusPreviewWindow,
@@ -205,6 +209,25 @@ func (p *desktopWebViewPolicy) contains(rawURL string) bool {
 	}
 	if parsed.Scheme != "https" {
 		return false
+	}
+	if len(p.trustedHosts) > 0 {
+		if parsed.Port() != "" && parsed.Port() != "443" {
+			return false
+		}
+		for _, host := range p.trustedHosts {
+			if strings.EqualFold(parsed.Hostname(), host) {
+				return true
+			}
+		}
+		return false
+	}
+	for _, suffix := range p.trustedHostSuffixes {
+		if parsed.Port() != "" && parsed.Port() != "443" {
+			continue
+		}
+		if strings.EqualFold(parsed.Hostname(), suffix) || strings.HasSuffix(strings.ToLower(parsed.Hostname()), "."+strings.ToLower(suffix)) {
+			return true
+		}
 	}
 	if !strings.EqualFold(parsed.Scheme, p.baseURL.Scheme) || !strings.EqualFold(parsed.Host, p.baseURL.Host) {
 		return false

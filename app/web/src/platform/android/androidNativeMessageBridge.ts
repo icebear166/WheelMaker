@@ -23,6 +23,7 @@ export type AndroidNativeMessageClient = {
 export type AndroidNativeRpcFacade = {
   reserveUserAction(action: 'image.share' | 'html.share' | 'speech.start' | 'file.download'): Promise<string>;
   deepSeekLogin(): Promise<string>;
+  qwenLogin(): Promise<string>;
   drainWebDiagnostics(): Promise<string>;
   setDiagnosticLogLevel(logLevel: string): Promise<string>;
   getSpeechCredentialState(): Promise<string>;
@@ -201,6 +202,7 @@ export function getAndroidNativeRpcFacade(
       'token',
     ),
     deepSeekLogin: () => request('deepseek.login'),
+    qwenLogin: () => request('qwen.login'),
     drainWebDiagnostics: () => request('diagnostics.drain'),
     setDiagnosticLogLevel: logLevel => request('diagnostics.setLogLevel', {logLevel}),
     getSpeechCredentialState: () => request('speech.credentialState'),

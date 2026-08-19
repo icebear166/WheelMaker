@@ -86,6 +86,7 @@ class TrustedWebMessagePolicy(private val configuredBaseUrl: String) {
         val BUSINESS_ACTIONS = setOf(
             "userAction.reserve",
             "deepseek.login",
+            "qwen.login",
             "device.getName",
             "app.launchReady",
             "diagnostics.drain",
@@ -118,6 +119,7 @@ class TrustedWebMessagePolicy(private val configuredBaseUrl: String) {
             "bootstrap.reset",
             "userAction.reserve",
             "deepseek.login",
+            "qwen.login",
             "notification.requestPermission",
             "apk.install",
             "relay.clearSiteData"

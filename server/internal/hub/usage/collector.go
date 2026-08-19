@@ -50,7 +50,9 @@ func providerOrder(id ProviderID) int {
 		return 3
 	case ProviderDeepSeek:
 		return 4
-	default:
+	case ProviderQwen:
 		return 5
+	default:
+		return 6
 	}
 }

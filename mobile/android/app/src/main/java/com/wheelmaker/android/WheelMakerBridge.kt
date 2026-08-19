@@ -8,6 +8,10 @@ interface DeepSeekLoginHost {
     fun showLogin(onResult: (token: String?) -> Unit)
 }
 
+interface QwenLoginHost {
+    fun showQwenLogin(onResult: (credentialJson: String?) -> Unit)
+}
+
 interface LaunchSplashHost {
     fun onLaunchReady()
 }
@@ -37,6 +41,7 @@ class WheelMakerBridge(
     private val androidDiagnosticLogLevelStore: AndroidDiagnosticLogLevelStore,
     private val trustedNativeActionGrantStore: TrustedNativeActionGrantStore,
     private val deepSeekLoginHost: DeepSeekLoginHost,
+    private val qwenLoginHost: QwenLoginHost,
     private val launchSplashHost: LaunchSplashHost
 ) {
 	fun dispatch(capability: TrustedNativeCapability, payload: JSONObject, reply: BridgeReply? = null): String? {
@@ -47,6 +52,7 @@ class WheelMakerBridge(
 		return when (action) {
         "userAction.reserve" -> reserveUserAction(payload)
         "deepseek.login" -> deepSeekLogin(reply)
+        "qwen.login" -> qwenLogin(reply)
         "device.getName" -> JSONObject.quote(Build.MODEL.trim().ifBlank { "Android" }.take(80))
         "app.launchReady" -> notifyLaunchReady()
         "diagnostics.drain" -> androidWebDiagnostics.drainJson()
@@ -92,6 +98,20 @@ class WheelMakerBridge(
         }
         deepSeekLoginHost.showLogin { token ->
             reply.success(JSONObject().put("token", token ?: JSONObject.NULL))
+        }
+        return null
+    }
+
+    private fun qwenLogin(reply: BridgeReply?): String? {
+        if (reply == null) {
+            throw IllegalArgumentException("qwen.login requires an async reply")
+        }
+        qwenLoginHost.showQwenLogin { credentialJson ->
+            if (credentialJson.isNullOrBlank()) {
+                reply.error("Qwen login window closed")
+            } else {
+                reply.success(JSONObject(credentialJson))
+            }
         }
         return null
     }

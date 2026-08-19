@@ -10,11 +10,12 @@ const (
 	ProviderKimi     ProviderID = "kimi"
 	ProviderZAI      ProviderID = "zai"
 	ProviderDeepSeek ProviderID = "deepseek"
+	ProviderQwen     ProviderID = "qwen"
 )
 
 func IsKnownProviderID(id ProviderID) bool {
 	switch id {
-	case ProviderCodex, ProviderFlicker, ProviderKimi, ProviderZAI, ProviderDeepSeek:
+	case ProviderCodex, ProviderFlicker, ProviderKimi, ProviderZAI, ProviderDeepSeek, ProviderQwen:
 		return true
 	default:
 		return false
@@ -74,22 +75,25 @@ type ResetCredits struct {
 }
 
 type Account struct {
-	LocalID  string         `json:"localId"`
-	Identity Identity       `json:"identity"`
-	Status   ProviderStatus `json:"status"`
-	Plan     string         `json:"plan,omitempty"`
-	Message  string         `json:"message,omitempty"`
+	LocalID      string         `json:"localId"`
+	Identity     Identity       `json:"identity"`
+	Status       ProviderStatus `json:"status"`
+	Plan         string         `json:"plan,omitempty"`
+	Message      string         `json:"message,omitempty"`
 	Limits       []Limit        `json:"limits"`
 	Balance      *Balance       `json:"balance,omitempty"`
 	ResetCredits *ResetCredits  `json:"resetCredits,omitempty"`
+	Qwen         *QwenUsageData `json:"qwen,omitempty"`
 }
 
 type ProviderSnapshot struct {
-	ID       ProviderID     `json:"id"`
-	Name     string         `json:"name"`
-	Status   ProviderStatus `json:"status"`
-	Message  string         `json:"message,omitempty"`
-	Accounts []Account      `json:"accounts"`
+	ID            ProviderID     `json:"id"`
+	Name          string         `json:"name"`
+	Status        ProviderStatus `json:"status"`
+	Message       string         `json:"message,omitempty"`
+	Remove        bool           `json:"remove,omitempty"`
+	Authenticated bool           `json:"authenticated"`
+	Accounts      []Account      `json:"accounts"`
 }
 
 type ScanStatus string

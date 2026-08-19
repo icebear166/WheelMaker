@@ -37,6 +37,19 @@ func TestHubStateUpdatedAllowsHubOrigin(t *testing.T) {
 	}
 }
 
+func TestQwenOAuthUpdateIsHubScopedAndClientCallable(t *testing.T) {
+	descriptor, ok := RegistryMethod(RegistryMethodQwenOAuthUpdate)
+	if !ok {
+		t.Fatal("qwen.oauth.update is not registered")
+	}
+	if descriptor.Route != RegistryRouteHubState || !descriptor.RequiresHubID {
+		t.Fatalf("descriptor=%+v", descriptor)
+	}
+	if !RegistryMethodAllowed(string(RegistryRoleClient), descriptor.Method) || RegistryMethodAllowed(string(RegistryRoleHub), descriptor.Method) {
+		t.Fatalf("unexpected roles=%v", descriptor.Roles)
+	}
+}
+
 func TestReleasePublishMethodsAreRegisteredInProtocol27(t *testing.T) {
 	for _, method := range []string{
 		RegistryMethodReleasePublishStart,

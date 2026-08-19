@@ -75,6 +75,11 @@ type hubConfigUpdatePayload struct {
 	Value   string `json:"value,omitempty"`
 }
 
+type qwenOAuthUpdatePayload struct {
+	Action     string                         `json:"action"`
+	Credential *hubconfig.QwenOAuthCredential `json:"credential,omitempty"`
+}
+
 type usageHistoryGetPayload struct {
 	ProviderID     usage.ProviderID `json:"providerId"`
 	AccountLocalID string           `json:"accountLocalId"`
@@ -288,11 +293,19 @@ func NewReporter(cfg ReporterConfig, projects []ProjectInfo) *Reporter {
 	r.fileIndex.setOperationDoneHandler(r.onFileIndexOperationDone)
 	r.flickerBridge.setStateChangeHandler(r.updateFlickerBridgeLifecycleState)
 	collector := usage.NewLocalCollector("")
+	collector.PersistQwenOAuth = func(credential usage.QwenOAuthCredential) error {
+		return r.ensureHubConfigStore().UpdateQwenOAuthCredential("set", hubconfig.QwenOAuthCredential{
+			AccessToken: credential.AccessToken, RefreshToken: credential.RefreshToken,
+			ExpiresAt: credential.ExpiresAt, Region: credential.Region, Site: credential.Site,
+		}, time.Now())
+	}
 	collector.UpdateAPIKeys(
 		apiKeys[hubconfig.APIKeyKimi],
 		apiKeys[hubconfig.APIKeyZAI],
 		apiKeys[hubconfig.APIKeyDeepSeek],
 	)
+	qwenOAuth, _ := r.hubConfig.QwenOAuthCredential()
+	collector.UpdateQwenCredentials(apiKeys[hubconfig.APIKeyQwen], qwenOAuthCredentialForUsage(qwenOAuth))
 	r.usageCollector = collector
 	r.usageHistory = usage.NewHistoryStore(filepath.Join(stateDir, "db", "usage-history.json"))
 	platformToken, _ := r.hubConfig.DeepSeekPlatformToken()
@@ -771,6 +784,8 @@ func (r *Reporter) handleRegistryRequest(conn *websocket.Conn, in envelope) {
 		r.replyHubConfigGet(conn, in)
 	case rp.RegistryMethodHubConfigUpdate:
 		r.replyHubConfigUpdate(conn, in)
+	case rp.RegistryMethodQwenOAuthUpdate:
+		r.replyQwenOAuthUpdate(conn, in)
 	case rp.RegistryMethodUsageHistoryGet:
 		r.replyUsageHistoryGet(conn, in)
 	case rp.RegistryMethodDeepSeekUsageGet:
@@ -1403,6 +1418,56 @@ func (r *Reporter) replyHubConfigUpdate(conn *websocket.Conn, req envelope) {
 	r.writeHubConfigSnapshot(conn, req, snapshot)
 }
 
+func (r *Reporter) replyQwenOAuthUpdate(conn *websocket.Conn, req envelope) {
+	var payload qwenOAuthUpdatePayload
+	if err := decodePayload(req.Payload, &payload); err != nil {
+		_ = r.writeError(conn, req.RequestID, codeInvalidArgument, "invalid qwen.oauth.update payload")
+		return
+	}
+	payload.Action = strings.TrimSpace(payload.Action)
+	if payload.Action != "set" && payload.Action != "clear" {
+		_ = r.writeError(conn, req.RequestID, codeInvalidArgument, "unsupported qwen OAuth action")
+		return
+	}
+	credential := hubconfig.QwenOAuthCredential{}
+	if payload.Action == "set" {
+		if payload.Credential == nil || strings.TrimSpace(payload.Credential.AccessToken) == "" {
+			_ = r.writeError(conn, req.RequestID, codeInvalidArgument, "qwen OAuth access token is required")
+			return
+		}
+		credential = *payload.Credential
+	}
+	if err := r.ensureHubConfigStore().UpdateQwenOAuthCredential(payload.Action, credential, time.Now()); err != nil {
+		_ = r.writeError(conn, req.RequestID, codeInvalidArgument, err.Error())
+		return
+	}
+	keys, err := r.ensureHubConfigStore().APIKeyValues()
+	if err != nil {
+		_ = r.writeError(conn, req.RequestID, codeInternal, "failed to read hub config")
+		return
+	}
+	if err := r.syncUsageCredentials(keys); err != nil {
+		_ = r.writeError(conn, req.RequestID, codeInternal, "failed to update Qwen usage credentials")
+		return
+	}
+	if r.usageService != nil {
+		go func() {
+			refreshCtx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
+			defer cancel()
+			if _, err := r.usageService.Refresh(refreshCtx); err != nil {
+				hubLogger("").Warn("refresh limits after Qwen OAuth update failed: %v", err)
+			}
+		}()
+	}
+	snapshot, err := r.ensureHubConfigStore().Snapshot()
+	if err != nil {
+		_ = r.writeError(conn, req.RequestID, codeInternal, "failed to read hub config")
+		return
+	}
+	r.overlayHubConfigDefaults(&snapshot)
+	r.writeHubConfigSnapshot(conn, req, snapshot)
+}
+
 func (r *Reporter) writeHubConfigSnapshot(conn *websocket.Conn, req envelope, snapshot hubconfig.Snapshot) {
 	r.writeHubConfigSnapshotWithPreview(conn, req, snapshot, nil)
 }
@@ -1496,6 +1561,13 @@ func (r *Reporter) applyHubConfigUpdate(payload hubConfigUpdatePayload) error {
 		return r.reloadConfiguredRuntime(context.Background())
 	default:
 		return fmt.Errorf("unsupported hub config section %q", payload.Section)
+	}
+}
+
+func qwenOAuthCredentialForUsage(credential hubconfig.QwenOAuthCredential) usage.QwenOAuthCredential {
+	return usage.QwenOAuthCredential{
+		AccessToken: credential.AccessToken, RefreshToken: credential.RefreshToken,
+		ExpiresAt: credential.ExpiresAt, Region: credential.Region, Site: credential.Site,
 	}
 }
 
@@ -1596,12 +1668,8 @@ func (r *Reporter) reloadConfiguredRuntime(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	if r.usageCollector != nil {
-		r.usageCollector.UpdateAPIKeys(
-			keys[hubconfig.APIKeyKimi],
-			keys[hubconfig.APIKeyZAI],
-			keys[hubconfig.APIKeyDeepSeek],
-		)
+	if err := r.syncUsageCredentials(keys); err != nil {
+		return err
 	}
 	if r.reloadAgentRuntime != nil {
 		if err := r.reloadAgentRuntime(ctx, keys); err != nil {
@@ -1617,6 +1685,25 @@ func (r *Reporter) reloadConfiguredRuntime(ctx context.Context) error {
 			}
 		}()
 	}
+	return nil
+}
+
+func (r *Reporter) syncUsageCredentials(keys map[hubconfig.APIKeyName]string) error {
+	if r.usageCollector == nil {
+		return nil
+	}
+	qwenOAuth, err := r.ensureHubConfigStore().QwenOAuthCredential()
+	if err != nil {
+		return err
+	}
+	r.usageCollector.UpdateAPIKeys(
+		keys[hubconfig.APIKeyKimi],
+		keys[hubconfig.APIKeyZAI],
+		keys[hubconfig.APIKeyDeepSeek],
+	)
+	r.usageCollector.UpdateQwenCredentials(
+		keys[hubconfig.APIKeyQwen], qwenOAuthCredentialForUsage(qwenOAuth),
+	)
 	return nil
 }
 
@@ -3736,6 +3823,15 @@ func redactDebugEnvelopePayload(env envelope) envelope {
 	var payload any
 	if len(env.Payload) == 0 || json.Unmarshal(env.Payload, &payload) != nil {
 		return env
+	}
+	if env.Method == rp.RegistryMethodQwenOAuthUpdate {
+		if input, ok := payload.(map[string]any); ok {
+			redacted := map[string]any{"action": input["action"]}
+			if _, exists := input["credential"]; exists {
+				redacted["credential"] = "[REDACTED]"
+			}
+			payload = redacted
+		}
 	}
 	env.Payload = rp.MustRaw(security.RedactDiagnosticValue(payload))
 	return env

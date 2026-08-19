@@ -3555,6 +3555,31 @@ func TestReporterDebugEnvelopeRecursivelyRedactsSecretsForEveryMethod(t *testing
 	}
 }
 
+func TestReporterQwenOAuthCredentialIsRedactedAsAWholeBundle(t *testing.T) {
+	var log strings.Builder
+	reporter := NewReporter(ReporterConfig{HubID: "hub-qwen-log"}, nil)
+	reporter.SetDebugLogger(&log)
+	reporter.writeDebugEnvelope("<-", envelope{
+		Type: rp.RegistryEnvelopeTypeRequest, Method: rp.RegistryMethodQwenOAuthUpdate, HubID: "hub-qwen-log",
+		Payload: rp.MustRaw(map[string]any{
+			"action": "set",
+			"credential": map[string]any{
+				"accessToken":  "qwen-access-secret",
+				"refreshToken": "qwen-refresh-secret",
+			},
+		}),
+	})
+	got := log.String()
+	for _, secret := range []string{"qwen-access-secret", "qwen-refresh-secret"} {
+		if strings.Contains(got, secret) {
+			t.Fatalf("secret %q leaked into debug log: %s", secret, got)
+		}
+	}
+	if !strings.Contains(got, `"credential":"[REDACTED]"`) {
+		t.Fatalf("whole-bundle redaction marker missing: %s", got)
+	}
+}
+
 func TestReporterTerminalPublishQueueIsBounded(t *testing.T) {
 	reporter := NewReporter(ReporterConfig{HubID: "hub-terminal-backlog"}, nil)
 	sink := newHubEventSink()
