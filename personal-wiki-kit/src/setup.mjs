@@ -14,6 +14,7 @@ import process from 'node:process';
 
 import {parseDeploymentConfig, renderPrivatePublishWorkflow} from './deployment-config.mjs';
 import { installSkills } from './install-skills.mjs';
+import {renderInstalledLauncher} from './installed-launcher.mjs';
 import {parseKitLock} from './kit-lock.mjs';
 import { parseUserConfig } from './user-config.mjs';
 
@@ -113,17 +114,10 @@ async function writeNewFile(filename, content) {
   return filename;
 }
 
-function commandLauncher({ kitRoot, nodeExecutable }) {
-  const escapedNode = nodeExecutable.replaceAll('"', '""');
-  const escapedCLI = path.join(kitRoot, 'src', 'cli.mjs').replaceAll('"', '""');
-  return `@echo off\r\n"${escapedNode}" "${escapedCLI}" %*\r\n`;
-}
-
 export async function setupWiki(options = {}, {
   runCommand = defaultRunCommand,
   confirm = async () => false,
   timestamp = defaultTimestamp(),
-  nodeExecutable = process.execPath,
 } = {}) {
   const validated = validateSetupOptions(options);
   const repositoryPath = path.resolve(options.repositoryPath);
@@ -200,7 +194,7 @@ export async function setupWiki(options = {}, {
     },
     {
       filename: path.join(configDirectory, 'bin', 'personal-wiki.cmd'),
-      content: commandLauncher({ kitRoot, nodeExecutable }),
+      content: renderInstalledLauncher(configDirectory),
     },
   ];
   const createdUserFiles = [];

@@ -137,6 +137,7 @@ function isAllowedHost(host) {
     || host === 'json-schema.org'
     || host === 'opencollective.com'
     || host === 'registry.npmjs.org'
+    || host === 'release.wheelmaker.top'
     || host === 'tidelift.com';
 }
 

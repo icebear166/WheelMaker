@@ -24,6 +24,7 @@ import { publishKnowledge } from './local-publish.mjs';
 import { migrateLegacyConfig } from './migrate-config.mjs';
 import {migrateRepository} from './migrate-repository.mjs';
 import { openLocalWiki } from './open-local.mjs';
+import {updateFromReleaseServer} from './online-update.mjs';
 import { loadProjectRouting, resolveProjectIds } from './project-routing.mjs';
 import { queryKnowledge } from './query-knowledge.mjs';
 import { setupWiki } from './setup.mjs';
@@ -260,9 +261,20 @@ async function publishCommand(options) {
   });
 }
 
-async function updateCommand(options) {
+async function updateCommand(options, prompt) {
   const repository = await resolveRepository(options);
-  for (const field of ['candidateKit', 'artifact', 'source', 'sha256']) {
+  const offlineFields = ['candidateKit', 'artifact', 'source', 'sha256'];
+  if (!offlineFields.some(field => options[field])) {
+    const userPaths = resolveUserConfigPaths();
+    return updateFromReleaseServer({
+      repository,
+      configDirectory: options.configDirectory || userPaths.directory,
+      skillsDirectory: options.skillsDirectory || path.join(homedir(), '.codex', 'skills'),
+    }, {
+      confirm: options.yes ? async () => true : prompt.confirm,
+    });
+  }
+  for (const field of offlineFields) {
     if (!options[field]) throw new Error(`update 命令缺少 --${field.replace(/[A-Z]/gu, (letter) => `-${letter.toLowerCase()}`)}`);
   }
   const candidateKitRoot = path.resolve(options.candidateKit);
@@ -413,7 +425,7 @@ export async function runCLI(values = process.argv.slice(2), {
     else if (command === 'build') result = await buildCommand(options);
     else if (command === 'open') result = await openCommand(options);
     else if (command === 'publish') result = await publishCommand(options);
-    else if (command === 'update') result = await updateCommand(options);
+    else if (command === 'update') result = await updateCommand(options, prompt);
     else if (command === 'migrate-config') result = await migrateCommand(options, prompt);
     else if (command === 'migrate-repository') result = await migrateRepositoryCommand(options);
     else throw new Error(`未知命令：${command}`);

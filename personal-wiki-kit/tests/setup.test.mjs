@@ -82,6 +82,10 @@ test('setup creates a local private repository, user config, and Chinese Skills 
     JSON.parse(await readFile(join(paths.configDirectory, 'project-routing.json'), 'utf8')),
     { schema: 1, routes: [] },
   );
+  const launcher = await readFile(join(paths.configDirectory, 'bin', 'personal-wiki.cmd'), 'utf8');
+  assert.match(launcher, /active-version\.txt/u);
+  assert.match(launcher, /kit\\versions/u);
+  assert.doesNotMatch(launcher, new RegExp(kitRoot.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&'), 'iu'));
   await assert.rejects(() => access(join(paths.repositoryPath, '.github', 'workflows', 'publish.yml')));
   assert.match(await readFile(join(paths.skillsDirectory, 'lookup-knowledge', 'SKILL.md'), 'utf8'), /查询个人 Wiki/);
   assert.match(await readFile(join(paths.skillsDirectory, 'publish-knowledge', 'SKILL.md'), 'utf8'), /明确批准/);
