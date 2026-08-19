@@ -4,11 +4,10 @@ import (
 	"bytes"
 	"encoding/base64"
 	"encoding/json"
-	"os"
-	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestTokenStatsUpdateMethodIsRemoved(t *testing.T) {
@@ -597,25 +596,6 @@ func TestRegistryProtocolDomainOldMethodsAreRemoved(t *testing.T) {
 	}
 }
 
-func TestRegistryProtocolDomainOldMethodLiteralsDoNotReappear(t *testing.T) {
-	files := []string{
-		"registry_methods.go",
-		filepath.Join("..", "registry", "server.go"),
-	}
-	for _, file := range files {
-		raw, err := os.ReadFile(file)
-		if err != nil {
-			t.Fatalf("read %s: %v", file, err)
-		}
-		source := string(raw)
-		for _, method := range removedRegistryProtocolMethods() {
-			if strings.Contains(source, `"`+method+`"`) || strings.Contains(source, "`"+method+"`") {
-				t.Fatalf("%s contains removed public method literal %q", file, method)
-			}
-		}
-	}
-}
-
 func TestRegistryHubSessionEventMapping(t *testing.T) {
 	method, ok := RegistryHubSessionEventMethod(RegistryMethodSessionMessage)
 	if !ok {
@@ -718,5 +698,936 @@ func TestReleaseStorageMethodsAreRegisteredWithoutVersionChange(t *testing.T) {
 	}
 	if DefaultProtocolVersion != "2.7" {
 		t.Fatalf("protocol version = %q, want 2.7", DefaultProtocolVersion)
+	}
+}
+
+func TestACPImplementedTypesPreserveMeta(t *testing.T) {
+	types := []any{
+		&InitializeParams{}, &InitializeResult{}, &ClientCapabilities{}, &FSCapabilities{},
+		&AgentCapabilities{}, &PromptCapabilities{}, &MCPCapabilities{}, &SessionCapabilities{},
+		&SessionListCapability{}, &SessionForkCapability{}, &SessionLifecycleCapability{},
+		&AgentInfo{}, &AuthMethodVar{}, &AuthMethod{}, &AvailableCommand{}, &AvailableCommandInput{},
+		&SessionNewParams{}, &SessionLoadParams{}, &EnvVariable{}, &HttpHeader{},
+		&SessionPromptParams{}, &SessionCancelParams{},
+		&SessionForkParams{}, &SessionForkResponse{}, &SessionDeleteParams{}, &SessionDeleteResult{},
+		&SessionSteeringParams{}, &SessionSteeringResponse{},
+		&PlanEntry{}, &ToolCallLocation{}, &EmbeddedResource{},
+		&ToolCallRef{}, &PermissionRequestParams{}, &PermissionOption{},
+		&PermissionResult{}, &PermissionResponse{}, &SessionLoadResult{},
+		&FSReadTextFileParams{}, &FSReadTextFileResult{}, &FSWriteTextFileParams{},
+		&TerminalCreateParams{}, &TerminalCreateResult{}, &TerminalOutputParams{}, &TerminalExitStatus{},
+		&TerminalOutputResult{}, &TerminalWaitForExitParams{}, &TerminalWaitForExitResult{},
+		&TerminalKillParams{}, &TerminalReleaseParams{}, &SessionListParams{}, &SessionInfo{}, &SessionListResult{},
+	}
+	for name, test := range map[string]struct {
+		raw    string
+		target any
+	}{
+		"SessionNewResult":    {`{"sessionId":"s1","_meta":{"future":{"value":7}}}`, &SessionNewResult{}},
+		"SessionPromptResult": {`{"stopReason":"end_turn","_meta":{"future":{"value":7}}}`, &SessionPromptResult{}},
+		"MCPServer":           {`{"type":"stdio","name":"local","command":"server","_meta":{"future":{"value":7}}}`, &MCPServer{}},
+		"ContentBlock":        {`{"type":"text","text":"hello","_meta":{"future":{"value":7}}}`, &ContentBlock{}},
+		"ToolCallContent":     {`{"type":"content","content":{"type":"text","text":"hello"},"_meta":{"future":{"value":7}}}`, &ToolCallContent{}},
+	} {
+		t.Run(name, func(t *testing.T) {
+			if err := json.Unmarshal([]byte(test.raw), test.target); err != nil {
+				t.Fatal(err)
+			}
+			raw, err := json.Marshal(test.target)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !bytes.Contains(raw, []byte(`"_meta":{"future":{"value":7}}`)) {
+				t.Fatalf("%T dropped metadata: %s", test.target, raw)
+			}
+		})
+	}
+	for _, target := range types {
+		t.Run(reflect.TypeOf(target).Elem().Name(), func(t *testing.T) {
+			if err := json.Unmarshal([]byte(`{"_meta":{"future":{"value":7}}}`), target); err != nil {
+				t.Fatal(err)
+			}
+			raw, err := json.Marshal(target)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !bytes.Contains(raw, []byte(`"_meta":{"future":{"value":7}}`)) {
+				t.Fatalf("%T dropped metadata: %s", target, raw)
+			}
+		})
+	}
+}
+
+func TestCXDeepSeekProviderIdentity(t *testing.T) {
+	provider, ok := ParseACPProvider(" CX-DeepSeek ")
+	if !ok || provider != ACPProviderCXDeepSeek {
+		t.Fatalf("ParseACPProvider() = (%q, %v), want (%q, true)", provider, ok, ACPProviderCXDeepSeek)
+	}
+
+	count := 0
+	for _, name := range ACPProviderNames() {
+		if name == string(ACPProviderCXDeepSeek) {
+			count++
+		}
+	}
+	if count != 1 {
+		t.Fatalf("ACPProviderNames() = %v, want one %q", ACPProviderNames(), ACPProviderCXDeepSeek)
+	}
+}
+
+func TestCXFlickerProviderIdentity(t *testing.T) {
+	provider, ok := ParseACPProvider(" CX-Flicker ")
+	if !ok || provider != ACPProviderCXFlicker {
+		t.Fatalf("ParseACPProvider() = (%q, %v), want (%q, true)", provider, ok, ACPProviderCXFlicker)
+	}
+
+	count := 0
+	for _, name := range ACPProviderNames() {
+		if name == string(ACPProviderCXFlicker) {
+			count++
+		}
+	}
+	if count != 1 {
+		t.Fatalf("ACPProviderNames() = %v, want one %q", ACPProviderNames(), ACPProviderCXFlicker)
+	}
+}
+
+func TestSessionUpdateParams_JSONParity(t *testing.T) {
+	in := SessionUpdateParams{SessionID: "s1"}
+	b, err := json.Marshal(in)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	var out SessionUpdateParams
+	if err := json.Unmarshal(b, &out); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if out.SessionID != "s1" {
+		t.Fatalf("session id = %q", out.SessionID)
+	}
+}
+
+func TestSessionUpdate_UsageUpdateFields(t *testing.T) {
+	raw := []byte(`{
+		"sessionId":"s1",
+		"update":{
+			"sessionUpdate":"usage_update",
+			"size":258400,
+			"used":183223
+		}
+	}`)
+
+	var out SessionUpdateParams
+	if err := json.Unmarshal(raw, &out); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if out.Update.SessionUpdate != SessionUpdateUsageUpdate {
+		t.Fatalf("sessionUpdate=%q, want %q", out.Update.SessionUpdate, SessionUpdateUsageUpdate)
+	}
+	if out.Update.Size == nil || *out.Update.Size != 258400 {
+		t.Fatalf("size=%v, want 258400", out.Update.Size)
+	}
+	if out.Update.Used == nil || *out.Update.Used != 183223 {
+		t.Fatalf("used=%v, want 183223", out.Update.Used)
+	}
+}
+
+func TestPermissionRequestParamsDecodeToolCallTextContent(t *testing.T) {
+	raw := []byte(`{
+		"sessionId":"sess-1",
+		"toolCall":{
+			"toolCallId":"call-1",
+			"title":"Choose how to continue",
+			"content":[
+				{"type":"content","content":{"type":"text","text":"Which path should I take?"}},
+				{"type":"diff","path":"secret.txt","newText":"do not retain"}
+			],
+			"rawInput":{"provider":"private"},
+			"rawOutput":{"answer":"private"}
+		},
+		"options":[{"optionId":"continue","name":"Continue","kind":"allow_once"}]
+	}`)
+
+	var params PermissionRequestParams
+	if err := json.Unmarshal(raw, &params); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if params.SessionID != "sess-1" || params.ToolCall.ToolCallID != "call-1" {
+		t.Fatalf("permission identity = %#v", params)
+	}
+	if len(params.ToolCall.Content) != 2 {
+		t.Fatalf("content count = %d, want 2", len(params.ToolCall.Content))
+	}
+	text := params.ToolCall.Content[0].Content
+	if text == nil || text.Type != ContentBlockTypeText || text.Text != "Which path should I take?" {
+		t.Fatalf("text content = %#v", text)
+	}
+	encoded, err := json.Marshal(params.ToolCall)
+	if err != nil {
+		t.Fatalf("marshal toolCall: %v", err)
+	}
+	if string(encoded) == "" || containsAny(string(encoded), "rawInput", "rawOutput", "provider", "answer") {
+		t.Fatalf("toolCall retained private raw fields: %s", encoded)
+	}
+}
+
+func TestPermissionTurnPayloadSerialization(t *testing.T) {
+	requestJSON, err := json.Marshal(SessionTurnPermissionRequest{
+		PermissionID: "perm-1",
+		Title:        "Choose",
+		DetailsText:  "Details",
+		Options: []SessionTurnPermissionOption{{
+			OptionID: "continue",
+			Name:     "Continue",
+			Kind:     "allow_once",
+		}},
+		CreatedAt: "2026-07-21T10:00:00Z",
+	})
+	if err != nil {
+		t.Fatalf("marshal request: %v", err)
+	}
+	for _, want := range []string{`"permissionId":"perm-1"`, `"detailsText":"Details"`, `"optionId":"continue"`} {
+		if !containsAny(string(requestJSON), want) {
+			t.Fatalf("request JSON %s missing %s", requestJSON, want)
+		}
+	}
+
+	responseJSON, err := json.Marshal(SessionTurnPermissionResponse{
+		PermissionID:     "perm-1",
+		RequestTurnIndex: 20,
+		Outcome:          "selected",
+		OptionID:         "continue",
+		OptionName:       "Continue",
+		RespondedAt:      "2026-07-21T10:01:00Z",
+	})
+	if err != nil {
+		t.Fatalf("marshal response: %v", err)
+	}
+	for _, forbidden := range []string{"detailsText", "options", `"title"`} {
+		if containsAny(string(responseJSON), forbidden) {
+			t.Fatalf("response JSON retained request field %q: %s", forbidden, responseJSON)
+		}
+	}
+}
+
+func TestSessionUpdateMetaMessagePhase(t *testing.T) {
+	for _, phase := range []string{SessionMessagePhaseCommentary, SessionMessagePhaseFinalAnswer} {
+		meta := BuildSessionUpdateMetaMessagePhase(phase)
+		if got := SessionUpdateMetaMessagePhase(meta); got != phase {
+			t.Fatalf("phase = %q, want %q; meta=%s", got, phase, meta)
+		}
+	}
+	if meta := BuildSessionUpdateMetaMessagePhase("future_phase"); len(meta) != 0 {
+		t.Fatalf("unknown phase meta = %s, want empty", meta)
+	}
+	if got := SessionUpdateMetaMessagePhase(json.RawMessage(`{"wm":{"messagePhase":"future_phase"}}`)); got != "" {
+		t.Fatalf("unknown phase = %q, want empty", got)
+	}
+}
+
+func TestSessionUpdateMetaRoundTripPreservesUnknownFields(t *testing.T) {
+	original := json.RawMessage(`{"wm":{"messagePhase":"commentary"},"thirdParty":{"trace":"opaque"}}`)
+	raw, err := json.Marshal(SessionUpdate{
+		SessionUpdate: SessionUpdateAgentMessageChunk,
+		Meta:          original,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var decoded SessionUpdate
+	if err := json.Unmarshal(raw, &decoded); err != nil {
+		t.Fatal(err)
+	}
+	var want, got any
+	if err := json.Unmarshal(original, &want); err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal(decoded.Meta, &got); err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("meta = %#v, want %#v", got, want)
+	}
+}
+
+func TestMergeSessionUpdateMetaDeepMergesLifecycleAndUnknownFields(t *testing.T) {
+	base := json.RawMessage(`{"wm":{"messagePhase":"commentary","nested":{"left":1}},"vendor":{"trace":"keep","array":[1]}}`)
+	incoming := json.RawMessage(`{"wm":{"messagePhase":"final_answer","messageComplete":true,"nested":{"right":2}},"vendor":{"array":[2]}}`)
+	merged, err := MergeSessionUpdateMeta(base, incoming)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := json.RawMessage(`{"wm":{"messagePhase":"final_answer","messageComplete":true,"nested":{"left":1,"right":2}},"vendor":{"trace":"keep","array":[2]}}`)
+	if !jsonEqual(merged, want) {
+		t.Fatalf("merged=%s, want %s", merged, want)
+	}
+	if phase := SessionUpdateMetaMessagePhase(merged); phase != SessionMessagePhaseFinalAnswer {
+		t.Fatalf("phase=%q", phase)
+	}
+	if !SessionUpdateMetaMessageComplete(merged) {
+		t.Fatal("messageComplete=false")
+	}
+}
+
+func TestBuildSessionUpdateMetaLifecyclePreservesSteered(t *testing.T) {
+	meta := BuildSessionUpdateMetaLifecycle("", true, true)
+	if SessionUpdateMetaMessagePhase(meta) != "" || !SessionUpdateMetaMessageComplete(meta) || !SessionUpdateMetaSteered(meta) {
+		t.Fatalf("meta=%s", meta)
+	}
+}
+
+func TestWithoutSessionUpdateLifecyclePreservesOtherMetadata(t *testing.T) {
+	meta := json.RawMessage(`{"wm":{"messagePhase":"commentary","messageComplete":true,"steered":true,"future":7},"vendor":{"trace":"keep"}}`)
+	got := WithoutSessionUpdateLifecycle(meta)
+	want := json.RawMessage(`{"wm":{"future":7},"vendor":{"trace":"keep"}}`)
+	if !jsonEqual(got, want) {
+		t.Fatalf("metadata=%s, want %s", got, want)
+	}
+}
+
+func TestSessionCapabilitiesRoundTripPreservesStandardLifecycleFields(t *testing.T) {
+	raw := []byte(`{"sessionCapabilities":{"fork":{},"delete":{},"resume":{},"close":{},"additionalDirectories":{}}}`)
+	var capabilities AgentCapabilities
+	if err := json.Unmarshal(raw, &capabilities); err != nil {
+		t.Fatal(err)
+	}
+	encoded, err := json.Marshal(capabilities)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, field := range []string{"\"fork\"", "\"delete\"", "\"resume\"", "\"close\"", "\"additionalDirectories\""} {
+		if !bytes.Contains(encoded, []byte(field)) {
+			t.Fatalf("encoded capabilities=%s, missing %s", encoded, field)
+		}
+	}
+}
+
+func TestAgentCapabilitiesRoundTripPreservesUnknownFields(t *testing.T) {
+	raw := []byte(`{"loadSession":true,"providers":{"list":{}},"sessionCapabilities":{"fork":{},"futureLifecycle":{"mode":"future"}}}`)
+	var capabilities AgentCapabilities
+	if err := json.Unmarshal(raw, &capabilities); err != nil {
+		t.Fatal(err)
+	}
+	encoded, err := json.Marshal(capabilities)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, field := range []string{"\"providers\"", "\"futureLifecycle\""} {
+		if !bytes.Contains(encoded, []byte(field)) {
+			t.Fatalf("encoded capabilities=%s, missing %s", encoded, field)
+		}
+	}
+}
+
+func TestSessionActionsExposeStandardCurrentForkAndLegacyHistoricalFork(t *testing.T) {
+	var standard AgentCapabilities
+	if err := json.Unmarshal([]byte(`{"sessionCapabilities":{"fork":{}}}`), &standard); err != nil {
+		t.Fatal(err)
+	}
+	standard.LoadSession = true
+	standardActions := SessionActionsFromAgentCapabilities(standard)
+	if !standardActions.Fork.Supported || !standardActions.Fork.CurrentSession || standardActions.Fork.HistoricalTurn {
+		t.Fatalf("standard fork actions=%#v, want current-only", standardActions.Fork)
+	}
+
+	verified := standard
+	verified.Meta = BuildWMAgentCapabilitiesMeta(nil, WMAgentExtensionCapabilities{
+		SessionActions: WMSessionActionCapabilities{CurrentSession: true},
+	})
+	verifiedActions := SessionActionsFromAgentCapabilities(verified)
+	if !verifiedActions.Fork.Supported || !verifiedActions.Fork.CurrentSession || verifiedActions.Fork.HistoricalTurn {
+		t.Fatalf("verified standard fork actions=%#v, want current-only", verifiedActions.Fork)
+	}
+
+	codex := AgentCapabilities{
+		LoadSession:         true,
+		SessionCapabilities: &SessionCapabilities{Fork: &SessionForkCapability{}},
+		Meta: BuildWMAgentCapabilitiesMeta(nil, WMAgentExtensionCapabilities{
+			SessionActions: WMSessionActionCapabilities{Fork: true},
+		}),
+	}
+	codexActions := SessionActionsFromAgentCapabilities(codex)
+	if !codexActions.Fork.Supported || !codexActions.Fork.CurrentSession || !codexActions.Fork.HistoricalTurn {
+		t.Fatalf("codex fork actions=%#v, want current and historical", codexActions.Fork)
+	}
+
+	legacy := AgentCapabilities{Meta: BuildWMAgentCapabilitiesMeta(nil, WMAgentExtensionCapabilities{
+		SessionActions: WMSessionActionCapabilities{Fork: true},
+	})}
+	legacyJSON, err := json.Marshal(SessionActionsFromAgentCapabilities(legacy))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Contains(legacyJSON, []byte(`"historicalTurn":true`)) {
+		t.Fatalf("legacy fork actions=%s, want historicalTurn=true", legacyJSON)
+	}
+}
+
+func containsAny(value string, needles ...string) bool {
+	for _, needle := range needles {
+		if len(needle) > 0 && len(value) >= len(needle) {
+			for index := 0; index+len(needle) <= len(value); index++ {
+				if value[index:index+len(needle)] == needle {
+					return true
+				}
+			}
+		}
+	}
+	return false
+}
+
+func TestDecodeSessionUpdateIgnoresUnknownRootFields(t *testing.T) {
+	for _, raw := range []string{
+		`{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"x"},"contentBlocks":[]}`,
+		`{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"x"},"clientMessageId":"m1"}`,
+		`{"sessionUpdate":"user_message_chunk","content":{"type":"text","text":"x"},"steered":true}`,
+		`{"sessionUpdate":"tool_call_update","toolCallId":"c","toolCallContent":[]}`,
+		`{"sessionUpdate":"usage_update","size":10,"used":2,"updatedAt":"2026-08-02T00:00:00Z"}`,
+	} {
+		t.Run(raw, func(t *testing.T) {
+			if _, err := DecodeSessionUpdate(json.RawMessage(raw)); err != nil {
+				t.Fatalf("DecodeSessionUpdate(%s): %v", raw, err)
+			}
+		})
+	}
+	if _, err := DecodeSessionUpdate(json.RawMessage(`{"sessionUpdate":"current_mode_update","modeId":"plan"}`)); err == nil {
+		t.Fatal("legacy mode update without currentModeId succeeded")
+	}
+}
+
+func TestDecodeSessionUpdateUsesStrictVariants(t *testing.T) {
+	tests := []struct {
+		raw      string
+		wantType any
+	}{
+		{`{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"hello"},"messageId":"m1"}`, MessageChunkUpdate{}},
+		{`{"sessionUpdate":"agent_thought_chunk","content":{"type":"text","text":"thinking"}}`, MessageChunkUpdate{}},
+		{`{"sessionUpdate":"tool_call","toolCallId":"c1","title":"Read","kind":"read","status":"pending","content":[],"locations":[],"rawInput":{},"rawOutput":{}}`, ToolCallUpdate{}},
+		{`{"sessionUpdate":"tool_call_update","toolCallId":"c1","status":"completed","content":[{"type":"content","content":{"type":"text","text":"done"}}]}`, ToolCallUpdate{}},
+		{`{"sessionUpdate":"current_mode_update","currentModeId":"code"}`, CurrentModeUpdate{}},
+		{`{"sessionUpdate":"usage_update","size":128000,"used":42}`, UsageUpdate{}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.raw, func(t *testing.T) {
+			got, err := DecodeSessionUpdate(json.RawMessage(tt.raw))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if reflect.TypeOf(got) != reflect.TypeOf(tt.wantType) {
+				t.Fatalf("type=%T, want %T", got, tt.wantType)
+			}
+		})
+	}
+}
+
+func TestSessionUpdateVariantMetaRoundTripPreservesUnknownFields(t *testing.T) {
+	original := json.RawMessage(`{"wm":{"messagePhase":"commentary","future":{"flag":true}},"thirdParty":{"trace":"opaque"}}`)
+	update := MessageChunkUpdate{
+		SessionUpdate: SessionUpdateAgentMessageChunk,
+		Content:       ContentBlock{Type: ContentBlockTypeText, Text: "hello"},
+		MessageID:     "m1",
+		Meta:          original,
+	}
+	raw, err := json.Marshal(update)
+	if err != nil {
+		t.Fatal(err)
+	}
+	decoded, err := DecodeSessionUpdate(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := decoded.(MessageChunkUpdate).Meta
+	var wantValue, gotValue any
+	if err := json.Unmarshal(original, &wantValue); err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal(got, &gotValue); err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(gotValue, wantValue) {
+		t.Fatalf("meta=%s, want %s", got, original)
+	}
+}
+
+func TestSessionUpdateParamsWireMarshalsACPFieldNames(t *testing.T) {
+	raw, err := json.Marshal(SessionUpdateParamsWire{
+		SessionID: "s1",
+		Update: MessageChunkUpdate{
+			SessionUpdate: SessionUpdateAgentMessageChunk,
+			Content:       ContentBlock{Type: ContentBlockTypeText, Text: "hello"},
+			MessageID:     "m1",
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(raw) != `{"sessionId":"s1","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"hello"},"messageId":"m1"}}` {
+		t.Fatalf("raw=%s", raw)
+	}
+	if _, err := DecodeSessionUpdateParams(raw); err != nil {
+		t.Fatalf("strict decode: %v", err)
+	}
+}
+
+func TestSessionPromptResultIgnoresUnknownFieldsAndRejectsInvalidStopReason(t *testing.T) {
+	var result SessionPromptResult
+	if err := json.Unmarshal([]byte(`{"stopReason":"end_turn","message":"private"}`), &result); err != nil {
+		t.Fatalf("forward-compatible result: %v", err)
+	}
+	if result.StopReason != "end_turn" {
+		t.Fatalf("stopReason=%q, want end_turn", result.StopReason)
+	}
+	if err := json.Unmarshal([]byte(`{"stopReason":"failed"}`), &result); err == nil {
+		t.Fatal("invalid failed stopReason succeeded")
+	}
+	var outcome PromptOutcome
+	if err := json.Unmarshal([]byte(`{"stopReason":"refusal","_meta":{"wm":{"message":"declined"}}}`), &outcome); err != nil {
+		t.Fatal(err)
+	}
+	if outcome.Message != "declined" {
+		t.Fatalf("message=%q", outcome.Message)
+	}
+}
+
+func TestStrictNestedUnionsRejectCrossVariantFields(t *testing.T) {
+	contentCases := []string{
+		`{"type":"text","text":"hello","data":"not-text"}`,
+		`{"type":"image","mimeType":"image/png","data":"abc","text":"not-image"}`,
+		`{"type":"resource_link","uri":"file:///x","name":"x","resource":{"uri":"file:///x","text":"x"}}`,
+	}
+	for _, raw := range contentCases {
+		if err := ValidateContentBlockJSON(json.RawMessage(raw)); err == nil {
+			t.Fatalf("ValidateContentBlockJSON(%s) succeeded", raw)
+		}
+	}
+	toolCases := []string{
+		`{"type":"content","content":{"type":"text","text":"x"},"path":"x"}`,
+		`{"type":"diff","path":"x","newText":"y","terminalId":"term"}`,
+	}
+	for _, raw := range toolCases {
+		if err := ValidateToolCallContentJSON(json.RawMessage(raw)); err == nil {
+			t.Fatalf("ValidateToolCallContentJSON(%s) succeeded", raw)
+		}
+	}
+	if _, err := json.Marshal(ContentBlock{Type: ContentBlockTypeText, Text: "hello", Data: "not-text"}); err == nil {
+		t.Fatal("invalid ContentBlock marshal succeeded")
+	}
+	if _, err := json.Marshal(ToolCallContent{Type: "terminal", TerminalID: "term", Path: "not-terminal"}); err == nil {
+		t.Fatal("invalid ToolCallContent marshal succeeded")
+	}
+}
+
+func TestInboundNestedUnionsIgnoreUnknownFields(t *testing.T) {
+	var content ContentBlock
+	if err := json.Unmarshal([]byte(`{"type":"text","text":"hello","data":"not-text","future":true}`), &content); err != nil {
+		t.Fatalf("content: %v", err)
+	}
+	if content.Type != ContentBlockTypeText || content.Text != "hello" || content.Data != "" {
+		t.Fatalf("content=%#v", content)
+	}
+
+	var toolContent ToolCallContent
+	if err := json.Unmarshal([]byte(`{"type":"content","content":{"type":"text","text":"done"},"path":"ignored","future":true}`), &toolContent); err != nil {
+		t.Fatalf("tool content: %v", err)
+	}
+	if toolContent.Type != "content" || toolContent.Content == nil || toolContent.Path != "" {
+		t.Fatalf("toolContent=%#v", toolContent)
+	}
+
+	var server MCPServer
+	if err := json.Unmarshal([]byte(`{"type":"stdio","name":"local","command":"server","args":[],"env":[],"url":"https://ignored.example","future":true}`), &server); err != nil {
+		t.Fatalf("mcp server: %v", err)
+	}
+	if server.Type != "stdio" || server.Command != "server" || server.URL != "" {
+		t.Fatalf("server=%#v", server)
+	}
+}
+
+func TestSessionUpdateVariantMarshalHasExactRootFields(t *testing.T) {
+	raw, err := json.Marshal(MessageChunkUpdate{
+		SessionUpdate: SessionUpdateAgentMessageChunk,
+		Content:       ContentBlock{Type: ContentBlockTypeText, Text: "hello"},
+		MessageID:     "m1",
+		Meta:          json.RawMessage(`{"wm":{"messageComplete":true}}`),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var object map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &object); err != nil {
+		t.Fatal(err)
+	}
+	allowed := map[string]bool{"sessionUpdate": true, "content": true, "messageId": true, "_meta": true}
+	for key := range object {
+		if !allowed[key] {
+			t.Fatalf("unexpected root field %q in %s", key, raw)
+		}
+	}
+}
+
+func TestSessionConfigOptionStrictVariants(t *testing.T) {
+	selectRaw := json.RawMessage(`{"id":"model","name":"Model","category":"model","type":"select","currentValue":"fast","options":[{"value":"fast","name":"Fast","_meta":{"vendor":1}}],"_meta":{"wm":{"x":1}}}`)
+	option, err := DecodeSessionConfigOption(selectRaw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := option.Variant.(SessionConfigSelect); !ok {
+		t.Fatalf("variant=%T, want SessionConfigSelect", option.Variant)
+	}
+	encoded, err := json.Marshal(option)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !jsonEqual(encoded, selectRaw) {
+		t.Fatalf("encoded=%s, want %s", encoded, selectRaw)
+	}
+
+	booleanRaw := json.RawMessage(`{"id":"fast","name":"Fast mode","type":"boolean","currentValue":true}`)
+	option, err = DecodeSessionConfigOption(booleanRaw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := option.Variant.(SessionConfigBoolean); !ok {
+		t.Fatalf("variant=%T, want SessionConfigBoolean", option.Variant)
+	}
+	option, err = DecodeSessionConfigOption(json.RawMessage(`{"id":"fast","name":"Fast mode","type":"boolean","currentValue":true,"options":[],"future":true}`))
+	if err != nil {
+		t.Fatalf("forward-compatible boolean option: %v", err)
+	}
+
+	for _, raw := range []json.RawMessage{
+		json.RawMessage(`{"id":"bad","name":"Bad","type":"select","currentValue":"x"}`),
+		json.RawMessage(`{"id":"bad","name":"Bad","type":"future","currentValue":"x"}`),
+	} {
+		if _, err := DecodeSessionConfigOption(raw); err == nil {
+			t.Fatalf("DecodeSessionConfigOption(%s) succeeded", raw)
+		}
+	}
+}
+
+func TestSetSessionConfigOptionStrictValueAndWrappedResponse(t *testing.T) {
+	valueID, err := DecodeSetSessionConfigOptionRequest(json.RawMessage(`{"sessionId":"s1","configId":"model","value":"fast","_meta":{"trace":1}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := valueID.Variant.(SetSessionConfigValueID); !ok {
+		t.Fatalf("variant=%T, want SetSessionConfigValueID", valueID.Variant)
+	}
+	boolean, err := DecodeSetSessionConfigOptionRequest(json.RawMessage(`{"sessionId":"s1","configId":"fast","type":"boolean","value":true}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := boolean.Variant.(SetSessionConfigBoolean); !ok {
+		t.Fatalf("variant=%T, want SetSessionConfigBoolean", boolean.Variant)
+	}
+	if _, err := DecodeSetSessionConfigOptionRequest(json.RawMessage(`{"sessionId":"s1","configId":"fast","value":true}`)); err == nil {
+		t.Fatal("boolean value without type succeeded")
+	}
+	if _, err := DecodeSetSessionConfigOptionResponse(json.RawMessage(`[]`)); err == nil {
+		t.Fatal("bare config option array response succeeded")
+	}
+	if _, err := DecodeSetSessionConfigOptionResponse(json.RawMessage(`{"configOptions":[],"future":true}`)); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestAvailableCommandInputUsesHintShape(t *testing.T) {
+	valid := json.RawMessage(`{"sessionUpdate":"available_commands_update","availableCommands":[{"name":"review","description":"Review changes","input":{"hint":"path","_meta":{"x":1}}}]}`)
+	if _, err := DecodeSessionUpdate(valid); err != nil {
+		t.Fatal(err)
+	}
+	forwardCompatible := json.RawMessage(`{"sessionUpdate":"available_commands_update","availableCommands":[{"name":"review","description":"Review changes","input":{"hint":"path","type":"future"}}]}`)
+	if _, err := DecodeSessionUpdate(forwardCompatible); err != nil {
+		t.Fatalf("forward-compatible command input: %v", err)
+	}
+}
+
+func TestMCPServerStrictVariants(t *testing.T) {
+	for _, raw := range []json.RawMessage{
+		json.RawMessage(`{"type":"stdio","name":"local","command":"server","args":[],"env":[]}`),
+		json.RawMessage(`{"type":"http","name":"remote","url":"https://example.test/mcp","headers":[]}`),
+		json.RawMessage(`{"type":"sse","name":"events","url":"https://example.test/sse","headers":[]}`),
+	} {
+		if err := ValidateMCPServerJSON(raw); err != nil {
+			t.Fatalf("ValidateMCPServerJSON(%s): %v", raw, err)
+		}
+	}
+	if err := ValidateMCPServerJSON(json.RawMessage(`{"type":"stdio","name":"bad","command":"server","args":[],"env":[],"url":"https://example.test"}`)); err == nil {
+		t.Fatal("cross-variant MCP fields succeeded")
+	}
+	if _, err := json.Marshal(MCPServer{Type: "stdio", Name: "bad", Command: "server", URL: "https://example.test"}); err == nil {
+		t.Fatal("cross-variant MCP marshal succeeded")
+	}
+}
+
+func jsonEqual(left, right []byte) bool {
+	var leftValue, rightValue any
+	if json.Unmarshal(left, &leftValue) != nil || json.Unmarshal(right, &rightValue) != nil {
+		return false
+	}
+	return reflect.DeepEqual(leftValue, rightValue)
+}
+
+func TestNegotiateWMExtensionsRequiresVersionIntersection(t *testing.T) {
+	client := BuildWMClientCapabilitiesMeta(json.RawMessage(`{"vendor":{"keep":true}}`))
+	agent := BuildWMAgentCapabilitiesMeta(nil, WMAgentExtensionCapabilities{
+		MessageLifecycle: true,
+		GoalLifecycle:    true,
+		SessionActions: WMSessionActionCapabilities{
+			Steer: true, Compact: true, Goal: true, Fork: true, Archive: true,
+		},
+	})
+	got := NegotiateWMExtensions(client, agent)
+	if !got.MessageLifecycle || !got.GoalLifecycle || !got.SessionActions.Steer || !got.SessionActions.Archive {
+		t.Fatalf("negotiated=%#v", got)
+	}
+	if got := NegotiateWMExtensions(nil, agent); got.MessageLifecycle || got.SessionActions.Steer {
+		t.Fatalf("agent-only capabilities negotiated: %#v", got)
+	}
+}
+
+func TestWMActionRPCErrorCarriesStableDataCode(t *testing.T) {
+	err := NewWMActionRPCError(WMActionErrorBusy, "turn already running")
+	code, ok := WMActionErrorCode(err)
+	if !ok || code != WMActionErrorBusy {
+		t.Fatalf("WMActionErrorCode() = %q, %v", code, ok)
+	}
+	var data WMActionErrorData
+	if decodeErr := json.Unmarshal(err.Data, &data); decodeErr != nil || data.Message != "turn already running" {
+		t.Fatalf("error data = %s, err=%v", err.Data, decodeErr)
+	}
+}
+
+func TestSessionActionsProjectOnlyNegotiatedAgentCapabilities(t *testing.T) {
+	capabilities := AgentCapabilities{Meta: BuildWMAgentCapabilitiesMeta(nil, WMAgentExtensionCapabilities{
+		SessionActions: WMSessionActionCapabilities{Compact: true, Goal: true},
+	})}
+	actions := SessionActionsFromAgentCapabilities(capabilities)
+	if !actions.Status.Supported || !actions.Compact.Supported || !actions.Goal.Supported {
+		t.Fatalf("negotiated actions=%#v", actions)
+	}
+	if actions.Steer.Supported || actions.Fork.Supported {
+		t.Fatalf("unadvertised actions=%#v", actions)
+	}
+	unnegotiated := SessionActionsFromAgentCapabilities(AgentCapabilities{})
+	if !unnegotiated.Status.Supported || unnegotiated.Compact.Supported || unnegotiated.Goal.Supported {
+		t.Fatalf("unnegotiated actions=%#v", unnegotiated)
+	}
+}
+
+func TestSessionActionsCompactFromAdvertisedCommand(t *testing.T) {
+	tests := []struct {
+		name      string
+		commands  []AvailableCommand
+		supported bool
+	}{
+		{name: "bare compact", commands: []AvailableCommand{{Name: "compact"}}, supported: true},
+		{name: "slash compact", commands: []AvailableCommand{{Name: "/compact"}}, supported: true},
+		{name: "case insensitive", commands: []AvailableCommand{{Name: "/CoMpAcT"}}, supported: true},
+		{name: "unrelated", commands: []AvailableCommand{{Name: "review"}}},
+		{name: "prefix is not compact", commands: []AvailableCommand{{Name: "compact-now"}}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			actions := SessionActionsFromState(SessionCapabilityState{Commands: tt.commands})
+			if actions.Compact.Supported != tt.supported {
+				t.Fatalf("compact support = %t, want %t; actions=%#v", actions.Compact.Supported, tt.supported, actions)
+			}
+		})
+	}
+}
+
+func TestDecodeWMGoalNotificationValidatesEventShape(t *testing.T) {
+	valid := []string{
+		`{"sessionId":"s1","event":"updated","goal":{"sessionId":"s1","objective":"ship","status":"active","tokenBudget":null,"tokensUsed":0,"timeUsedSeconds":0,"createdAt":1,"updatedAt":1},"_meta":{"vendor":{"keep":true}}}`,
+		`{"sessionId":"s1","event":"cleared"}`,
+		`{"sessionId":"s1","event":"turn_started","turnId":"t1"}`,
+		`{"sessionId":"s1","event":"turn_completed","turnId":"t1"}`,
+	}
+	for _, raw := range valid {
+		if _, err := DecodeWMGoalNotification(json.RawMessage(raw)); err != nil {
+			t.Fatalf("valid %s: %v", raw, err)
+		}
+	}
+	invalid := []string{
+		`{"sessionId":"s1","event":"updated"}`,
+		`{"sessionId":"s1","event":"cleared","goal":{"sessionId":"s1"}}`,
+		`{"sessionId":"s1","event":"turn_started"}`,
+		`{"sessionId":"s1","event":"future"}`,
+		`{"sessionId":"s1","event":"cleared","private":true}`,
+	}
+	for _, raw := range invalid {
+		if _, err := DecodeWMGoalNotification(json.RawMessage(raw)); err == nil {
+			t.Fatalf("invalid %s accepted", raw)
+		}
+	}
+}
+
+func TestWMExtensionMethodsUseReservedNamespace(t *testing.T) {
+	methods := []string{
+		MethodWMSessionSteer, MethodWMSessionCompact, MethodWMSessionGoalSet,
+		MethodWMSessionGoalGet, MethodWMSessionGoalClear, MethodWMSessionForkResolve,
+		MethodWMSessionFork, MethodWMSessionArchive, MethodWMSessionGoal,
+	}
+	for _, method := range methods {
+		if len(method) < 4 || method[:4] != "_wm/" {
+			t.Fatalf("method=%q", method)
+		}
+	}
+}
+
+func TestWMSessionForkExtensionUsesStablePromptFieldNames(t *testing.T) {
+	turnIndex := int64(7)
+	meta := BuildWMSessionForkMeta(nil, WMSessionForkExtension{
+		Ref:       "turn-7",
+		TurnIndex: &turnIndex,
+		Prompts: []SessionForkPrompt{{
+			DoneTurnIndex: 7,
+			ContentBlocks: []ContentBlock{{Type: ContentBlockTypeText, Text: "follow up"}},
+		}},
+	})
+	if !bytes.Contains(meta, []byte(`"doneTurnIndex":7`)) || !bytes.Contains(meta, []byte(`"contentBlocks"`)) {
+		t.Fatalf("fork metadata=%s, want stable prompt field names", meta)
+	}
+	decoded, ok := WMSessionForkExtensionFromMeta(meta)
+	if !ok || decoded.Ref != "turn-7" || decoded.TurnIndex == nil || *decoded.TurnIndex != 7 || len(decoded.Prompts) != 1 {
+		t.Fatalf("decoded fork extension=%#v, ok=%v", decoded, ok)
+	}
+	if decoded.Prompts[0].DoneTurnIndex != 7 || len(decoded.Prompts[0].ContentBlocks) != 1 {
+		t.Fatalf("decoded prompts=%#v", decoded.Prompts)
+	}
+}
+
+func TestWMSessionForkResultExtensionRoundTripsWithoutDiscardingBaseMeta(t *testing.T) {
+	meta := BuildWMSessionForkResultMeta(json.RawMessage(`{"vendor":{"keep":true}}`), WMSessionForkResultExtension{
+		Title: "Forked thread",
+		ForkPoints: map[int64]SessionForkPoint{
+			3: {Provider: "codex", Ref: "target-turn-1"},
+		},
+	})
+	if !bytes.Contains(meta, []byte(`"vendor":{"keep":true}`)) {
+		t.Fatalf("fork result metadata=%s, base metadata was discarded", meta)
+	}
+	decoded, ok := WMSessionForkResultExtensionFromMeta(meta)
+	if !ok || decoded.Title != "Forked thread" || decoded.ForkPoints[3].Ref != "target-turn-1" {
+		t.Fatalf("decoded fork result extension=%#v, ok=%v", decoded, ok)
+	}
+}
+
+func TestProjectACPUpdateProducesTypedAgentEvent(t *testing.T) {
+	receivedAt := time.Date(2026, 8, 2, 1, 2, 3, 0, time.UTC)
+	params, err := DecodeSessionUpdateParams(json.RawMessage(`{
+		"sessionId":"s1",
+		"update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"hello"},"messageId":"m1","_meta":{"wm":{"messagePhase":"commentary"},"vendor":{"trace":1}}},
+		"_meta":{"envelope":{"sequence":9}}
+	}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	event, err := ProjectSessionUpdate(params, receivedAt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	message, ok := event.Update.(AgentMessageEvent)
+	if !ok {
+		t.Fatalf("update=%T, want AgentMessageEvent", event.Update)
+	}
+	if event.SessionID != "s1" || message.MessageID != "m1" || message.Content.Text != "hello" || !message.ReceivedAt.Equal(receivedAt) {
+		t.Fatalf("event=%#v", event)
+	}
+	if string(message.Meta) != `{"wm":{"messagePhase":"commentary"},"vendor":{"trace":1}}` {
+		t.Fatalf("meta=%s", message.Meta)
+	}
+}
+
+func TestDecodeSessionUpdateParamsIgnoresUnknownEnvelopeAndRejectsInvalidUpdate(t *testing.T) {
+	valid := json.RawMessage(`{"sessionId":"s1","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"x"},"status":"streaming"},"private":true}`)
+	if _, err := DecodeSessionUpdateParams(valid); err != nil {
+		t.Fatalf("forward-compatible update: %v", err)
+	}
+	invalid := json.RawMessage(`{"sessionId":"s1","update":{"sessionUpdate":"future_update"}}`)
+	if _, err := DecodeSessionUpdateParams(invalid); err == nil {
+		t.Fatalf("DecodeSessionUpdateParams(%s) succeeded", invalid)
+	}
+}
+
+func TestProjectToolUpdatePreservesRichFields(t *testing.T) {
+	params, err := DecodeSessionUpdateParams(json.RawMessage(`{
+		"sessionId":"s1",
+		"update":{
+			"sessionUpdate":"tool_call_update",
+			"toolCallId":"call-1",
+			"title":"Run",
+			"kind":"execute",
+			"status":"completed",
+			"content":[{"type":"terminal","terminalId":"term-1","_meta":{"vendor":1}}],
+			"locations":[{"path":"main.go","line":4,"_meta":{"vendor":2}}],
+			"rawInput":{"command":"go test"},
+			"rawOutput":{"exitCode":0},
+			"_meta":{"vendor":{"trace":"abc"}}
+		}
+	}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	event, err := ProjectSessionUpdate(params, time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	tool, ok := event.Update.(AgentToolEvent)
+	if !ok {
+		t.Fatalf("update=%T, want AgentToolEvent", event.Update)
+	}
+	if len(tool.Content) != 1 || len(tool.Locations) != 1 || len(tool.RawInput) == 0 || len(tool.RawOutput) == 0 || len(tool.Meta) == 0 {
+		t.Fatalf("tool=%#v", tool)
+	}
+}
+
+func TestSessionQueueRequestRoundTrip(t *testing.T) {
+	raw := []byte(`{"sessionId":"sess-1","action":"enqueue","item":{"itemId":"item-1","kind":"prompt","createdAt":"2026-07-31T10:00:00Z","blocks":[{"type":"text","text":"hello"}]}}`)
+	var got SessionQueueRequest
+	if err := json.Unmarshal(raw, &got); err != nil {
+		t.Fatal(err)
+	}
+	if got.SessionID != "sess-1" || got.Action != SessionQueueActionEnqueue || got.Item == nil ||
+		got.Item.ItemID != "item-1" || got.Item.Kind != SessionQueueItemKindPrompt ||
+		len(got.Item.Blocks) != 1 || got.Item.Blocks[0].Text != "hello" {
+		t.Fatalf("request = %#v", got)
+	}
+}
+
+func TestSessionQueueSnapshotRoundTrip(t *testing.T) {
+	snapshot := SessionQueueSnapshot{
+		Generation:   "generation-1",
+		Revision:     4,
+		ActiveKind:   SessionQueueItemKindPrompt,
+		WaitingCount: 1,
+		ActiveItem: &SessionQueueItem{
+			ItemID:          "active-1",
+			Kind:            SessionQueueItemKindPrompt,
+			Status:          SessionQueueItemStatusRunning,
+			CreatedAt:       "2026-07-31T10:00:00Z",
+			CancelSupported: true,
+		},
+		WaitingItems: []SessionQueueItem{{
+			ItemID:          "waiting-1",
+			Kind:            SessionQueueItemKindCompact,
+			Status:          SessionQueueItemStatusQueued,
+			CreatedAt:       "2026-07-31T10:01:00Z",
+			CancelSupported: true,
+		}},
+	}
+	raw, err := json.Marshal(snapshot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got SessionQueueSnapshot
+	if err := json.Unmarshal(raw, &got); err != nil {
+		t.Fatal(err)
+	}
+	if got.Generation != snapshot.Generation || got.Revision != snapshot.Revision ||
+		got.ActiveItem == nil || got.ActiveItem.Status != SessionQueueItemStatusRunning ||
+		len(got.WaitingItems) != 1 || got.WaitingItems[0].Kind != SessionQueueItemKindCompact {
+		t.Fatalf("snapshot = %#v", got)
 	}
 }

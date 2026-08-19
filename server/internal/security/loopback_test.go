@@ -1,8 +1,13 @@
 package security
 
 import (
+	"crypto/rand"
 	"crypto/tls"
+	"errors"
+	"io"
 	"net/http"
+	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -125,6 +130,179 @@ func TestBrowserWriteRequiresSameOriginFetchMetadata(t *testing.T) {
 			request.Header.Set("Sec-Fetch-Mode", tt.fetchMode)
 			if got := BrowserWriteRequestAllowed(request); got != tt.ok {
 				t.Fatalf("BrowserWriteRequestAllowed()=%t, want %t", got, tt.ok)
+			}
+		})
+	}
+}
+
+func TestRedactDiagnosticValueRedactsNestedAndObfuscatedSecretKeys(t *testing.T) {
+	original := map[string]any{
+		"registryToken": "registry-secret",
+		"nested": []any{map[string]any{
+			"api_key":       "api-secret",
+			"set-cookie":    "cookie-secret",
+			"error_details": map[string]any{"app.secret": "app-secret", "credential": "credential-secret"},
+		}},
+		"tokenCount":           12,
+		"inputTokens":          8,
+		"output_tokens":        4,
+		"accessCodeGeneration": 3,
+	}
+
+	got := RedactDiagnosticValue(original)
+	want := map[string]any{
+		"registryToken": RedactedValue,
+		"nested": []any{map[string]any{
+			"api_key":       RedactedValue,
+			"set-cookie":    RedactedValue,
+			"error_details": map[string]any{"app.secret": RedactedValue, "credential": RedactedValue},
+		}},
+		"tokenCount":           12,
+		"inputTokens":          8,
+		"output_tokens":        4,
+		"accessCodeGeneration": 3,
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("RedactDiagnosticValue() = %#v, want %#v", got, want)
+	}
+	if original["registryToken"] != "registry-secret" {
+		t.Fatalf("redactor mutated input: %#v", original)
+	}
+}
+
+func TestRedactDiagnosticValueRedactsAPIKeysContainer(t *testing.T) {
+	input := map[string]any{
+		"api_keys": map[string]any{
+			"kimi":    "kimi-test-secret",
+			"qwen":    "qwen-test-secret",
+			"zai":     "zai-test-secret",
+			"flicker": "flicker-test-secret",
+		},
+	}
+	want := map[string]any{"api_keys": RedactedValue}
+	if got := RedactDiagnosticValue(input); !reflect.DeepEqual(got, want) {
+		t.Fatalf("RedactDiagnosticValue() = %#v, want %#v", got, want)
+	}
+
+	type configWithAPIKeys struct {
+		APIKeys map[string]string `json:"api_keys"`
+	}
+	structInput := configWithAPIKeys{APIKeys: map[string]string{
+		"kimi":    "kimi-test-secret",
+		"qwen":    "qwen-test-secret",
+		"zai":     "zai-test-secret",
+		"flicker": "flicker-test-secret",
+	}}
+	if got := RedactDiagnosticValue(structInput); !reflect.DeepEqual(got, want) {
+		t.Fatalf("RedactDiagnosticValue(struct) = %#v, want %#v", got, want)
+	}
+}
+
+func TestRedactDiagnosticValueTerminatesAtDepthAndNodeLimits(t *testing.T) {
+	deep := map[string]any{"value": "root"}
+	cursor := deep
+	for i := 0; i < 32; i++ {
+		next := map[string]any{"value": i}
+		cursor["next"] = next
+		cursor = next
+	}
+
+	wide := make([]any, 10_100)
+	for i := range wide {
+		wide[i] = map[string]any{"value": i}
+	}
+
+	got := RedactDiagnosticValue(map[string]any{"deep": deep, "wide": wide})
+	if got == nil {
+		t.Fatal("redactor returned nil at safety limits")
+	}
+}
+
+func TestNewRegistryTokenCreatesIndependentValues(t *testing.T) {
+	first, err := NewRegistryToken(rand.Reader)
+	if err != nil {
+		t.Fatalf("NewRegistryToken(first): %v", err)
+	}
+	second, err := NewRegistryToken(rand.Reader)
+	if err != nil {
+		t.Fatalf("NewRegistryToken(second): %v", err)
+	}
+	if len(first) != 43 || len(second) != 43 {
+		t.Fatalf("token lengths=%d/%d, want 43/43", len(first), len(second))
+	}
+	if first == second {
+		t.Fatal("independent token generations returned the same value")
+	}
+}
+
+func TestNewRegistryTokenReturnsRandomSourceFailure(t *testing.T) {
+	want := errors.New("random source unavailable")
+	_, err := NewRegistryToken(errorReader{err: want})
+	if !errors.Is(err, want) {
+		t.Fatalf("NewRegistryToken() error=%v, want wrapped %v", err, want)
+	}
+}
+
+type errorReader struct {
+	err error
+}
+
+func (r errorReader) Read([]byte) (int, error) {
+	return 0, r.err
+}
+
+var _ io.Reader = errorReader{}
+
+func TestValidateRegistryTokenRejectsUnsafeValues(t *testing.T) {
+	for _, token := range []string{"", "   ", "wheelmaker-local-token"} {
+		err := ValidateRegistryToken(token)
+		if err == nil {
+			t.Fatalf("ValidateRegistryToken(%q) succeeded, want rejection", token)
+		}
+		if err.Error() != "token must be a non-default value" {
+			t.Fatalf("ValidateRegistryToken(%q) error=%q, want top-level token field", token, err)
+		}
+	}
+}
+
+func TestValidateRegistryTokenAcceptsGeneratedAndShortCustomValues(t *testing.T) {
+	for _, token := range []string{strings.Repeat("a", 43), "short-custom"} {
+		if err := ValidateRegistryToken(token); err != nil {
+			t.Fatalf("ValidateRegistryToken(%q) error=%v", token, err)
+		}
+	}
+}
+
+func TestNormalizeHTTPSBaseURL(t *testing.T) {
+	tests := []struct {
+		raw        string
+		normalized string
+		ok         bool
+	}{
+		{raw: "https://example.com", normalized: "https://example.com/", ok: true},
+		{raw: "https://example.com:8443/wheelmaker", normalized: "https://example.com:8443/wheelmaker/", ok: true},
+		{raw: "https://127.0.0.1/app/", normalized: "https://127.0.0.1/app/", ok: true},
+		{raw: "https://example.com/a%20b", normalized: "https://example.com/a%20b/", ok: true},
+		{raw: "http://example.com/", ok: false},
+		{raw: "https://user@example.com/", ok: false},
+		{raw: "https://example.com/?x=1", ok: false},
+		{raw: "https://example.com/#x", ok: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.raw, func(t *testing.T) {
+			got, err := NormalizeHTTPSBaseURL(tt.raw)
+			if !tt.ok {
+				if err == nil {
+					t.Fatalf("NormalizeHTTPSBaseURL(%q)=%q, want rejection", tt.raw, got)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("NormalizeHTTPSBaseURL(%q) error=%v", tt.raw, err)
+			}
+			if got.String() != tt.normalized {
+				t.Fatalf("NormalizeHTTPSBaseURL(%q)=%q, want %q", tt.raw, got, tt.normalized)
 			}
 		})
 	}

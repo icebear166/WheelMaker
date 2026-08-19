@@ -1,10 +1,16 @@
 package tools
 
 import (
+	"archive/zip"
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -4756,5 +4762,1698 @@ func TestSkillsCommandPreviewDeleteHandlesExternallyRemovedProjectSource(t *test
 	preview := response.(skillsCommandResponse).Preview
 	if preview == nil || !reflect.DeepEqual(preview.Skills, []string{"alpha"}) {
 		t.Fatalf("preview=%#v", preview)
+	}
+}
+
+func TestNativeSkillSourceRejectsSSHPassword(t *testing.T) {
+	if _, _, err := normalizeSkillGitSource("ssh://deploy:secret@example.com/owner/repo.git"); err == nil {
+		t.Fatal("normalizeSkillGitSource() accepted an SSH password")
+	}
+}
+
+func TestNativeSkillSourceStoreInspectFetchesExistingClone(t *testing.T) {
+	repository := t.TempDir()
+	initSkillSourceGitFixture(t, repository, "first")
+	store := newSkillSourceStore(filepath.Join(t.TempDir(), "home"))
+	source := skillSourceSnapshot{Source: repository, SourceKey: "local/example"}
+	first, err := store.ensureRepo(context.Background(), source)
+	if err != nil {
+		t.Fatalf("ensureRepo() error=%v", err)
+	}
+	appendSkillSourceGitCommit(t, repository, "second")
+
+	inspected, err := store.inspectRepo(context.Background(), source)
+	if err != nil {
+		t.Fatalf("inspectRepo() error=%v", err)
+	}
+	if inspected.RemoteCommit == "" || inspected.RemoteCommit == first.Commit {
+		t.Fatalf("inspectRepo() remote commit=%q, want newer commit than %q", inspected.RemoteCommit, first.Commit)
+	}
+}
+
+func TestNativeSkillSourceStoreKeepsSourceLockWhileConsumingCheckout(t *testing.T) {
+	repository := t.TempDir()
+	initSkillSourceGitFixture(t, repository, "first")
+	store := newSkillSourceStore(filepath.Join(t.TempDir(), "home"))
+	source := skillSourceSnapshot{Source: repository, SourceKey: "local/example"}
+	if _, err := store.ensureRepo(context.Background(), source); err != nil {
+		t.Fatalf("ensureRepo() error=%v", err)
+	}
+
+	entered := make(chan struct{})
+	release := make(chan struct{})
+	firstDone := make(chan error, 1)
+	go func() {
+		firstDone <- store.withEnsuredRepo(context.Background(), source, func(checkout skillSourceCheckout) error {
+			if checkout.Commit == "" {
+				return errors.New("checkout commit is empty")
+			}
+			close(entered)
+			<-release
+			return nil
+		})
+	}()
+	<-entered
+
+	secondDone := make(chan error, 1)
+	go func() {
+		_, err := store.updateRepo(context.Background(), source)
+		secondDone <- err
+	}()
+	select {
+	case err := <-secondDone:
+		t.Fatalf("updateRepo() completed while checkout was being consumed: %v", err)
+	case <-time.After(100 * time.Millisecond):
+	}
+	close(release)
+	if err := <-firstDone; err != nil {
+		t.Fatalf("withEnsuredRepo() error=%v", err)
+	}
+	if err := <-secondDone; err != nil {
+		t.Fatalf("updateRepo() error=%v", err)
+	}
+}
+
+func TestNativeSkillSourceStoreRefreshUsesRemoteDefaultBranch(t *testing.T) {
+	repository := t.TempDir()
+	initSkillSourceGitFixture(t, repository, "main-skill")
+	runSkillSourceGit(t, repository, "checkout", "-b", "develop")
+	writeSkillSourceFixture(t, filepath.Join(repository, "skills", "develop-skill"), "# develop\n", nil)
+	runSkillSourceGit(t, repository, "add", "-A")
+	runSkillSourceGit(t, repository, "commit", "-m", "develop")
+	runSkillSourceGit(t, repository, "checkout", "main")
+
+	store := newSkillSourceStore(filepath.Join(t.TempDir(), "home"))
+	source := skillSourceSnapshot{Source: repository, SourceKey: "local/example"}
+	checkout, err := store.ensureRepo(context.Background(), source)
+	if err != nil {
+		t.Fatalf("ensureRepo() error=%v", err)
+	}
+	// Keep the clone's cached origin/HEAD stale after changing the remote HEAD.
+	runSkillSourceGit(t, checkout.Path, "symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/main")
+	runSkillSourceGit(t, repository, "symbolic-ref", "HEAD", "refs/heads/develop")
+
+	refreshed, err := store.refreshRepo(context.Background(), source)
+	if err != nil {
+		t.Fatalf("refreshRepo() error=%v", err)
+	}
+	if refreshed.Branch != "develop" {
+		t.Fatalf("refreshRepo() branch=%q, want develop", refreshed.Branch)
+	}
+	if refreshed.RemoteCommit == "" {
+		t.Fatal("refreshRepo() returned an empty remote commit")
+	}
+}
+
+func TestNativeInstalledNamesIncludeDirectoryLinks(t *testing.T) {
+	home := t.TempDir()
+	source := filepath.Join(t.TempDir(), "alpha")
+	writeSkillSourceFixture(t, source, "# alpha\n", nil)
+	link := filepath.Join(home, ".agents", "skills", "alpha")
+	if err := createSkillDirectoryLink(source, link); err != nil {
+		t.Skipf("directory links unavailable: %v", err)
+	}
+	command := newSkillsCommandWithRunner(newFakeSkillsRunner(), skillsCommandConfig{HubID: "hub-a", HomeDir: home})
+	names, err := command.nativeInstalledNames(skillsCommandTarget{scope: "hub"})
+	if err != nil {
+		t.Fatalf("nativeInstalledNames() error=%v", err)
+	}
+	if _, ok := names["alpha"]; !ok {
+		t.Fatalf("nativeInstalledNames()=%#v, want linked alpha", names)
+	}
+}
+
+func TestNativeSkillTargetPathRejectsManagedRootSymlink(t *testing.T) {
+	managedRoot := filepath.Join(t.TempDir(), "skills")
+	outside := t.TempDir()
+	if err := os.Symlink(outside, managedRoot); err != nil {
+		t.Skipf("directory symlinks unavailable: %v", err)
+	}
+	if _, err := nativeSkillTargetPath(managedRoot, "alpha"); err == nil {
+		t.Fatal("nativeSkillTargetPath() accepted a managed root symlink")
+	}
+}
+
+func TestNativeGlobalV2MigrationMaterializesCentralLinks(t *testing.T) {
+	repository := t.TempDir()
+	initSkillSourceGitFixture(t, repository, "alpha")
+	home := t.TempDir()
+	key := "github.com/example/skills"
+	store := newSkillSourceStore(home)
+	clonePath := store.repositoryPath(key)
+	os.MkdirAll(filepath.Dir(clonePath), 0o755)
+	runSkillSourceGit(t, filepath.Dir(clonePath), "clone", "--quiet", repository, clonePath)
+
+	legacyPath := filepath.Join(home, ".agents", ".skill-source-lock.json")
+	writeLegacySkillSourceLock(t, legacyPath, "https://github.com/example/skills.git", key, "alpha")
+	for _, root := range []string{".agents/skills/alpha", ".claude/skills/alpha"} {
+		writeSkillSourceFixture(t, filepath.Join(home, filepath.FromSlash(root)), "# legacy\n", nil)
+	}
+
+	command := newSkillsCommandWithRunner(newFakeSkillsRunner(), skillsCommandConfig{HubID: "hub-a", HomeDir: home})
+	target := skillsCommandTarget{scope: "hub"}
+	var migrated skillSourceLock
+	err := command.withNativeScopeLock(target, func() error {
+		var err error
+		migrated, _, err = command.readNativeScopeLock(context.Background(), target)
+		return err
+	})
+	if err != nil {
+		t.Fatalf("readNativeScopeLock() migration error=%v", err)
+	}
+	if len(migrated.Sources) != 1 || len(migrated.Sources[0].ManagedSkills) != 1 {
+		t.Fatalf("migrated lock=%#v", migrated)
+	}
+	centralSkill := filepath.Join(clonePath, "skills", "alpha")
+	centralInfo, err := os.Stat(centralSkill)
+	if err != nil {
+		t.Fatalf("stat central skill: %v", err)
+	}
+	for _, root := range []string{".agents/skills/alpha", ".claude/skills/alpha"} {
+		installedInfo, err := os.Stat(filepath.Join(home, filepath.FromSlash(root)))
+		if err != nil {
+			t.Fatalf("stat migrated skill %s: %v", root, err)
+		}
+		if !os.SameFile(installedInfo, centralInfo) {
+			t.Fatalf("migrated skill %s does not resolve to central checkout", root)
+		}
+	}
+}
+
+func TestNativeGlobalV2MigrationFailureLeavesCanonicalLockAndTargetsUnchanged(t *testing.T) {
+	home := t.TempDir()
+	legacyPath := filepath.Join(home, ".agents", ".skill-source-lock.json")
+	writeLegacySkillSourceLock(t, legacyPath, "https://example.invalid/missing/skills.git", "example.invalid/missing/skills", "alpha")
+	for _, root := range []string{".agents/skills/alpha", ".claude/skills/alpha"} {
+		writeSkillSourceFixture(t, filepath.Join(home, filepath.FromSlash(root)), "# legacy\n", nil)
+	}
+	command := newSkillsCommandWithRunner(newFakeSkillsRunner(), skillsCommandConfig{HubID: "hub-a", HomeDir: home})
+	target := skillsCommandTarget{scope: "hub"}
+	err := command.withNativeScopeLock(target, func() error {
+		_, _, err := command.readNativeScopeLock(context.Background(), target)
+		return err
+	})
+	if err == nil {
+		t.Fatal("readNativeScopeLock() unexpectedly migrated a source whose clone failed")
+	}
+	if _, statErr := os.Stat(command.sourceLockFile(target)); !os.IsNotExist(statErr) {
+		t.Fatalf("canonical lock exists after failed migration: %v", statErr)
+	}
+	for _, root := range []string{".agents/skills/alpha", ".claude/skills/alpha"} {
+		info, statErr := os.Stat(filepath.Join(home, filepath.FromSlash(root)))
+		if statErr != nil || !info.IsDir() {
+			t.Fatalf("migration failure changed target %s: info=%#v err=%v", root, info, statErr)
+		}
+	}
+}
+
+func TestNativeAddRepoDoesNotAdvanceProjectLockWithoutSynchronizingCopies(t *testing.T) {
+	repository := t.TempDir()
+	initSkillSourceGitFixture(t, repository, "alpha")
+	home := t.TempDir()
+	project := t.TempDir()
+	key := "github.com/example/skills"
+	store := newSkillSourceStore(home)
+	clonePath := store.repositoryPath(key)
+	os.MkdirAll(filepath.Dir(clonePath), 0o755)
+	runSkillSourceGit(t, filepath.Dir(clonePath), "clone", "--quiet", repository, clonePath)
+
+	command := newSkillsCommandWithRunner(newFakeSkillsRunner(), skillsCommandConfig{
+		HubID: "hub-a", HomeDir: home, Projects: []ProjectInfo{{Name: "project", Path: project}},
+	})
+	target := skillsCommandTarget{scope: "project", projectName: "project", dir: project}
+	source := "https://github.com/example/skills.git"
+	if err := command.nativeAddRepo(context.Background(), target, source, key); err != nil {
+		t.Fatalf("initial nativeAddRepo() error=%v", err)
+	}
+	if err := command.nativeInstall(context.Background(), target, source, []string{"alpha"}, false); err != nil {
+		t.Fatalf("nativeInstall() error=%v", err)
+	}
+	lockPath := command.sourceLockFile(target)
+	firstLock, _, err := readSkillSourceLockFile(lockPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	writeSkillSourceFixture(t, filepath.Join(repository, "skills", "alpha"), "# alpha v2\n", nil)
+	runSkillSourceGit(t, repository, "add", "-A")
+	runSkillSourceGit(t, repository, "commit", "-m", "alpha v2")
+	if _, err := command.nativeStore().updateRepo(context.Background(), skillSourceSnapshot{Source: source, SourceKey: key}); err != nil {
+		t.Fatalf("central updateRepo() error=%v", err)
+	}
+	if err := command.nativeAddRepo(context.Background(), target, source, key); err != nil {
+		t.Fatalf("duplicate nativeAddRepo() error=%v", err)
+	}
+	secondLock, _, err := readSkillSourceLockFile(lockPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if secondLock.Sources[0].Commit != firstLock.Sources[0].Commit {
+		t.Fatalf("duplicate Add Repo advanced project commit from %s to %s without copying", firstLock.Sources[0].Commit, secondLock.Sources[0].Commit)
+	}
+	raw, err := os.ReadFile(filepath.Join(project, ".agents", "skills", "alpha", "SKILL.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.TrimSpace(string(raw)) != "# alpha" {
+		t.Fatalf("project copy changed during duplicate Add Repo: %q", raw)
+	}
+}
+
+func TestSkillsCommandScopeUpdateProcessesEveryRepository(t *testing.T) {
+	firstRepository := t.TempDir()
+	secondRepository := t.TempDir()
+	initSkillSourceGitFixture(t, firstRepository, "alpha")
+	initSkillSourceGitFixture(t, secondRepository, "beta")
+	home := t.TempDir()
+	command := newSkillsCommandWithRunner(newFakeSkillsRunner(), skillsCommandConfig{HubID: "hub-a", HomeDir: home})
+	target := skillsCommandTarget{scope: "hub"}
+	firstSource := "https://github.com/example/first.git"
+	secondSource := "https://github.com/example/second.git"
+	seedNativeSkillSourceClone(t, command, firstRepository, firstSource, "github.com/example/first")
+	seedNativeSkillSourceClone(t, command, secondRepository, secondSource, "github.com/example/second")
+	appendSkillSourceGitCommit(t, firstRepository, "alpha-new")
+	appendSkillSourceGitCommit(t, secondRepository, "beta-new")
+	lock := skillSourceLock{Version: 3, Sources: []skillSourceSnapshot{
+		{Source: firstSource, SourceKey: "github.com/example/first", ManagedSkills: []string{}},
+		{Source: secondSource, SourceKey: "github.com/example/second", ManagedSkills: []string{}},
+	}}
+	if _, err := writeSkillSourceLockFile(command.sourceLockFile(target), skillSourceMissingRevision, lock); err != nil {
+		t.Fatal(err)
+	}
+
+	response, cmdErr := command.Handle(context.Background(), rawSkillsCommandPayload(t, map[string]any{
+		"action": "updateScope",
+		"hubId":  "hub-a",
+		"scope":  "hub",
+	}))
+	if cmdErr != nil {
+		t.Fatalf("scope update error: %#v", cmdErr)
+	}
+	if body := response.(skillsCommandResponse); !body.OK || !body.Accepted {
+		t.Fatalf("response=%#v, want accepted scope update", body)
+	}
+	operation := waitForSkillsOperationDone(t, command)
+	if operation.Status != "succeeded" || len(operation.Results) != 2 {
+		t.Fatalf("operation=%#v, want two successful source results", operation)
+	}
+	for _, result := range operation.Results {
+		if result.Status != "succeeded" || result.Action != "update" {
+			t.Fatalf("source result=%#v, want successful update", result)
+		}
+	}
+	updated, _, err := readSkillSourceLockFile(command.sourceLockFile(target))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, source := range updated.Sources {
+		if source.Commit == "" {
+			t.Fatalf("source=%#v has no updated commit", source)
+		}
+	}
+}
+
+func TestSkillsCommandScopeUpdateContinuesAfterSourceFailure(t *testing.T) {
+	workingRepository := t.TempDir()
+	initSkillSourceGitFixture(t, workingRepository, "alpha")
+	home := t.TempDir()
+	command := newSkillsCommandWithRunner(newFakeSkillsRunner(), skillsCommandConfig{HubID: "hub-a", HomeDir: home})
+	target := skillsCommandTarget{scope: "hub"}
+	workingSource := "https://github.com/example/working.git"
+	missingSource := "https://github.com/example/missing.git"
+	seedNativeSkillSourceClone(t, command, workingRepository, workingSource, "github.com/example/working")
+	if err := os.MkdirAll(command.nativeStore().repositoryPath("github.com/example/missing"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := writeSkillSourceLockFile(command.sourceLockFile(target), skillSourceMissingRevision, skillSourceLock{
+		Version: 3,
+		Sources: []skillSourceSnapshot{
+			{Source: workingSource, SourceKey: "github.com/example/working"},
+			{Source: missingSource, SourceKey: "github.com/example/missing"},
+		},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	response, cmdErr := command.Handle(context.Background(), rawSkillsCommandPayload(t, map[string]any{
+		"action": "updateScope",
+		"hubId":  "hub-a",
+		"scope":  "hub",
+	}))
+	if cmdErr != nil {
+		t.Fatalf("scope update error: %#v", cmdErr)
+	}
+	if body := response.(skillsCommandResponse); !body.OK || !body.Accepted {
+		t.Fatalf("response=%#v, want accepted scope update", body)
+	}
+	operation := waitForSkillsOperationDone(t, command)
+	if operation.Status != "partial" || len(operation.Results) != 2 {
+		t.Fatalf("operation=%#v, want partial results for both sources", operation)
+	}
+	statuses := map[string]string{}
+	for _, result := range operation.Results {
+		statuses[result.Skill] = result.Status
+	}
+	if statuses["github.com/example/working"] != "succeeded" || statuses["github.com/example/missing"] != "failed" {
+		t.Fatalf("source statuses=%#v, want working succeeded and missing failed", statuses)
+	}
+	if _, err := os.Stat(command.nativeStore().repositoryPath("github.com/example/working")); err != nil {
+		t.Fatalf("successful source was not processed: %v", err)
+	}
+}
+
+func TestSkillsCommandScopeInstallAllUpdatesBeforeInstalling(t *testing.T) {
+	firstRepository := t.TempDir()
+	secondRepository := t.TempDir()
+	initSkillSourceGitFixture(t, firstRepository, "alpha")
+	initSkillSourceGitFixture(t, secondRepository, "beta")
+	projectRoot := t.TempDir()
+	command := newSkillsCommandWithRunner(newFakeSkillsRunner(), skillsCommandConfig{
+		HubID: "hub-a", HomeDir: t.TempDir(), Projects: []ProjectInfo{{Name: "project", Path: projectRoot}},
+	})
+	target := skillsCommandTarget{scope: "project", projectName: "project", dir: projectRoot}
+	firstSource := "https://github.com/example/first.git"
+	secondSource := "https://github.com/example/second.git"
+	firstInitial := seedNativeSkillSourceClone(t, command, firstRepository, firstSource, "github.com/example/first")
+	secondInitial := seedNativeSkillSourceClone(t, command, secondRepository, secondSource, "github.com/example/second")
+	if _, err := writeSkillSourceLockFile(command.sourceLockFile(target), skillSourceMissingRevision, skillSourceLock{
+		Version: 3,
+		Sources: []skillSourceSnapshot{
+			{Source: firstSource, SourceKey: "github.com/example/first", Commit: firstInitial, UpdatedAt: "2026-08-19T00:00:00Z"},
+			{Source: secondSource, SourceKey: "github.com/example/second", Commit: secondInitial, UpdatedAt: "2026-08-19T00:00:00Z"},
+		},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	appendSkillSourceGitCommit(t, firstRepository, "new-alpha")
+	appendSkillSourceGitCommit(t, secondRepository, "new-beta")
+
+	response, cmdErr := command.Handle(context.Background(), rawSkillsCommandPayload(t, map[string]any{
+		"action":      "installAllScope",
+		"hubId":       "hub-a",
+		"scope":       "project",
+		"projectName": "project",
+	}))
+	if cmdErr != nil {
+		t.Fatalf("scope install all error: %#v", cmdErr)
+	}
+	if body := response.(skillsCommandResponse); !body.OK || !body.Accepted {
+		t.Fatalf("response=%#v, want accepted scope install all", body)
+	}
+	operation := waitForSkillsOperationDone(t, command)
+	if operation.Status != "succeeded" || len(operation.Results) != 2 {
+		t.Fatalf("operation=%#v, want two successful install results", operation)
+	}
+	lock, _, err := readSkillSourceLockFile(command.sourceLockFile(target))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, source := range lock.Sources {
+		if source.Commit == firstInitial || source.Commit == secondInitial {
+			t.Fatalf("source=%#v did not advance before install", source)
+		}
+	}
+	for _, root := range []string{".agents/skills/new-alpha", ".claude/skills/new-alpha", ".agents/skills/new-beta", ".claude/skills/new-beta"} {
+		if _, err := os.Stat(filepath.Join(projectRoot, filepath.FromSlash(root), "SKILL.md")); err != nil {
+			t.Fatalf("latest Skill copy %s missing: %v", root, err)
+		}
+	}
+}
+
+func TestSkillsCommandScopeInstallAllSkipsFailedSource(t *testing.T) {
+	workingRepository := t.TempDir()
+	initSkillSourceGitFixture(t, workingRepository, "alpha")
+	projectRoot := t.TempDir()
+	command := newSkillsCommandWithRunner(newFakeSkillsRunner(), skillsCommandConfig{
+		HubID: "hub-a", HomeDir: t.TempDir(), Projects: []ProjectInfo{{Name: "project", Path: projectRoot}},
+	})
+	target := skillsCommandTarget{scope: "project", projectName: "project", dir: projectRoot}
+	workingSource := "https://github.com/example/working.git"
+	missingSource := "https://github.com/example/missing.git"
+	seedNativeSkillSourceClone(t, command, workingRepository, workingSource, "github.com/example/working")
+	if err := os.MkdirAll(command.nativeStore().repositoryPath("github.com/example/missing"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := writeSkillSourceLockFile(command.sourceLockFile(target), skillSourceMissingRevision, skillSourceLock{
+		Version: 3,
+		Sources: []skillSourceSnapshot{
+			{Source: workingSource, SourceKey: "github.com/example/working"},
+			{Source: missingSource, SourceKey: "github.com/example/missing"},
+		},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	response, cmdErr := command.Handle(context.Background(), rawSkillsCommandPayload(t, map[string]any{
+		"action":      "installAllScope",
+		"hubId":       "hub-a",
+		"scope":       "project",
+		"projectName": "project",
+	}))
+	if cmdErr != nil {
+		t.Fatalf("scope install all error: %#v", cmdErr)
+	}
+	if body := response.(skillsCommandResponse); !body.OK || !body.Accepted {
+		t.Fatalf("response=%#v, want accepted scope install all", body)
+	}
+	operation := waitForSkillsOperationDone(t, command)
+	if operation.Status != "partial" || len(operation.Results) != 2 {
+		t.Fatalf("operation=%#v, want partial results for both sources", operation)
+	}
+	statuses := map[string]string{}
+	for _, result := range operation.Results {
+		statuses[result.Skill] = result.Status
+	}
+	if statuses["github.com/example/working"] != "succeeded" || statuses["github.com/example/missing"] != "failed" {
+		t.Fatalf("source statuses=%#v, want working succeeded and missing failed", statuses)
+	}
+	if _, err := os.Stat(filepath.Join(projectRoot, ".agents", "skills", "alpha", "SKILL.md")); err != nil {
+		t.Fatalf("successful source was not installed: %v", err)
+	}
+}
+
+func TestSkillsOperationsHaveUniqueIDsAtSecondResolution(t *testing.T) {
+	command := newSkillsCommandWithRunner(newFakeSkillsRunner(), skillsCommandConfig{HubID: "hub-a"})
+	fixed := time.Date(2026, 8, 18, 12, 0, 0, 0, time.UTC)
+	command.now = func() time.Time { return fixed }
+	payload := skillsCommandPayload{Action: "install", HubID: "hub-a", Scope: "hub"}
+	first, err := command.acceptOperation(payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	command.finishOperation(first, "succeeded", nil, "", "")
+	second, err := command.acceptOperation(payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first.ID == "" || second.ID == "" || first.ID == second.ID {
+		t.Fatalf("operation IDs=%q,%q, want unique non-empty IDs", first.ID, second.ID)
+	}
+}
+
+func TestNativeDirectoryTransactionRollbackReportsFailure(t *testing.T) {
+	transaction := &nativeDirectoryTransaction{items: []nativeStagedChange{{
+		nativeDirectoryChange: nativeDirectoryChange{Final: filepath.Join(t.TempDir(), "final")},
+		Backup:                filepath.Join(t.TempDir(), "missing-backup"),
+		HadExist:              true,
+	}}}
+	if err := transaction.Rollback(); err == nil {
+		t.Fatal("Rollback() returned nil after failing to restore a missing backup")
+	}
+}
+
+func writeLegacySkillSourceLock(t *testing.T, path, source, sourceKey, skillName string) {
+	t.Helper()
+	legacy := skillSourceLockV2Wire{
+		Version:       2,
+		HashAlgorithm: skillSourceHashAlgorithm,
+		Sources: []skillSourceSnapshotV2Wire{{
+			Source: source, SourceKey: sourceKey, ResolvedCommit: strings.Repeat("a", 40),
+			RefreshedAt: "2026-08-18T12:00:00Z", SkillList: []skillSourceSkillSnapshot{{Name: skillName}},
+		}},
+	}
+	raw, err := json.Marshal(legacy)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, append(raw, '\n'), 0o600); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func seedNativeSkillSourceClone(t *testing.T, command *SkillsCommand, repository, source, sourceKey string) string {
+	t.Helper()
+	clonePath := command.nativeStore().repositoryPath(sourceKey)
+	if err := os.MkdirAll(filepath.Dir(clonePath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	runSkillSourceGit(t, filepath.Dir(clonePath), "clone", "--quiet", repository, clonePath)
+	checkout, err := command.nativeStore().ensureRepo(context.Background(), skillSourceSnapshot{Source: source, SourceKey: sourceKey})
+	if err != nil {
+		t.Fatalf("seed source %s: %v", source, err)
+	}
+	return checkout.Commit
+}
+
+func TestNativeSkillSourceLockWritesV3ManagedSkillsWithoutLegacyFields(t *testing.T) {
+	path := filepath.Join(t.TempDir(), ".skill-source-lock.json")
+	lock := skillSourceLock{
+		Version: 3,
+		Sources: []skillSourceSnapshot{{
+			Source:        "https://github.com/example/skills.git",
+			SourceKey:     "github.com/example/skills",
+			Branch:        "main",
+			Commit:        strings.Repeat("a", 40),
+			UpdatedAt:     "2026-08-18T12:00:00Z",
+			ManagedSkills: []string{"zeta", "alpha"},
+		}},
+	}
+
+	if _, err := writeSkillSourceLockFile(path, skillSourceMissingRevision, lock); err != nil {
+		t.Fatalf("writeSkillSourceLockFile() error=%v", err)
+	}
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Contains(raw, []byte(`"version": 3`)) ||
+		!bytes.Contains(raw, []byte(`"commit": "`+strings.Repeat("a", 40)+`"`)) ||
+		!bytes.Contains(raw, []byte(`"managedSkills"`)) {
+		t.Fatalf("raw lock=%s, want v3 fields", raw)
+	}
+	for _, legacy := range []string{"hashAlgorithm", "resolvedCommit", "refreshedAt", "skillList", "contentSha256"} {
+		if bytes.Contains(raw, []byte(`"`+legacy+`"`)) {
+			t.Fatalf("raw lock contains legacy field %q: %s", legacy, raw)
+		}
+	}
+	loaded, _, err := readSkillSourceLockFile(path)
+	if err != nil {
+		t.Fatalf("readSkillSourceLockFile() error=%v", err)
+	}
+	if loaded.Sources[0].Commit != strings.Repeat("a", 40) || len(loaded.Sources[0].ManagedSkills) != 2 {
+		t.Fatalf("loaded=%#v", loaded)
+	}
+}
+
+func TestNativeSkillsCommandUninstallRemovesExplicitExternalSkillWithoutCreatingLock(t *testing.T) {
+	home := t.TempDir()
+	command := newSkillsCommandWithRunner(newFakeSkillsRunner(), skillsCommandConfig{HubID: "hub-a", HomeDir: home})
+	target := skillsCommandTarget{scope: "hub"}
+	for _, root := range []string{".agents/skills/local", ".claude/skills/local"} {
+		writeSkillSourceFixture(t, filepath.Join(home, filepath.FromSlash(root)), "# local\n", nil)
+	}
+
+	if err := command.nativeUninstall(context.Background(), target, "", []string{"local"}); err != nil {
+		t.Fatalf("nativeUninstall() error=%v", err)
+	}
+	for _, root := range []string{".agents/skills/local", ".claude/skills/local"} {
+		if _, err := os.Stat(filepath.Join(home, filepath.FromSlash(root))); !os.IsNotExist(err) {
+			t.Fatalf("external skill %s still exists, err=%v", root, err)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(home, ".wheelmaker", "skills", ".skill-source-lock.json")); !os.IsNotExist(err) {
+		t.Fatalf("external uninstall created a source lock: %v", err)
+	}
+}
+
+func TestNativeSkillSourceLockMigrationUsesOnlyLegacyListAndInstalledNames(t *testing.T) {
+	legacy := skillSourceLock{
+		Version:       2,
+		HashAlgorithm: skillSourceHashAlgorithm,
+		Sources: []skillSourceSnapshot{{
+			Source:         "https://github.com/example/skills.git",
+			SourceKey:      "github.com/example/skills",
+			ResolvedCommit: strings.Repeat("b", 40),
+			RefreshedAt:    "2026-08-18T12:00:00Z",
+			SkillList: []skillSourceSkillSnapshot{
+				{Name: "alpha"},
+				{Name: "not-installed"},
+			},
+		}},
+	}
+	migrated, err := migrateSkillSourceLockToV3(legacy, map[string]struct{}{"alpha": {}, "external": {}})
+	if err != nil {
+		t.Fatalf("migrateSkillSourceLockToV3() error=%v", err)
+	}
+	if migrated.Version != 3 || migrated.Sources[0].Commit != strings.Repeat("b", 40) || migrated.Sources[0].UpdatedAt != legacy.Sources[0].RefreshedAt {
+		t.Fatalf("migrated=%#v", migrated)
+	}
+	if got := migrated.Sources[0].ManagedSkills; len(got) != 1 || got[0] != "alpha" {
+		t.Fatalf("managedSkills=%v, want only installed legacy skill", got)
+	}
+}
+
+func TestNativeSkillSourceStoreRefreshFetchesWithoutChangingCheckout(t *testing.T) {
+	repository := t.TempDir()
+	initSkillSourceGitFixture(t, repository, "first")
+	store := newSkillSourceStore(filepath.Join(t.TempDir(), "home"))
+	source := skillSourceSnapshot{Source: repository, SourceKey: "local/example"}
+	first, err := store.ensureRepo(context.Background(), source)
+	if err != nil {
+		t.Fatalf("ensureRepo() error=%v", err)
+	}
+	appendSkillSourceGitCommit(t, repository, "second")
+	refreshed, err := store.refreshRepo(context.Background(), source)
+	if err != nil {
+		t.Fatalf("refreshRepo() error=%v", err)
+	}
+	if refreshed.Commit != first.Commit {
+		t.Fatalf("refresh changed checkout commit from %s to %s", first.Commit, refreshed.Commit)
+	}
+	if refreshed.RemoteCommit == "" || refreshed.RemoteCommit == first.Commit {
+		t.Fatalf("refresh remote commit=%q, want newer remote SHA", refreshed.RemoteCommit)
+	}
+	updated, err := store.updateRepo(context.Background(), source)
+	if err != nil {
+		t.Fatalf("updateRepo() error=%v", err)
+	}
+	if updated.Commit != refreshed.RemoteCommit {
+		t.Fatalf("updated commit=%s, want remote %s", updated.Commit, refreshed.RemoteCommit)
+	}
+}
+
+func TestNativeSkillSourceStoreEnsureLatestRepoClonesMissingRepository(t *testing.T) {
+	repository := t.TempDir()
+	initSkillSourceGitFixture(t, repository, "alpha")
+	store := newSkillSourceStore(filepath.Join(t.TempDir(), "home"))
+
+	checkout, err := store.ensureLatestRepo(context.Background(), skillSourceSnapshot{
+		Source: repository, SourceKey: "local/example",
+	})
+	if err != nil {
+		t.Fatalf("ensureLatestRepo() error=%v", err)
+	}
+	if checkout.Commit == "" || checkout.Branch != "main" {
+		t.Fatalf("checkout=%#v, want main branch and commit", checkout)
+	}
+	if len(checkout.Skills) != 1 || checkout.Skills[0].Name != "alpha" {
+		t.Fatalf("checkout skills=%#v, want alpha", checkout.Skills)
+	}
+	if _, err := os.Stat(store.repositoryPath("local/example")); err != nil {
+		t.Fatalf("latest clone missing: %v", err)
+	}
+}
+
+func TestNativeSkillSourceStoreEnsureLatestRepoFetchesAndChecksOutRemoteHead(t *testing.T) {
+	repository := t.TempDir()
+	initSkillSourceGitFixture(t, repository, "alpha")
+	store := newSkillSourceStore(filepath.Join(t.TempDir(), "home"))
+	source := skillSourceSnapshot{Source: repository, SourceKey: "local/example"}
+	first, err := store.ensureLatestRepo(context.Background(), source)
+	if err != nil {
+		t.Fatalf("first ensureLatestRepo() error=%v", err)
+	}
+	appendSkillSourceGitCommit(t, repository, "beta")
+
+	latest, err := store.ensureLatestRepo(context.Background(), source)
+	if err != nil {
+		t.Fatalf("second ensureLatestRepo() error=%v", err)
+	}
+	if latest.Commit == first.Commit {
+		t.Fatalf("latest commit=%s, want a new commit after remote advance", latest.Commit)
+	}
+	if latest.Branch != "main" || len(latest.Skills) != 2 {
+		t.Fatalf("latest checkout=%#v, want main with alpha and beta", latest)
+	}
+}
+
+func TestNativeInstallUpdatesRepositoryBeforeInstalling(t *testing.T) {
+	repository := t.TempDir()
+	initSkillSourceGitFixture(t, repository, "alpha")
+	home := t.TempDir()
+	projectRoot := t.TempDir()
+	store := newSkillSourceStore(home)
+	key := "github.com/example/skills"
+	clonePath := store.repositoryPath(key)
+	if err := os.MkdirAll(filepath.Dir(clonePath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	runSkillSourceGit(t, filepath.Dir(clonePath), "clone", "--quiet", repository, clonePath)
+	command := newSkillsCommandWithRunner(newFakeSkillsRunner(), skillsCommandConfig{
+		HubID: "hub-a", HomeDir: home, Projects: []ProjectInfo{{Name: "project", Path: projectRoot}},
+	})
+	target := skillsCommandTarget{scope: "project", projectName: "project", dir: projectRoot}
+	source := "https://github.com/example/skills.git"
+	initial, err := command.nativeStore().ensureRepo(context.Background(), skillSourceSnapshot{Source: source, SourceKey: key})
+	if err != nil {
+		t.Fatalf("ensureRepo() error=%v", err)
+	}
+	if _, err := writeSkillSourceLockFile(command.sourceLockFile(target), skillSourceMissingRevision, skillSourceLock{
+		Version: 3,
+		Sources: []skillSourceSnapshot{{Source: source, SourceKey: key, Commit: initial.Commit, UpdatedAt: "2026-08-18T12:00:00Z"}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	appendSkillSourceGitCommit(t, repository, "beta")
+
+	if err := command.nativeInstall(context.Background(), target, source, []string{"beta"}, false); err != nil {
+		t.Fatalf("nativeInstall() error=%v", err)
+	}
+	lock, _, err := readSkillSourceLockFile(command.sourceLockFile(target))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if lock.Sources[0].Commit == initial.Commit {
+		t.Fatalf("Scope commit=%s, want latest commit instead of %s", lock.Sources[0].Commit, initial.Commit)
+	}
+	for _, root := range []string{".agents/skills/beta", ".claude/skills/beta"} {
+		if _, err := os.Stat(filepath.Join(projectRoot, filepath.FromSlash(root), "SKILL.md")); err != nil {
+			t.Fatalf("latest Skill copy %s missing: %v", root, err)
+		}
+	}
+}
+
+func TestSkillSourceLockOperationsDoNotCreateSidecarLock(t *testing.T) {
+	home := t.TempDir()
+	command := newSkillsCommandWithRunner(newFakeSkillsRunner(), skillsCommandConfig{HubID: "hub-a", HomeDir: home})
+	target := skillsCommandTarget{scope: "hub"}
+	path := command.sourceLockFile(target)
+
+	if err := withSkillSourceLockFile(path, func() error { return nil }); err != nil {
+		t.Fatalf("withSkillSourceLockFile() error=%v", err)
+	}
+	if _, err := os.Stat(path + ".lock"); !os.IsNotExist(err) {
+		t.Fatalf("source lock sidecar exists after read lock: %v", err)
+	}
+
+	if err := command.withNativeScopeLock(target, func() error { return nil }); err != nil {
+		t.Fatalf("withNativeScopeLock() error=%v", err)
+	}
+	if _, err := os.Stat(path + ".lock"); !os.IsNotExist(err) {
+		t.Fatalf("source lock sidecar exists after native scope lock: %v", err)
+	}
+}
+
+func TestNativeSkillSourceStoreUsesReadableSourceKeyPaths(t *testing.T) {
+	home := t.TempDir()
+	store := newSkillSourceStore(home)
+
+	if got, want := filepath.ToSlash(store.repositoryPath("github.com/owner/repo")), filepath.ToSlash(filepath.Join(home, ".wheelmaker", "skills", "github.com_owner_repo")); got != want {
+		t.Fatalf("repositoryPath()=%q, want %q", got, want)
+	}
+	if got, want := filepath.ToSlash(store.repositoryPath("github.com:8443/owner/repo")), filepath.ToSlash(filepath.Join(home, ".wheelmaker", "skills", "github.com~3A8443_owner_repo")); got != want {
+		t.Fatalf("repositoryPath(port)=%q, want %q", got, want)
+	}
+	if got, want := filepath.ToSlash(store.repositoryPath("github.com/owner/repo-name")), filepath.ToSlash(filepath.Join(home, ".wheelmaker", "skills", "github.com_owner_repo-name")); got != want {
+		t.Fatalf("repositoryPath(dash)=%q, want %q", got, want)
+	}
+	if got, want := filepath.ToSlash(store.repositoryPath("github.com/owner/repo_name")), filepath.ToSlash(filepath.Join(home, ".wheelmaker", "skills", "github.com_owner_repo~5Fname")); got != want {
+		t.Fatalf("repositoryPath(underscore)=%q, want %q", got, want)
+	}
+	if got, want := filepath.ToSlash(store.lockPath("github.com/owner/repo")), filepath.ToSlash(filepath.Join(home, ".wheelmaker", "skills", ".locks", "github.com_owner_repo.lock")); got != want {
+		t.Fatalf("lockPath()=%q, want %q", got, want)
+	}
+}
+
+func TestNativeSkillSourceStoreDoesNotAdoptLegacyRepositoryPaths(t *testing.T) {
+	key := "github.com/example/skills"
+	legacyPath := func(name string, home string) string {
+		switch name {
+		case "flat":
+			return filepath.Join(home, ".wheelmaker", "skills", "github.com--example--skills")
+		case "nested":
+			return filepath.Join(home, ".wheelmaker", "skills", "github.com", "example", "skills")
+		case "hash":
+			digest := sha256.Sum256([]byte(strings.ToLower(strings.TrimSpace(key))))
+			return filepath.Join(home, ".wheelmaker", "skills", hex.EncodeToString(digest[:]))
+		default:
+			t.Fatalf("unknown legacy path %q", name)
+			return ""
+		}
+	}
+
+	for _, name := range []string{"flat", "nested", "hash"} {
+		t.Run(name, func(t *testing.T) {
+			repository := t.TempDir()
+			initSkillSourceGitFixture(t, repository, "alpha")
+			home := t.TempDir()
+			oldPath := legacyPath(name, home)
+			if err := os.MkdirAll(filepath.Dir(oldPath), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			runSkillSourceGit(t, filepath.Dir(oldPath), "clone", "--quiet", repository, oldPath)
+
+			store := newSkillSourceStore(home)
+			checkout, err := store.ensureRepo(context.Background(), skillSourceSnapshot{Source: repository, SourceKey: key})
+			if err != nil {
+				t.Fatalf("ensureRepo() error=%v", err)
+			}
+			wantPath := filepath.Join(home, ".wheelmaker", "skills", "github.com_example_skills")
+			if checkout.Path != wantPath {
+				t.Fatalf("checkout.Path=%q, want %q", checkout.Path, wantPath)
+			}
+			if _, err := os.Stat(oldPath); err != nil {
+				t.Fatalf("legacy repository was adopted or removed: %v", err)
+			}
+		})
+	}
+}
+
+func TestNativeSkillSourceStoreRejectsDirtyCheckoutBeforeUpdate(t *testing.T) {
+	repository := t.TempDir()
+	initSkillSourceGitFixture(t, repository, "first")
+	store := newSkillSourceStore(filepath.Join(t.TempDir(), "home"))
+	source := skillSourceSnapshot{Source: repository, SourceKey: "local/example"}
+	checkout, err := store.ensureRepo(context.Background(), source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(checkout.Path, "untracked.txt"), []byte("dirty\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.updateRepo(context.Background(), source); err == nil || !strings.Contains(strings.ToLower(err.Error()), "dirty") {
+		t.Fatalf("updateRepo() error=%v, want dirty checkout failure", err)
+	}
+}
+
+func TestNativeSkillDirectoryCopyAndLinkMaterializers(t *testing.T) {
+	source := filepath.Join(t.TempDir(), "source")
+	writeSkillSourceFixture(t, source, "# Skill\n", map[string]string{"references/guide.md": "guide\n"})
+	copyTarget := filepath.Join(t.TempDir(), "copy")
+	if err := copySkillDirectory(source, copyTarget); err != nil {
+		t.Fatalf("copySkillDirectory() error=%v", err)
+	}
+	copyRaw, err := os.ReadFile(filepath.Join(copyTarget, "SKILL.md"))
+	if err != nil || string(copyRaw) != "# Skill\n" {
+		t.Fatalf("copied skill=%q err=%v", copyRaw, err)
+	}
+	linkTarget := filepath.Join(t.TempDir(), "link")
+	if err := createSkillDirectoryLink(source, linkTarget); err != nil {
+		t.Skipf("directory links unavailable: %v", err)
+	}
+	linkRaw, err := os.ReadFile(filepath.Join(linkTarget, "references", "guide.md"))
+	if err != nil || string(linkRaw) != "guide\n" {
+		t.Fatalf("linked skill=%q err=%v", linkRaw, err)
+	}
+}
+
+func initSkillSourceGitFixture(t *testing.T, repository, skillName string) {
+	t.Helper()
+	runSkillSourceGit(t, repository, "init", "-b", "main")
+	runSkillSourceGit(t, repository, "config", "user.email", "skills@example.com")
+	runSkillSourceGit(t, repository, "config", "user.name", "Skills Test")
+	writeSkillSourceFixture(t, filepath.Join(repository, "skills", skillName), "# "+skillName+"\n", nil)
+	runSkillSourceGit(t, repository, "add", ".")
+	runSkillSourceGit(t, repository, "commit", "-m", "initial")
+}
+
+func appendSkillSourceGitCommit(t *testing.T, repository, skillName string) {
+	t.Helper()
+	writeSkillSourceFixture(t, filepath.Join(repository, "skills", skillName), "# "+skillName+"\n", nil)
+	runSkillSourceGit(t, repository, "add", ".")
+	runSkillSourceGit(t, repository, "commit", "-m", skillName)
+}
+
+func TestNativeSkillSourceLockWireShapeIsStrictJSON(t *testing.T) {
+	path := filepath.Join(t.TempDir(), ".skill-source-lock.json")
+	if err := os.WriteFile(path, []byte(`{"version":3,"sources":[]}{}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := readSkillSourceLockFile(path); err == nil {
+		t.Fatal("readSkillSourceLockFile() accepted trailing JSON")
+	}
+	var value map[string]any
+	if err := json.Unmarshal([]byte(`{"version":3,"sources":[]}`), &value); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestNativeSkillSourceIdentityNormalizesEquivalentAddressesAndSeparatesSSHVariants(t *testing.T) {
+	equivalent := []string{
+		"owner/repo",
+		"https://GitHub.com/Owner/repo.git/",
+		"git@github.com:Owner/repo.git",
+		"ssh://git@github.com/Owner/repo.git",
+	}
+	var wantKey string
+	for index, input := range equivalent {
+		_, key, err := normalizeSkillGitSource(input)
+		if err != nil {
+			t.Fatalf("normalizeSkillGitSource(%q) error=%v", input, err)
+		}
+		if index == 0 {
+			wantKey = key
+		} else if key != wantKey {
+			t.Fatalf("normalizeSkillGitSource(%q) key=%q, want %q", input, key, wantKey)
+		}
+	}
+
+	variants := map[string]string{
+		"ssh://deploy@github.com/Owner/repo.git":   "deploy@github.com/owner/repo",
+		"ssh://git@github.com:2222/Owner/repo.git": "github.com:2222/owner/repo",
+		"https://github.com:8443/Owner/repo.git":   "github.com:8443/owner/repo",
+	}
+	for input, expectedKey := range variants {
+		_, key, err := normalizeSkillGitSource(input)
+		if err != nil {
+			t.Fatalf("normalizeSkillGitSource(%q) error=%v", input, err)
+		}
+		if key != expectedKey {
+			t.Fatalf("normalizeSkillGitSource(%q) key=%q, want %q", input, key, expectedKey)
+		}
+	}
+}
+
+func TestNativeSkillSourceCatalogMarksMissingCloneWithoutNetwork(t *testing.T) {
+	home := t.TempDir()
+	lockPath := filepath.Join(home, ".wheelmaker", "skills", ".skill-source-lock.json")
+	lock := skillSourceLock{Version: 3, Sources: []skillSourceSnapshot{{
+		Source: "https://example.invalid/owner/repo.git", SourceKey: "example.invalid/owner/repo",
+		Commit: strings.Repeat("a", 40), UpdatedAt: "2026-08-18T12:00:00Z", ManagedSkills: []string{"alpha"},
+	}}}
+	if _, err := writeSkillSourceLockFile(lockPath, skillSourceMissingRevision, lock); err != nil {
+		t.Fatal(err)
+	}
+	installedRoot := filepath.Join(home, ".agents", "skills", "alpha")
+	writeSkillSourceFixture(t, installedRoot, "# alpha\n", nil)
+	snapshot, err := ScanSkillsSourceScope(context.Background(), SkillsSourceScopeInput{
+		HomeDir: home,
+		Installed: []SkillsInstalledSkillSnapshot{{
+			Name: "alpha", Managed: true, Locations: []string{filepath.Join(installedRoot, "SKILL.md")},
+		}},
+	})
+	if err != nil {
+		t.Fatalf("ScanSkillsSourceScope() error=%v", err)
+	}
+	if len(snapshot.Sources) != 1 || snapshot.Sources[0].Status != "needs_clone" {
+		t.Fatalf("snapshot=%#v, want needs_clone without cloning", snapshot)
+	}
+	if len(snapshot.Sources[0].Skills) != 1 || snapshot.Sources[0].Skills[0].Name != "alpha" || snapshot.Sources[0].Skills[0].Status != "needs_clone" {
+		t.Fatalf("missing-clone managed skill=%#v, want visible installed ownership", snapshot.Sources[0].Skills)
+	}
+	if _, err := os.Stat(newSkillSourceStore(home).repositoryPath("example.invalid/owner/repo")); !os.IsNotExist(err) {
+		t.Fatalf("passive scan created a clone: %v", err)
+	}
+}
+
+func TestNativeSkillsCommandProjectUpdateDeletesUpstreamRemovedWithoutInstallingNew(t *testing.T) {
+	repository := t.TempDir()
+	initSkillSourceGitFixture(t, repository, "alpha")
+	home := t.TempDir()
+	projectRoot := t.TempDir()
+	store := newSkillSourceStore(home)
+	key := "github.com/example/skills"
+	clonePath := store.repositoryPath(key)
+	if err := os.MkdirAll(filepath.Dir(clonePath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	runSkillSourceGit(t, filepath.Dir(clonePath), "clone", "--quiet", repository, clonePath)
+	command := newSkillsCommandWithRunner(newFakeSkillsRunner(), skillsCommandConfig{
+		HubID: "hub-a", HomeDir: home, Projects: []ProjectInfo{{Name: "project", Path: projectRoot}},
+	})
+	target := skillsCommandTarget{scope: "project", projectName: "project", dir: projectRoot}
+	initial, err := command.nativeStore().ensureRepo(context.Background(), skillSourceSnapshot{Source: "https://github.com/example/skills.git", SourceKey: key})
+	if err != nil {
+		t.Fatal(err)
+	}
+	lockPath := command.sourceLockFile(target)
+	if _, err := writeSkillSourceLockFile(lockPath, skillSourceMissingRevision, skillSourceLock{
+		Version: 3,
+		Sources: []skillSourceSnapshot{{Source: "https://github.com/example/skills.git", SourceKey: key, Commit: initial.Commit, UpdatedAt: "2026-08-18T12:00:00Z", ManagedSkills: []string{}}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := command.nativeInstall(context.Background(), target, "https://github.com/example/skills.git", []string{"alpha"}, false); err != nil {
+		t.Fatalf("nativeInstall() error=%v", err)
+	}
+	for _, root := range []string{".agents/skills/alpha", ".claude/skills/alpha"} {
+		if _, err := os.Stat(filepath.Join(projectRoot, filepath.FromSlash(root), "SKILL.md")); err != nil {
+			t.Fatalf("installed copy %s missing: %v", root, err)
+		}
+	}
+	if err := os.RemoveAll(filepath.Join(repository, "skills", "alpha")); err != nil {
+		t.Fatal(err)
+	}
+	writeSkillSourceFixture(t, filepath.Join(repository, "skills", "beta"), "# beta\n", nil)
+	runSkillSourceGit(t, repository, "add", "-A")
+	runSkillSourceGit(t, repository, "commit", "-m", "replace alpha")
+	if err := command.nativeUpdateRepo(context.Background(), target, "https://github.com/example/skills.git"); err != nil {
+		t.Fatalf("nativeUpdateRepo() error=%v", err)
+	}
+	if _, err := os.Stat(filepath.Join(projectRoot, ".agents", "skills", "alpha")); !os.IsNotExist(err) {
+		t.Fatalf("removed upstream alpha still exists: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(projectRoot, ".agents", "skills", "beta")); !os.IsNotExist(err) {
+		t.Fatalf("new upstream beta was auto-installed: %v", err)
+	}
+}
+
+func TestFetchNPMLatestVersionRequiresMatchingManifest(t *testing.T) {
+	tests := []struct {
+		name        string
+		statusCode  int
+		body        string
+		wantVersion string
+		wantErr     bool
+	}{
+		{name: "matching package", statusCode: http.StatusOK, body: `{"name":"@myflicker/cli","version":"0.3.13"}`, wantVersion: "0.3.13"},
+		{name: "html login page", statusCode: http.StatusOK, body: `<html>login</html>`, wantErr: true},
+		{name: "wrong package", statusCode: http.StatusOK, body: `{"name":"other-package","version":"0.3.13"}`, wantErr: true},
+		{name: "missing version", statusCode: http.StatusOK, body: `{"name":"@myflicker/cli"}`, wantErr: true},
+		{name: "registry unavailable", statusCode: http.StatusForbidden, body: `{"error":"forbidden"}`, wantErr: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var requestedPath string
+			server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+				requestedPath = request.URL.EscapedPath()
+				writer.WriteHeader(tt.statusCode)
+				_, _ = writer.Write([]byte(tt.body))
+			}))
+			defer server.Close()
+
+			version, err := fetchNPMLatestVersion(context.Background(), server.Client(), server.URL, myFlickerPackageName)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatalf("fetchNPMLatestVersion()=%q, want error", version)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("fetchNPMLatestVersion() error: %v", err)
+			}
+			if version != tt.wantVersion {
+				t.Fatalf("fetchNPMLatestVersion()=%q, want %q", version, tt.wantVersion)
+			}
+			if requestedPath != "/@myflicker%2fcli/latest" {
+				t.Fatalf("requested path=%q, want the single-manifest endpoint", requestedPath)
+			}
+		})
+	}
+}
+
+func TestNPMCommandHidesMyFlickerWhenPrivateRegistryUnavailableAndCachesProbe(t *testing.T) {
+	runner := newFakeNPMRunner()
+	runner.set("npm", []string{"list", "-g", "--depth=0", "--json"}, npmCommandResult{
+		Stdout:   `{"dependencies":{"@myflicker/cli":{"version":"1.0.0"},"@openai/codex":{"version":"0.129.0"}}}`,
+		ExitCode: 0,
+	})
+	var probeMu sync.Mutex
+	probeCalls := 0
+	cmd, fetcher := newNPMTestCommandWithProbe(runner, func(context.Context) bool {
+		probeMu.Lock()
+		probeCalls++
+		probeMu.Unlock()
+		return false
+	})
+
+	for i := 0; i < 2; i++ {
+		resp, cmdErr := cmd.Handle(context.Background(), rawNPMCommandPayload(t, map[string]any{
+			"action": "scan",
+			"hubId":  "hub-a",
+		}))
+		if cmdErr != nil {
+			t.Fatalf("scan %d error: %#v", i+1, cmdErr)
+		}
+		body := resp.(npmCommandResponse)
+		if body.Hub.Capabilities.MyFlicker {
+			t.Fatalf("scan %d reported unavailable MyFlicker capability: %#v", i+1, resp)
+		}
+		if hasNPMTestPackage(body.Hub.Packages, myFlickerPackageName) {
+			t.Fatalf("scan %d included unavailable MyFlicker: %#v", i+1, resp)
+		}
+		waitForNPMTestOperation(t, cmd)
+	}
+
+	probeMu.Lock()
+	calls := probeCalls
+	probeMu.Unlock()
+	if calls != 1 {
+		t.Fatalf("private registry probe calls=%d, want 1 within the cache TTL", calls)
+	}
+	if fetcher.callCount(myFlickerPackageName) != 0 {
+		t.Fatal("unavailable MyFlicker should not query latest version")
+	}
+}
+
+func TestNPMCommandPublishesMyFlickerCapabilityAndNotifiesAfterProbe(t *testing.T) {
+	runner := newFakeNPMRunner()
+	runner.set("npm", []string{"list", "-g", "--depth=0", "--json"}, npmCommandResult{
+		Stdout:   `{"dependencies":{"@myflicker/cli":{"version":"1.0.0"}}}`,
+		ExitCode: 0,
+	})
+	cmd, fetcher := newNPMTestCommandWithProbe(runner, func(context.Context) bool { return true })
+	fetcher.setVersion(myFlickerPackageName, "1.0.1")
+	changed := make(chan struct{}, 2)
+	cmd.setMetadataChangedHandler(func() {
+		changed <- struct{}{}
+	})
+
+	resp, cmdErr := cmd.Handle(context.Background(), rawNPMCommandPayload(t, map[string]any{
+		"action": "scan",
+		"hubId":  "hub-a",
+	}))
+	if cmdErr != nil {
+		t.Fatalf("first scan error: %#v", cmdErr)
+	}
+	if resp.(npmCommandResponse).Hub.Capabilities.MyFlicker {
+		t.Fatal("MyFlicker capability must remain false while the first probe is pending")
+	}
+
+	select {
+	case <-changed:
+	case <-time.After(time.Second):
+		t.Fatal("scan_latest did not notify the metadata change handler")
+	}
+
+	resp, cmdErr = cmd.Handle(context.Background(), rawNPMCommandPayload(t, map[string]any{
+		"action": "scan",
+		"hubId":  "hub-a",
+	}))
+	if cmdErr != nil {
+		t.Fatalf("second scan error: %#v", cmdErr)
+	}
+	body := resp.(npmCommandResponse)
+	if !body.Hub.Capabilities.MyFlicker {
+		t.Fatal("MyFlicker capability was not published after a successful probe")
+	}
+	if !hasNPMTestPackage(body.Hub.Packages, myFlickerPackageName) {
+		t.Fatalf("MyFlicker row missing after successful probe: %#v", body.Hub)
+	}
+	select {
+	case <-changed:
+		t.Fatal("cached follow-up scan unexpectedly notified another metadata change")
+	case <-time.After(20 * time.Millisecond):
+	}
+}
+
+func TestNPMCommandReprobesPrivateRegistryAfterUnavailableTTL(t *testing.T) {
+	runner := newFakeNPMRunner()
+	runner.set("npm", []string{"list", "-g", "--depth=0", "--json"}, npmCommandResult{
+		Stdout:   `{"dependencies":{"@myflicker/cli":{"version":"1.0.0"}}}`,
+		ExitCode: 0,
+	})
+	var probeMu sync.Mutex
+	probeCalls := 0
+	cmd, _ := newNPMTestCommandWithProbe(runner, func(context.Context) bool {
+		probeMu.Lock()
+		defer probeMu.Unlock()
+		probeCalls++
+		// Recover on the second probe, mirroring a machine that rejoined the
+		// corporate network.
+		return probeCalls > 1
+	})
+	base := time.Date(2026, 7, 31, 10, 0, 0, 0, time.UTC)
+	var clockMu sync.Mutex
+	clock := base
+	cmd.now = func() time.Time {
+		clockMu.Lock()
+		defer clockMu.Unlock()
+		return clock
+	}
+
+	if _, cmdErr := cmd.Handle(context.Background(), rawNPMCommandPayload(t, map[string]any{
+		"action": "scan",
+		"hubId":  "hub-a",
+	})); cmdErr != nil {
+		t.Fatalf("first scan error: %#v", cmdErr)
+	}
+	waitForNPMTestOperation(t, cmd)
+
+	clockMu.Lock()
+	clock = base.Add(npmPrivateRegistryUnavailableTTL + time.Minute)
+	clockMu.Unlock()
+
+	if _, cmdErr := cmd.Handle(context.Background(), rawNPMCommandPayload(t, map[string]any{
+		"action": "scan",
+		"hubId":  "hub-a",
+	})); cmdErr != nil {
+		t.Fatalf("second scan error: %#v", cmdErr)
+	}
+	waitForNPMTestOperation(t, cmd)
+
+	resp, cmdErr := cmd.Handle(context.Background(), rawNPMCommandPayload(t, map[string]any{
+		"action": "scan",
+		"hubId":  "hub-a",
+	}))
+	if cmdErr != nil {
+		t.Fatalf("third scan error: %#v", cmdErr)
+	}
+	if !hasNPMTestPackage(resp.(npmCommandResponse).Hub.Packages, myFlickerPackageName) {
+		t.Fatalf("MyFlicker row missing after the registry became reachable again: %#v", resp)
+	}
+	probeMu.Lock()
+	calls := probeCalls
+	probeMu.Unlock()
+	if calls != 2 {
+		t.Fatalf("private registry probe calls=%d, want 2 (one per expired TTL)", calls)
+	}
+}
+
+func TestNPMCommandUsesPrivateRegistryOnlyForMyFlickerOperations(t *testing.T) {
+	runner := newFakeNPMRunner()
+	cmd, _ := newNPMTestCommand(runner)
+
+	_, cmdErr := cmd.Handle(context.Background(), rawNPMCommandPayload(t, map[string]any{
+		"action":      "install",
+		"hubId":       "hub-a",
+		"packageName": myFlickerPackageName,
+		"version":     "latest",
+	}))
+	if cmdErr != nil {
+		t.Fatalf("MyFlicker install error: %#v", cmdErr)
+	}
+	waitForNPMTestOperation(t, cmd)
+	if !runner.hasCall("npm", "install", "-g", myFlickerPackageName+"@latest", "--registry="+myFlickerRegistry) {
+		t.Fatalf("MyFlicker install did not use private registry: %#v", runner.calls)
+	}
+
+	_, cmdErr = cmd.Handle(context.Background(), rawNPMCommandPayload(t, map[string]any{
+		"action":       "install_many",
+		"hubId":        "hub-a",
+		"packageNames": []string{myFlickerPackageName, "@openai/codex"},
+		"version":      "latest",
+	}))
+	if cmdErr != nil {
+		t.Fatalf("bulk install error: %#v", cmdErr)
+	}
+	waitForNPMTestOperation(t, cmd)
+	if !runner.hasCall("npm", "install", "-g", myFlickerPackageName+"@latest", "--registry="+myFlickerRegistry) {
+		t.Fatalf("bulk MyFlicker install did not use private registry: %#v", runner.calls)
+	}
+	if !runner.hasCall("npm", "install", "-g", "@openai/codex@latest") {
+		t.Fatalf("other package install call not found: %#v", runner.calls)
+	}
+	if runner.hasCall("npm", "install", "-g", "@openai/codex@latest", "--registry="+myFlickerRegistry) {
+		t.Fatalf("other package install was routed through MyFlicker registry: %#v", runner.calls)
+	}
+
+	_, cmdErr = cmd.Handle(context.Background(), rawNPMCommandPayload(t, map[string]any{
+		"action":      "reinstall",
+		"hubId":       "hub-a",
+		"packageName": myFlickerPackageName,
+	}))
+	if cmdErr != nil {
+		t.Fatalf("MyFlicker reinstall error: %#v", cmdErr)
+	}
+	waitForNPMTestOperation(t, cmd)
+	if !runner.hasCall("npm", "uninstall", "-g", myFlickerPackageName) {
+		t.Fatalf("MyFlicker reinstall uninstall call not found: %#v", runner.calls)
+	}
+
+	runner.mu.Lock()
+	calls := append([]npmCommandCall(nil), runner.calls...)
+	runner.mu.Unlock()
+	for _, call := range calls {
+		if call.Name == "npm" && len(call.Args) > 0 && call.Args[0] == "config" {
+			t.Fatalf("NPM operation polluted npm config: %#v", calls)
+		}
+	}
+}
+
+func TestNPMCommandUsesMyFlickerBinaryNameInInstallMessage(t *testing.T) {
+	runner := newFakeNPMRunner()
+	cmd, _ := newNPMTestCommand(runner)
+	cmd.lookPath = func(name string) (string, error) {
+		if name == "myflicker" {
+			return "/usr/local/bin/myflicker", nil
+		}
+		return "", errors.New("not found")
+	}
+
+	_, cmdErr := cmd.Handle(context.Background(), rawNPMCommandPayload(t, map[string]any{
+		"action":      "install",
+		"hubId":       "hub-a",
+		"packageName": myFlickerPackageName,
+		"version":     "latest",
+	}))
+	if cmdErr != nil {
+		t.Fatalf("MyFlicker install error: %#v", cmdErr)
+	}
+	operation := waitForNPMTestOperation(t, cmd)
+	if !strings.Contains(operation.Message, "`myflicker` is now on PATH") || strings.Contains(operation.Message, "`flicker`") {
+		t.Fatalf("MyFlicker install message=%q", operation.Message)
+	}
+}
+
+type fakeGatewayUpdateRunner struct {
+	calls   chan string
+	release chan struct{}
+	err     error
+}
+
+func (r *fakeGatewayUpdateRunner) Run(_ context.Context, stateDir string) error {
+	r.calls <- stateDir
+	<-r.release
+	return r.err
+}
+
+func TestGatewayUpdateCommandQueryReportsNotInstalled(t *testing.T) {
+	command := newGatewayUpdateCommandWithDependencies(t.TempDir(), &fakeGatewayUpdateRunner{})
+	response := handleGatewayUpdateForTest(t, command, map[string]any{
+		"action": "query",
+		"hubId":  "hub-a",
+	})
+	if response.Status != "not_installed" || response.Installed != nil || response.CanRequest {
+		t.Fatalf("response=%#v", response)
+	}
+}
+
+func TestGatewayUpdateCommandQueryReportsInstalledRelease(t *testing.T) {
+	baseDir := t.TempDir()
+	statePath := filepath.Join(baseDir, "gateway", "state", "release.json")
+	if err := os.MkdirAll(filepath.Dir(statePath), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	state := gatewayInstalledRelease{
+		SchemaVersion: 1,
+		Version:       "v1.3",
+		SourceSHA:     "89abcdef0123456789abcdef0123456789abcdef",
+		ManifestSHA:   "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+		InstalledAt:   "2026-08-06T00:00:00Z",
+	}
+	raw, err := json.Marshal(state)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(statePath, raw, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	command := newGatewayUpdateCommandWithDependencies(baseDir, &fakeGatewayUpdateRunner{})
+	response := handleGatewayUpdateForTest(t, command, map[string]any{
+		"action": "query",
+		"hubId":  "hub-a",
+	})
+	if response.Status != "installed" || response.Installed == nil || response.Installed.Version != "v1.3" || !response.CanRequest {
+		t.Fatalf("response=%#v", response)
+	}
+}
+
+func TestGatewayUpdateCommandQueryReportsInstalledReleaseWithGatewaySchema(t *testing.T) {
+	baseDir := t.TempDir()
+	statePath := filepath.Join(baseDir, "gateway", "state", "release.json")
+	if err := os.MkdirAll(filepath.Dir(statePath), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(statePath, []byte(`{"schema":1,"version":"v1.3","sourceSha":"89abcdef0123456789abcdef0123456789abcdef","manifestSha256":"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef","installedAt":"2026-08-06T00:00:00Z"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	command := newGatewayUpdateCommandWithDependencies(baseDir, &fakeGatewayUpdateRunner{})
+	response := handleGatewayUpdateForTest(t, command, map[string]any{
+		"action": "query",
+		"hubId":  "hub-a",
+	})
+	if response.Status != "installed" || response.Installed == nil || response.Installed.SchemaVersion != 1 || response.Installed.Version != "v1.3" || !response.CanRequest {
+		t.Fatalf("response=%#v", response)
+	}
+}
+
+func TestGatewayUpdateCommandRequestSharesActiveJob(t *testing.T) {
+	baseDir := t.TempDir()
+	statePath := filepath.Join(baseDir, "gateway", "state", "release.json")
+	if err := os.MkdirAll(filepath.Dir(statePath), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(statePath, []byte(`{"schemaVersion":1,"version":"v1.3","sourceSha":"89abcdef0123456789abcdef0123456789abcdef","manifestSha256":"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef","installedAt":"2026-08-06T00:00:00Z"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	runner := &fakeGatewayUpdateRunner{calls: make(chan string, 1), release: make(chan struct{})}
+	command := newGatewayUpdateCommandWithDependencies(baseDir, runner)
+	first := handleGatewayUpdateForTest(t, command, map[string]any{"action": "request", "hubId": "hub-a"})
+	if !first.Accepted || first.Status != "update_pending" || first.Job == nil || !first.JobActive() {
+		t.Fatalf("first response=%#v", first)
+	}
+	select {
+	case got := <-runner.calls:
+		if got != baseDir {
+			t.Fatalf("runner stateDir=%q, want %q", got, baseDir)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("gateway runner was not started")
+	}
+	second := handleGatewayUpdateForTest(t, command, map[string]any{"action": "request", "hubId": "hub-a"})
+	if !second.Accepted || second.JobID != first.JobID || second.Status != "update_pending" {
+		t.Fatalf("second response=%#v", second)
+	}
+	close(runner.release)
+	deadline := time.Now().Add(time.Second)
+	for time.Now().Before(deadline) {
+		status := handleGatewayUpdateForTest(t, command, map[string]any{"action": "query", "hubId": "hub-a"})
+		if status.Job != nil && status.Job.State == "succeeded" {
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatal("gateway update did not reach succeeded state")
+}
+
+func TestGatewayUpdateCommandReapsStaleActiveJob(t *testing.T) {
+	baseDir := t.TempDir()
+	writeGatewayInstalledRelease(t, baseDir)
+	command := newGatewayUpdateCommandWithDependencies(baseDir, &fakeGatewayUpdateRunner{})
+	now := time.Date(2026, time.August, 6, 12, 0, 0, 0, time.UTC)
+	command.now = func() time.Time { return now }
+	stale := &gatewayUpdateJobStatus{
+		Schema:    1,
+		JobID:     "stale-job",
+		State:     "downloading",
+		StartedAt: now.Add(-staleGatewayUpdateThreshold - time.Minute).Format(time.RFC3339Nano),
+		UpdatedAt: now.Add(-staleGatewayUpdateThreshold - time.Minute).Format(time.RFC3339Nano),
+	}
+	if err := command.writeJobStatus(stale); err != nil {
+		t.Fatal(err)
+	}
+
+	response := handleGatewayUpdateForTest(t, command, map[string]any{"action": "query", "hubId": "hub-a"})
+	if response.Status != "installed" || !response.CanRequest || response.Job == nil || response.Job.State != "failed" || response.Job.ErrorCode != "gateway_updater_stalled" {
+		t.Fatalf("response=%#v", response)
+	}
+}
+
+func TestGatewayUpdateCommandRunnerOutlivesRequestContext(t *testing.T) {
+	baseDir := t.TempDir()
+	writeGatewayInstalledRelease(t, baseDir)
+	runner := &contextGatewayUpdateRunner{started: make(chan context.Context, 1), release: make(chan struct{}), done: make(chan struct{})}
+	command := newGatewayUpdateCommandWithDependencies(baseDir, runner)
+	requestContext, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	raw, err := json.Marshal(map[string]any{"action": "request", "hubId": "hub-a"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, commandErr := command.Handle(requestContext, raw); commandErr != nil {
+		t.Fatalf("Handle() error=%v", commandErr)
+	}
+	var runnerContext context.Context
+	select {
+	case runnerContext = <-runner.started:
+	case <-time.After(time.Second):
+		t.Fatal("gateway runner was not started")
+	}
+	cancel()
+	if runnerContext.Err() != nil {
+		t.Fatalf("runner context was cancelled with request: %v", runnerContext.Err())
+	}
+	close(runner.release)
+	select {
+	case <-runner.done:
+	case <-time.After(time.Second):
+		t.Fatal("gateway runner did not finish")
+	}
+}
+
+type contextGatewayUpdateRunner struct {
+	started chan context.Context
+	release chan struct{}
+	done    chan struct{}
+}
+
+func (r *contextGatewayUpdateRunner) Run(ctx context.Context, _ string) error {
+	defer close(r.done)
+	r.started <- ctx
+	<-r.release
+	return nil
+}
+
+func writeGatewayInstalledRelease(t *testing.T, baseDir string) {
+	t.Helper()
+	statePath := filepath.Join(baseDir, "gateway", "state", "release.json")
+	if err := os.MkdirAll(filepath.Dir(statePath), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(statePath, []byte(`{"schemaVersion":1,"version":"v1.3","sourceSha":"89abcdef0123456789abcdef0123456789abcdef","manifestSha256":"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef","installedAt":"2026-08-06T00:00:00Z"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func (r gatewayUpdateResponse) JobActive() bool {
+	return r.Job != nil && activeGatewayUpdateState(r.Job.State)
+}
+
+func handleGatewayUpdateForTest(t *testing.T, command *GatewayUpdateCommand, payload map[string]any) gatewayUpdateResponse {
+	t.Helper()
+	raw, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, commandErr := command.Handle(context.Background(), raw)
+	if commandErr != nil {
+		t.Fatalf("Handle() error=%v", commandErr)
+	}
+	return result.(gatewayUpdateResponse)
+}
+
+func TestDebugWebTransferReceiverAppliesVerifiedArchive(t *testing.T) {
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, "web"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "web", "index.html"), []byte("old"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	archive := debugWebZip(t, map[string]string{"index.html": "new"})
+	receiver := newDebugWebTransferReceiver(root)
+	transferID := "transfer-verified"
+	mustHandleDebugWebTransfer(t, receiver, rp.RegistryMethodHubDebugWebReceiveStart, map[string]any{"transferId": transferID, "size": len(archive), "sha256": debugWebDigest(archive)}, "accepted")
+	middle := len(archive) / 2
+	mustHandleDebugWebTransfer(t, receiver, rp.RegistryMethodHubDebugWebReceiveChunk, map[string]any{"transferId": transferID, "sequence": 0, "data": base64.StdEncoding.EncodeToString(archive[:middle])}, "accepted")
+	mustHandleDebugWebTransfer(t, receiver, rp.RegistryMethodHubDebugWebReceiveChunk, map[string]any{"transferId": transferID, "sequence": 1, "data": base64.StdEncoding.EncodeToString(archive[middle:])}, "accepted")
+	mustHandleDebugWebTransfer(t, receiver, rp.RegistryMethodHubDebugWebReceiveFinish, map[string]any{"transferId": transferID}, "success")
+
+	current, err := os.ReadFile(filepath.Join(root, "web", "index.html"))
+	if err != nil || string(current) != "new" {
+		t.Fatalf("web=%q err=%v", current, err)
+	}
+	if _, err := os.Stat(filepath.Join(root, updateStagingDirectoryName, updateLeaseFileName)); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("lease remains: %v", err)
+	}
+}
+
+func TestDebugWebTransferReceiverPreservesWebOnDigestMismatch(t *testing.T) {
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, "web"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "web", "index.html"), []byte("old"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	receiver := newDebugWebTransferReceiver(root)
+	mustHandleDebugWebTransfer(t, receiver, rp.RegistryMethodHubDebugWebReceiveStart, map[string]any{"transferId": "transfer-bad", "size": 3, "sha256": strings.Repeat("a", 64)}, "accepted")
+	mustHandleDebugWebTransfer(t, receiver, rp.RegistryMethodHubDebugWebReceiveChunk, map[string]any{"transferId": "transfer-bad", "sequence": 0, "data": base64.StdEncoding.EncodeToString([]byte("zip"))}, "accepted")
+	raw, _ := json.Marshal(map[string]any{"transferId": "transfer-bad"})
+	status, commandErr := receiver.Handle(rp.RegistryMethodHubDebugWebReceiveFinish, raw)
+	if commandErr == nil || status.ErrorCode != "debug_web_digest_mismatch" {
+		t.Fatalf("status=%#v err=%v", status, commandErr)
+	}
+	current, _ := os.ReadFile(filepath.Join(root, "web", "index.html"))
+	if string(current) != "old" {
+		t.Fatalf("existing web replaced: %q", current)
+	}
+}
+
+func TestDebugWebTransferReceiverRejectsOutOfOrderChunk(t *testing.T) {
+	receiver := newDebugWebTransferReceiver(t.TempDir())
+	mustHandleDebugWebTransfer(t, receiver, rp.RegistryMethodHubDebugWebReceiveStart, map[string]any{"transferId": "transfer-order", "size": 3, "sha256": debugWebDigest([]byte("zip"))}, "accepted")
+	raw, _ := json.Marshal(map[string]any{"transferId": "transfer-order", "sequence": 1, "data": base64.StdEncoding.EncodeToString([]byte("zip"))})
+	status, commandErr := receiver.Handle(rp.RegistryMethodHubDebugWebReceiveChunk, raw)
+	if commandErr == nil || status.ErrorCode != "debug_web_sequence_mismatch" {
+		t.Fatalf("status=%#v err=%v", status, commandErr)
+	}
+	mustHandleDebugWebTransfer(t, receiver, rp.RegistryMethodHubDebugWebReceiveAbort, map[string]any{"transferId": "transfer-order"}, "aborted")
+}
+
+func mustHandleDebugWebTransfer(t *testing.T, receiver *debugWebTransferReceiver, method string, payload map[string]any, want string) {
+	t.Helper()
+	raw, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	status, commandErr := receiver.Handle(method, raw)
+	if commandErr != nil || status.Status != want {
+		t.Fatalf("method=%s status=%#v err=%v", method, status, commandErr)
+	}
+}
+
+func debugWebZip(t *testing.T, files map[string]string) []byte {
+	t.Helper()
+	var out bytes.Buffer
+	writer := zip.NewWriter(&out)
+	for name, content := range files {
+		entry, err := writer.Create(name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := entry.Write([]byte(content)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatal(err)
+	}
+	return out.Bytes()
+}
+func debugWebDigest(bytes []byte) string {
+	sum := sha256.Sum256(bytes)
+	return hex.EncodeToString(sum[:])
+}
+
+// Install-message verification tests. Kept in a dedicated file so the A2
+// post-install LookPath checks are exercised independently of the larger
+// tools_test.go update/release test suite.
+
+func TestNPMCommandInstallMessageReportsReadyWhenBinaryOnPath(t *testing.T) {
+	runner := newFakeNPMRunner()
+	cmd := newNPMCommandWithRunner(runner)
+	cmd.lookPath = func(name string) (string, error) {
+		if name == "codex" {
+			return "/usr/local/bin/codex", nil
+		}
+		return "", errors.New("not found")
+	}
+
+	_, err := cmd.Handle(context.Background(), rawNPMCommandPayload(t, map[string]any{
+		"action":      "install",
+		"hubId":       "hub-a",
+		"packageName": "@openai/codex",
+		"version":     "latest",
+	}))
+	if err != nil {
+		t.Fatalf("install error: %#v", err)
+	}
+	operation := waitForNPMTestOperation(t, cmd)
+	if operation.Status != "succeeded" {
+		t.Fatalf("status=%q want succeeded", operation.Status)
+	}
+	if !strings.Contains(operation.Message, "ready to use") || strings.Contains(operation.Message, "Restart WheelMaker") {
+		t.Fatalf("message=%q want ready to use (no restart)", operation.Message)
+	}
+}
+
+func TestNPMCommandInstallMessageReportsRestartWhenBinaryMissing(t *testing.T) {
+	runner := newFakeNPMRunner()
+	cmd := newNPMCommandWithRunner(runner)
+	cmd.lookPath = func(string) (string, error) { return "", errors.New("not found") }
+
+	_, err := cmd.Handle(context.Background(), rawNPMCommandPayload(t, map[string]any{
+		"action":      "install",
+		"hubId":       "hub-a",
+		"packageName": "@openai/codex",
+		"version":     "latest",
+	}))
+	if err != nil {
+		t.Fatalf("install error: %#v", err)
+	}
+	operation := waitForNPMTestOperation(t, cmd)
+	if operation.Status != "succeeded" {
+		t.Fatalf("status=%q want succeeded", operation.Status)
+	}
+	if !strings.Contains(operation.Message, "Restart WheelMaker") || !strings.Contains(operation.Message, "not found") {
+		t.Fatalf("message=%q want restart + not found", operation.Message)
+	}
+}
+
+func TestNPMCommandBulkInstallMessageReportsMissingBinaries(t *testing.T) {
+	runner := newFakeNPMRunner()
+	cmd := newNPMCommandWithRunner(runner)
+	cmd.lookPath = func(name string) (string, error) {
+		if name == "claude" {
+			return "/usr/local/bin/claude", nil
+		}
+		return "", errors.New("not found")
+	}
+
+	_, err := cmd.Handle(context.Background(), rawNPMCommandPayload(t, map[string]any{
+		"action":       "install_many",
+		"hubId":        "hub-a",
+		"packageNames": []string{"@openai/codex", "@anthropic-ai/claude-code"},
+		"version":      "latest",
+	}))
+	if err != nil {
+		t.Fatalf("bulk install error: %#v", err)
+	}
+	operation := waitForNPMTestOperation(t, cmd)
+	if operation.Status != "succeeded" {
+		t.Fatalf("status=%q want succeeded", operation.Status)
+	}
+	if !strings.Contains(operation.Message, "not found yet") || !strings.Contains(operation.Message, "codex") {
+		t.Fatalf("message=%q want codex listed as not found yet", operation.Message)
+	}
+	if strings.Contains(operation.Message, "ready to use") {
+		t.Fatalf("message should not claim ready when codex is missing: %q", operation.Message)
 	}
 }

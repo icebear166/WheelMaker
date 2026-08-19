@@ -10,17 +10,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/gorilla/websocket"
-	"github.com/swm8023/wheelmaker/internal/hub/agent"
-	clientpkg "github.com/swm8023/wheelmaker/internal/hub/client"
-	"github.com/swm8023/wheelmaker/internal/hub/tools"
-	"github.com/swm8023/wheelmaker/internal/hub/usage"
-	"github.com/swm8023/wheelmaker/internal/hubconfig"
-	rp "github.com/swm8023/wheelmaker/internal/protocol"
-	"github.com/swm8023/wheelmaker/internal/registry"
-	logger "github.com/swm8023/wheelmaker/internal/shared"
 	"io"
-	_ "modernc.org/sqlite"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -37,6 +27,17 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/gorilla/websocket"
+	"github.com/swm8023/wheelmaker/internal/hub/agent"
+	clientpkg "github.com/swm8023/wheelmaker/internal/hub/client"
+	"github.com/swm8023/wheelmaker/internal/hub/tools"
+	"github.com/swm8023/wheelmaker/internal/hub/usage"
+	"github.com/swm8023/wheelmaker/internal/hubconfig"
+	rp "github.com/swm8023/wheelmaker/internal/protocol"
+	"github.com/swm8023/wheelmaker/internal/registry"
+	logger "github.com/swm8023/wheelmaker/internal/shared"
+	_ "modernc.org/sqlite"
 )
 
 func TestBuildClient_DefaultConfigStartsSessionClient(t *testing.T) {
@@ -5765,4 +5766,1177 @@ func equalStringsForClaudeTest(got, want []string) bool {
 		}
 	}
 	return true
+}
+
+func TestHubStateRefreshReturnsBeforeUpdaterCompletesAndCoalesces(t *testing.T) {
+	started := make(chan struct{}, 1)
+	release := make(chan struct{})
+	var calls atomic.Int32
+	manager := newHubStateManager("hub-a", "instance-a", map[string]hubStateSectionHandler{
+		hubStateSectionSkills: {
+			Refresh: func(context.Context, hubStateRefreshInput) (any, error) {
+				calls.Add(1)
+				started <- struct{}{}
+				<-release
+				return map[string]any{"skills": []string{"scope"}}, nil
+			},
+		},
+	}, nil)
+
+	first, err := manager.enqueueRefresh([]string{hubStateSectionSkills}, false)
+	if err != nil || !first.Accepted {
+		t.Fatalf("first refresh = %#v, %v", first, err)
+	}
+	waitSignal(t, started)
+	second, err := manager.enqueueRefresh([]string{hubStateSectionSkills}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first.Updates[0].UpdateID != second.Updates[0].UpdateID {
+		t.Fatalf("duplicate refresh was not coalesced: %#v %#v", first, second)
+	}
+	close(release)
+	waitHubStateSectionIdle(t, manager, hubStateSectionSkills)
+	if calls.Load() != 1 {
+		t.Fatalf("calls = %d, want 1", calls.Load())
+	}
+}
+
+func TestHubStateRefreshKeepsOrdinaryQueueProgressRequestLocal(t *testing.T) {
+	started := make(chan struct{}, 1)
+	release := make(chan struct{})
+	manager := newHubStateManager("hub-a", "instance-a", map[string]hubStateSectionHandler{
+		hubStateSectionSkills: {
+			Refresh: func(context.Context, hubStateRefreshInput) (any, error) {
+				started <- struct{}{}
+				<-release
+				return map[string]any{"skills": []string{"scope"}}, nil
+			},
+		},
+	}, nil)
+
+	response, err := manager.enqueueRefresh([]string{hubStateSectionSkills}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if response.Updates[0].Status != string(rp.HubStateUpdateQueued) {
+		t.Fatalf("ack status = %q, want queued", response.Updates[0].Status)
+	}
+	if got := response.State.Sections[hubStateSectionSkills].UpdateStatus; got != rp.HubStateUpdateIdle {
+		t.Fatalf("response section status = %q, want request-local idle snapshot", got)
+	}
+	waitSignal(t, started)
+	if got := manager.get([]string{hubStateSectionSkills}).Sections[hubStateSectionSkills].UpdateStatus; got != rp.HubStateUpdateIdle {
+		t.Fatalf("get section status = %q, want request-local idle snapshot", got)
+	}
+	close(release)
+	waitHubStateSectionIdle(t, manager, hubStateSectionSkills)
+}
+
+func TestHubStateForceDuringRunSchedulesOnlyOneRerun(t *testing.T) {
+	started := make(chan struct{}, 2)
+	release := make(chan struct{}, 2)
+	var calls atomic.Int32
+	manager := newHubStateManager("hub-a", "instance-a", map[string]hubStateSectionHandler{
+		hubStateSectionSkills: {
+			Refresh: func(context.Context, hubStateRefreshInput) (any, error) {
+				run := calls.Add(1)
+				started <- struct{}{}
+				<-release
+				return map[string]any{"run": run}, nil
+			},
+		},
+	}, nil)
+
+	if _, err := manager.enqueueRefresh([]string{hubStateSectionSkills}, false); err != nil {
+		t.Fatal(err)
+	}
+	waitSignal(t, started)
+	for range 2 {
+		if _, err := manager.enqueueRefresh([]string{hubStateSectionSkills}, true); err != nil {
+			t.Fatal(err)
+		}
+	}
+	release <- struct{}{}
+	waitSignal(t, started)
+	release <- struct{}{}
+	waitHubStateSectionIdle(t, manager, hubStateSectionSkills)
+	if calls.Load() != 2 {
+		t.Fatalf("calls = %d, want 2", calls.Load())
+	}
+}
+
+func TestHubStateRefreshAbsorbsMatchingProgressNotificationWithoutRerun(t *testing.T) {
+	var calls atomic.Int32
+	var manager *HubStateManager
+	var publishedMu sync.Mutex
+	var published []rp.HubStateSection
+	ready := map[string]any{"generation": 1, "status": "ready"}
+	manager = newHubStateManager("hub-a", "instance-a", map[string]hubStateSectionHandler{
+		hubStateSectionTokenStats: {
+			Refresh: func(context.Context, hubStateRefreshInput) (any, error) {
+				if calls.Add(1) == 1 {
+					manager.notifyRefreshProgress(
+						hubStateSectionTokenStats,
+						map[string]any{"generation": 1, "status": "scanning"},
+						rp.HubStateAvailabilityReady,
+						rp.HubStateUpdateUpdating,
+						"",
+						"snapshot",
+					)
+					manager.notifyRefreshProgress(
+						hubStateSectionTokenStats,
+						ready,
+						rp.HubStateAvailabilityReady,
+						rp.HubStateUpdateIdle,
+						"",
+						"snapshot",
+					)
+				}
+				return ready, nil
+			},
+		},
+	}, func(_ string, sections map[string]rp.HubStateSection) {
+		publishedMu.Lock()
+		published = append(published, sections[hubStateSectionTokenStats])
+		publishedMu.Unlock()
+	})
+
+	if _, err := manager.enqueueRefresh([]string{hubStateSectionTokenStats}, true); err != nil {
+		t.Fatal(err)
+	}
+	waitHubStateSectionIdle(t, manager, hubStateSectionTokenStats)
+
+	if got := calls.Load(); got != 1 {
+		t.Fatalf("refresh calls = %d, want 1", got)
+	}
+	final := manager.get([]string{hubStateSectionTokenStats}).Sections[hubStateSectionTokenStats]
+	if final.UpdateStatus != rp.HubStateUpdateIdle {
+		t.Fatalf("final update status = %q, want idle", final.UpdateStatus)
+	}
+	publishedMu.Lock()
+	defer publishedMu.Unlock()
+	if len(published) == 0 || published[len(published)-1].UpdateStatus != rp.HubStateUpdateIdle {
+		t.Fatalf("last published section = %#v, want idle", published)
+	}
+}
+
+func TestHubStateNotificationWinsOverOlderScan(t *testing.T) {
+	started := make(chan struct{}, 2)
+	release := make(chan struct{}, 2)
+	var calls atomic.Int32
+	manager := newHubStateManager("hub-a", "instance-a", map[string]hubStateSectionHandler{
+		hubStateSectionSkills: {
+			Refresh: func(context.Context, hubStateRefreshInput) (any, error) {
+				run := calls.Add(1)
+				started <- struct{}{}
+				<-release
+				return map[string]any{"source": "scan", "run": run}, nil
+			},
+		},
+	}, nil)
+
+	if _, err := manager.enqueueRefresh([]string{hubStateSectionSkills}, false); err != nil {
+		t.Fatal(err)
+	}
+	waitSignal(t, started)
+	manager.notify(
+		hubStateSectionSkills,
+		map[string]any{"source": "notification"},
+		rp.HubStateAvailabilityReady,
+		"",
+		"skills-files-changed",
+	)
+	release <- struct{}{}
+	waitSignal(t, started)
+	duringRerun := manager.get([]string{hubStateSectionSkills}).Sections[hubStateSectionSkills]
+	if got := duringRerun.Data.(map[string]any)["source"]; got != "notification" {
+		t.Fatalf("data during rerun = %#v", duringRerun.Data)
+	}
+	release <- struct{}{}
+	waitHubStateSectionIdle(t, manager, hubStateSectionSkills)
+	final := manager.get([]string{hubStateSectionSkills}).Sections[hubStateSectionSkills]
+	if got := final.Data.(map[string]any)["run"]; got != int32(2) {
+		t.Fatalf("final data = %#v", final.Data)
+	}
+}
+
+func TestHubStateRefreshFailureRetainsCommittedData(t *testing.T) {
+	var fail atomic.Bool
+	manager := newHubStateManager("hub-a", "instance-a", map[string]hubStateSectionHandler{
+		hubStateSectionSkills: {
+			Refresh: func(context.Context, hubStateRefreshInput) (any, error) {
+				if fail.Load() {
+					return nil, errors.New("scan failed")
+				}
+				return map[string]any{"version": 1}, nil
+			},
+		},
+	}, nil)
+
+	if _, err := manager.enqueueRefresh([]string{hubStateSectionSkills}, false); err != nil {
+		t.Fatal(err)
+	}
+	waitHubStateSectionIdle(t, manager, hubStateSectionSkills)
+	fail.Store(true)
+	if _, err := manager.enqueueRefresh([]string{hubStateSectionSkills}, true); err != nil {
+		t.Fatal(err)
+	}
+	waitHubStateSectionIdle(t, manager, hubStateSectionSkills)
+	got := manager.get([]string{hubStateSectionSkills}).Sections[hubStateSectionSkills]
+	if got.Availability != rp.HubStateAvailabilityReady ||
+		got.UpdateStatus != rp.HubStateUpdateIdle ||
+		got.LastError != "scan failed" {
+		t.Fatalf("failed refresh state = %#v", got)
+	}
+	if got.Data.(map[string]any)["version"] != 1 {
+		t.Fatalf("committed data was cleared: %#v", got.Data)
+	}
+}
+
+func TestHubStateDifferentSectionsRunConcurrently(t *testing.T) {
+	started := make(chan string, 2)
+	release := make(chan struct{})
+	handler := func(section string) hubStateSectionHandler {
+		return hubStateSectionHandler{
+			Refresh: func(context.Context, hubStateRefreshInput) (any, error) {
+				started <- section
+				<-release
+				return map[string]any{"section": section}, nil
+			},
+		}
+	}
+	manager := newHubStateManager("hub-a", "instance-a", map[string]hubStateSectionHandler{
+		hubStateSectionSkills:    handler(hubStateSectionSkills),
+		hubStateSectionFileIndex: handler(hubStateSectionFileIndex),
+	}, nil)
+
+	if _, err := manager.enqueueRefresh(
+		[]string{hubStateSectionSkills, hubStateSectionFileIndex},
+		false,
+	); err != nil {
+		t.Fatal(err)
+	}
+	got := map[string]bool{
+		waitValue(t, started): true,
+		waitValue(t, started): true,
+	}
+	if !got[hubStateSectionSkills] || !got[hubStateSectionFileIndex] {
+		t.Fatalf("started sections = %v", got)
+	}
+	close(release)
+	waitHubStateSectionIdle(t, manager, hubStateSectionSkills)
+	waitHubStateSectionIdle(t, manager, hubStateSectionFileIndex)
+}
+
+func TestHubStateActionDoesNotReplaceSectionData(t *testing.T) {
+	manager := newHubStateManager("hub-a", "instance-a", map[string]hubStateSectionHandler{
+		hubStateSectionAgentPackages: {
+			Action: func(context.Context, string, map[string]any) (any, error) {
+				return map[string]any{"operationId": "npm-1"}, nil
+			},
+		},
+	}, nil)
+	manager.notify(
+		hubStateSectionAgentPackages,
+		map[string]any{"packages": []string{"existing"}},
+		rp.HubStateAvailabilityReady,
+		"",
+		"seed",
+	)
+
+	response, err := manager.action(
+		context.Background(),
+		hubStateSectionAgentPackages,
+		"install",
+		map[string]any{"packageName": "@openai/codex"},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if response.Result.(map[string]any)["operationId"] != "npm-1" {
+		t.Fatalf("action response = %#v", response)
+	}
+	data := manager.get(nil).Sections[hubStateSectionAgentPackages].Data
+	if !reflect.DeepEqual(data, map[string]any{"packages": []string{"existing"}}) {
+		t.Fatalf("action replaced committed data: %#v", data)
+	}
+}
+
+func TestHubStateSnapshotMutationDoesNotAlterCommittedData(t *testing.T) {
+	manager := newHubStateManager("hub-a", "instance-a", map[string]hubStateSectionHandler{
+		hubStateSectionSkills: {},
+	}, nil)
+	manager.notify(
+		hubStateSectionSkills,
+		map[string]any{"skills": []any{map[string]any{"name": "scope"}}},
+		rp.HubStateAvailabilityReady,
+		"",
+		"seed",
+	)
+
+	first := manager.get(nil)
+	first.Sections[hubStateSectionSkills].Data.(map[string]any)["skills"].([]any)[0].(map[string]any)["name"] = "mutated"
+
+	second := manager.get(nil)
+	got := second.Sections[hubStateSectionSkills].Data.(map[string]any)["skills"].([]any)[0].(map[string]any)["name"]
+	if got != "scope" {
+		t.Fatalf("committed data mutated through snapshot: %v", got)
+	}
+}
+
+func TestHubStateStructAndPointerPayloadsDoNotShareMutableData(t *testing.T) {
+	type nested struct {
+		Labels []string
+	}
+	type payload struct {
+		Names  []string
+		Values map[string][]int
+		Nested *nested
+	}
+	original := payload{
+		Names:  []string{"scope"},
+		Values: map[string][]int{"counts": {1, 2}},
+		Nested: &nested{Labels: []string{"agents"}},
+	}
+	manager := newHubStateManager("hub-a", "instance-a", map[string]hubStateSectionHandler{
+		hubStateSectionSkills: {},
+	}, nil)
+	manager.notify(
+		hubStateSectionSkills,
+		original,
+		rp.HubStateAvailabilityReady,
+		"",
+		"seed",
+	)
+
+	original.Names[0] = "mutated-original"
+	original.Values["counts"][0] = 9
+	original.Nested.Labels[0] = "mutated-original"
+	first := manager.get(nil).Sections[hubStateSectionSkills].Data.(payload)
+	if !reflect.DeepEqual(first, payload{
+		Names:  []string{"scope"},
+		Values: map[string][]int{"counts": {1, 2}},
+		Nested: &nested{Labels: []string{"agents"}},
+	}) {
+		t.Fatalf("committed struct shared original data: %#v", first)
+	}
+
+	first.Names[0] = "mutated-snapshot"
+	first.Values["counts"][0] = 8
+	first.Nested.Labels[0] = "mutated-snapshot"
+	second := manager.get(nil).Sections[hubStateSectionSkills].Data.(payload)
+	if second.Names[0] != "scope" || second.Values["counts"][0] != 1 || second.Nested.Labels[0] != "agents" {
+		t.Fatalf("committed struct mutated through snapshot: %#v", second)
+	}
+}
+
+func TestReporterBootstrapRefreshesOperationalSectionsOnce(t *testing.T) {
+	var calls sync.Map
+	handlers := map[string]hubStateSectionHandler{}
+	for _, section := range append(
+		append([]string(nil), bootstrapHubStateSections...),
+		hubStateSectionTokenStats,
+	) {
+		name := section
+		handlers[name] = hubStateSectionHandler{
+			Refresh: func(context.Context, hubStateRefreshInput) (any, error) {
+				counter, _ := calls.LoadOrStore(name, &atomic.Int32{})
+				counter.(*atomic.Int32).Add(1)
+				return map[string]any{"section": name}, nil
+			},
+		}
+	}
+	reporter := &Reporter{cfg: ReporterConfig{HubID: "hub-a"}}
+	reporter.hubStateManager = newHubStateManager(
+		"hub-a",
+		"instance-a",
+		handlers,
+		nil,
+	)
+
+	reporter.bootstrapHubState(context.Background())
+
+	for _, section := range bootstrapHubStateSections {
+		value, ok := calls.Load(section)
+		if !ok || value.(*atomic.Int32).Load() != 1 {
+			t.Fatalf("%s calls = %v, want 1", section, value)
+		}
+	}
+	if value, ok := calls.Load(hubStateSectionTokenStats); ok && value.(*atomic.Int32).Load() != 0 {
+		t.Fatalf("tokenStats bootstrap calls = %d, want 0", value.(*atomic.Int32).Load())
+	}
+}
+
+func TestProjectTopologyChangeRefreshesSkillsAndFileIndex(t *testing.T) {
+	var refreshed sync.Map
+	handler := func(name string) hubStateSectionHandler {
+		return hubStateSectionHandler{
+			Refresh: func(context.Context, hubStateRefreshInput) (any, error) {
+				counter, _ := refreshed.LoadOrStore(name, &atomic.Int32{})
+				counter.(*atomic.Int32).Add(1)
+				return map[string]any{"section": name}, nil
+			},
+		}
+	}
+	reporter := &Reporter{
+		cfg:          ReporterConfig{HubID: "hub-a"},
+		projectsByID: map[string]ProjectInfo{},
+	}
+	reporter.hubStateManager = newHubStateManager(
+		"hub-a",
+		"instance-a",
+		map[string]hubStateSectionHandler{
+			hubStateSectionSkills:    handler(hubStateSectionSkills),
+			hubStateSectionFileIndex: handler(hubStateSectionFileIndex),
+		},
+		nil,
+	)
+	assertRefreshes := func(label string, skills, fileIndex int32) {
+		t.Helper()
+		waitHubStateSectionIdle(t, reporter.hubStateManager, hubStateSectionSkills)
+		waitHubStateSectionIdle(t, reporter.hubStateManager, hubStateSectionFileIndex)
+		for name, want := range map[string]int32{
+			hubStateSectionSkills:    skills,
+			hubStateSectionFileIndex: fileIndex,
+		} {
+			value, _ := refreshed.LoadOrStore(name, &atomic.Int32{})
+			if got := value.(*atomic.Int32).Load(); got != want {
+				t.Fatalf("%s %s refreshes = %d, want %d", label, name, got, want)
+			}
+		}
+	}
+
+	reporter.replaceProjects([]ProjectInfo{{Name: "project", Path: t.TempDir()}})
+	assertRefreshes("add", 1, 1)
+	reporter.replaceProjects([]ProjectInfo{{Name: "project", Path: t.TempDir()}})
+	assertRefreshes("path", 2, 2)
+	reporter.replaceProjects(nil)
+	assertRefreshes("remove", 3, 3)
+}
+
+func TestProjectAgentChangeRefreshesSkillsWithoutRefreshingFileIndex(t *testing.T) {
+	var refreshed sync.Map
+	handler := func(name string) hubStateSectionHandler {
+		return hubStateSectionHandler{
+			Refresh: func(context.Context, hubStateRefreshInput) (any, error) {
+				counter, _ := refreshed.LoadOrStore(name, &atomic.Int32{})
+				counter.(*atomic.Int32).Add(1)
+				return map[string]any{"section": name}, nil
+			},
+		}
+	}
+	reporter := &Reporter{
+		cfg: ReporterConfig{HubID: "hub-a"},
+		projects: []ProjectInfo{{
+			Name:   "project",
+			Path:   "same",
+			Agents: []string{"codex"},
+		}},
+		projectsByID: map[string]ProjectInfo{
+			"project":       {Name: "project", Path: "same", Agents: []string{"codex"}},
+			"hub-a:project": {Name: "project", Path: "same", Agents: []string{"codex"}},
+		},
+	}
+	reporter.hubStateManager = newHubStateManager(
+		"hub-a",
+		"instance-a",
+		map[string]hubStateSectionHandler{
+			hubStateSectionSkills:    handler(hubStateSectionSkills),
+			hubStateSectionFileIndex: handler(hubStateSectionFileIndex),
+		},
+		nil,
+	)
+
+	if err := reporter.UpdateProject(ProjectInfo{
+		Name:   "project",
+		Path:   "same",
+		Agents: []string{"codex", "claude"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	waitHubStateSectionIdle(t, reporter.hubStateManager, hubStateSectionSkills)
+
+	skills, _ := refreshed.LoadOrStore(hubStateSectionSkills, &atomic.Int32{})
+	fileIndex, _ := refreshed.LoadOrStore(hubStateSectionFileIndex, &atomic.Int32{})
+	if got := skills.(*atomic.Int32).Load(); got != 1 {
+		t.Fatalf("skills refreshes = %d, want 1", got)
+	}
+	if got := fileIndex.(*atomic.Int32).Load(); got != 0 {
+		t.Fatalf("fileIndex refreshes = %d, want 0", got)
+	}
+}
+
+func TestUpdateProjectPathRefreshesSkillsAndFileIndex(t *testing.T) {
+	started := make(chan string, 2)
+	reporter := &Reporter{
+		cfg: ReporterConfig{HubID: "hub-a"},
+		projects: []ProjectInfo{{
+			Name: "project",
+			Path: "old",
+		}},
+		projectsByID: map[string]ProjectInfo{
+			"project":       {Name: "project", Path: "old"},
+			"hub-a:project": {Name: "project", Path: "old"},
+		},
+	}
+	handler := func(name string) hubStateSectionHandler {
+		return hubStateSectionHandler{
+			Refresh: func(context.Context, hubStateRefreshInput) (any, error) {
+				started <- name
+				return map[string]any{"section": name}, nil
+			},
+		}
+	}
+	reporter.hubStateManager = newHubStateManager(
+		"hub-a",
+		"instance-a",
+		map[string]hubStateSectionHandler{
+			hubStateSectionSkills:    handler(hubStateSectionSkills),
+			hubStateSectionFileIndex: handler(hubStateSectionFileIndex),
+		},
+		nil,
+	)
+
+	if err := reporter.UpdateProject(ProjectInfo{Name: "project", Path: "new"}); err != nil {
+		t.Fatal(err)
+	}
+	got := map[string]bool{
+		waitValue(t, started): true,
+		waitValue(t, started): true,
+	}
+	if !got[hubStateSectionSkills] || !got[hubStateSectionFileIndex] {
+		t.Fatalf("refreshed sections = %v", got)
+	}
+}
+
+func TestReporterPublishesCurrentSnapshotWithoutRefreshing(t *testing.T) {
+	var refreshes atomic.Int32
+	reporter := &Reporter{
+		cfg:          ReporterConfig{HubID: "hub-a"},
+		projectsByID: map[string]ProjectInfo{},
+		hubEventSink: newHubEventSink(),
+	}
+	reporter.hubStateManager = newHubStateManager(
+		"hub-a",
+		"instance-a",
+		map[string]hubStateSectionHandler{
+			hubStateSectionSkills: {
+				Refresh: func(context.Context, hubStateRefreshInput) (any, error) {
+					refreshes.Add(1)
+					return nil, nil
+				},
+			},
+		},
+		nil,
+	)
+	reporter.hubStateManager.notify(
+		hubStateSectionSkills,
+		map[string]any{"name": "scope"},
+		rp.HubStateAvailabilityReady,
+		"",
+		"seed",
+	)
+
+	reporter.publishCurrentHubState("reconnect")
+
+	event := waitValue(t, reporter.hubEventSink.events)
+	var payload struct {
+		InstanceID string                        `json:"instanceId"`
+		Sections   map[string]rp.HubStateSection `json:"sections"`
+		Reason     string                        `json:"reason"`
+	}
+	if err := json.Unmarshal(event.Payload, &payload); err != nil {
+		t.Fatal(err)
+	}
+	if payload.InstanceID != "instance-a" || payload.Reason != "reconnect" {
+		t.Fatalf("payload = %#v", payload)
+	}
+	if payload.Sections[hubStateSectionSkills].Revision != 1 {
+		t.Fatalf("skills section = %#v", payload.Sections[hubStateSectionSkills])
+	}
+	if refreshes.Load() != 0 {
+		t.Fatalf("snapshot publish invoked %d refreshes", refreshes.Load())
+	}
+}
+
+func waitHubStateSectionIdle(t *testing.T, manager *HubStateManager, section string) {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := manager.waitForIdle(ctx, section); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func waitSignal(t *testing.T, values <-chan struct{}) {
+	t.Helper()
+	select {
+	case <-values:
+	case <-time.After(5 * time.Second):
+		t.Fatal("timed out waiting for signal")
+	}
+}
+
+func waitValue[T any](t *testing.T, values <-chan T) T {
+	t.Helper()
+	select {
+	case value := <-values:
+		return value
+	case <-time.After(5 * time.Second):
+		var zero T
+		t.Fatal("timed out waiting for value")
+		return zero
+	}
+}
+
+type stubSessionAttachmentDownloadResolver struct {
+	path     string
+	fileName string
+	mimeType string
+	err      error
+}
+
+func (s stubSessionAttachmentDownloadResolver) ResolveSessionAttachmentDownload(context.Context, string, string, string) (string, string, string, error) {
+	return s.path, s.fileName, s.mimeType, s.err
+}
+
+func TestFileDownloadManagerStreamsProjectFileInBoundedChunks(t *testing.T) {
+	root := t.TempDir()
+	want := bytes.Repeat([]byte("wheelmaker-download\x00"), fileDownloadChunkSize/10+31)
+	path := filepath.Join(root, "large.bin")
+	if err := os.WriteFile(path, want, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	manager := newFileDownloadManager()
+	opened, err := manager.open(context.Background(), root, fileDownloadSource{Kind: fileDownloadSourceProject, Path: "large.bin"}, nil)
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	if opened.FileName != "large.bin" || opened.Size != int64(len(want)) || opened.TransferID == "" || opened.Identity == "" {
+		t.Fatalf("open response=%+v", opened)
+	}
+
+	var got []byte
+	var offset int64
+	reads := 0
+	for {
+		chunk, readErr := manager.read(opened.TransferID, offset, fileDownloadChunkSize*4)
+		if readErr != nil {
+			t.Fatalf("read offset %d: %v", offset, readErr)
+		}
+		decoded, decodeErr := base64.StdEncoding.DecodeString(chunk.Data)
+		if decodeErr != nil {
+			t.Fatalf("decode: %v", decodeErr)
+		}
+		if len(decoded) > fileDownloadChunkSize {
+			t.Fatalf("chunk size=%d, want <=%d", len(decoded), fileDownloadChunkSize)
+		}
+		got = append(got, decoded...)
+		offset = chunk.NextOffset
+		reads++
+		if chunk.EOF {
+			break
+		}
+	}
+	if reads < 3 {
+		t.Fatalf("reads=%d, want at least 3", reads)
+	}
+	if !bytes.Equal(got, want) {
+		t.Fatal("streamed content differs")
+	}
+	if manager.active() != 0 {
+		t.Fatalf("active transfers=%d, want 0 after EOF", manager.active())
+	}
+}
+
+func TestFileDownloadManagerRejectsInvalidTargetsAndOffsets(t *testing.T) {
+	root := t.TempDir()
+	if err := os.Mkdir(filepath.Join(root, "folder"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "ok.txt"), []byte("hello"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	manager := newFileDownloadManager()
+	for name, source := range map[string]fileDownloadSource{
+		"traversal":         {Kind: fileDownloadSourceProject, Path: "../escape.txt"},
+		"directory":         {Kind: fileDownloadSourceProject, Path: "folder"},
+		"relative external": {Kind: fileDownloadSourceExternal, Path: "relative.txt"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			if opened, err := manager.open(context.Background(), root, source, nil); err == nil {
+				t.Fatalf("open=%+v, want error", opened)
+			}
+		})
+	}
+
+	opened, err := manager.open(context.Background(), root, fileDownloadSource{Kind: fileDownloadSourceProject, Path: "ok.txt"}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := manager.read(opened.TransferID, 1, fileDownloadChunkSize); err == nil {
+		t.Fatal("out-of-order offset should fail")
+	}
+	if manager.active() != 0 {
+		t.Fatal("invalid read should close the transfer")
+	}
+}
+
+func TestFileDownloadManagerOpensExternalAndAttachmentFiles(t *testing.T) {
+	root := t.TempDir()
+	externalRoot := t.TempDir()
+	externalPath := filepath.Join(externalRoot, "outside.txt")
+	if err := os.WriteFile(externalPath, []byte("outside"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	manager := newFileDownloadManager()
+	external, err := manager.open(context.Background(), root, fileDownloadSource{Kind: fileDownloadSourceExternal, Path: externalPath}, nil)
+	if err != nil || external.FileName != "outside.txt" {
+		t.Fatalf("external=%+v err=%v", external, err)
+	}
+	manager.close(external.TransferID)
+
+	attachment, err := manager.open(
+		context.Background(),
+		root,
+		fileDownloadSource{Kind: fileDownloadSourceAttachment, SessionID: "session-1", AttachmentID: "sha256-value"},
+		stubSessionAttachmentDownloadResolver{path: externalPath, fileName: "original name.txt", mimeType: "text/plain"},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if attachment.FileName != "original name.txt" || attachment.MimeType != "text/plain" {
+		t.Fatalf("attachment=%+v", attachment)
+	}
+	manager.closeAll()
+	if manager.active() != 0 {
+		t.Fatal("closeAll leaked a transfer")
+	}
+}
+
+func TestFileDownloadManagerStopsWhenSourceChanges(t *testing.T) {
+	root := t.TempDir()
+	path := filepath.Join(root, "changing.txt")
+	if err := os.WriteFile(path, []byte("before"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	manager := newFileDownloadManager()
+	opened, err := manager.open(context.Background(), root, fileDownloadSource{Kind: fileDownloadSourceProject, Path: "changing.txt"}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte("changed-content"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := manager.read(opened.TransferID, 0, fileDownloadChunkSize); err == nil {
+		t.Fatal("changed source should terminate transfer")
+	}
+	if manager.active() != 0 {
+		t.Fatal("changed source leaked a transfer")
+	}
+}
+
+func TestFileDownloadManagerBoundsConcurrentOpenTransfers(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "bounded.txt"), []byte("content"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	manager := newFileDownloadManager()
+	for index := 0; index < fileDownloadMaxTransfers; index++ {
+		if _, err := manager.open(context.Background(), root, fileDownloadSource{Kind: fileDownloadSourceProject, Path: "bounded.txt"}, nil); err != nil {
+			t.Fatalf("open %d: %v", index, err)
+		}
+	}
+	if _, err := manager.open(context.Background(), root, fileDownloadSource{Kind: fileDownloadSourceProject, Path: "bounded.txt"}, nil); err == nil {
+		t.Fatal("transfer beyond capacity should fail")
+	}
+	if manager.active() != fileDownloadMaxTransfers {
+		t.Fatalf("active=%d, want %d", manager.active(), fileDownloadMaxTransfers)
+	}
+	manager.closeAll()
+}
+
+func TestReporterHandlesFileDownloadOpen(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "report.txt"), []byte("report body"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	responses := make(chan testEnvelope, 1)
+	errorsSeen := make(chan error, 1)
+	server := newFakeReporterRegistry(t, "hub-download", testEnvelope{
+		RequestID: 81,
+		Type:      rp.RegistryEnvelopeTypeRequest,
+		Method:    rp.RegistryMethodFileDownloadOpen,
+		ProjectID: rp.ProjectID("hub-download", "proj1"),
+		Payload: map[string]any{
+			"source": map[string]any{"kind": fileDownloadSourceProject, "path": "report.txt"},
+		},
+	}, responses, errorsSeen)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	reporter := NewReporter(ReporterConfig{
+		PublicURL:         strings.TrimPrefix(server.URL, "http://"),
+		HubID:             "hub-download",
+		ReconnectInterval: time.Second,
+	}, []ProjectInfo{{Name: "proj1", Path: root, Online: true}})
+	done := make(chan error, 1)
+	go func() { done <- reporter.Run(ctx) }()
+
+	select {
+	case err := <-errorsSeen:
+		stopReporterForTest(t, cancel, done)
+		t.Fatal(err)
+	case response := <-responses:
+		stopReporterForTest(t, cancel, done)
+		if response.Type != rp.RegistryEnvelopeTypeResponse || response.Method != rp.RegistryMethodFileDownloadOpen {
+			t.Fatalf("response=%+v", response)
+		}
+		if response.Payload["fileName"] != "report.txt" || response.Payload["size"] != float64(len("report body")) {
+			t.Fatalf("payload=%+v", response.Payload)
+		}
+		if response.Payload["transferId"] == "" || response.Payload["identity"] == "" {
+			t.Fatalf("payload=%+v", response.Payload)
+		}
+	case <-time.After(3 * time.Second):
+		stopReporterForTest(t, cancel, done)
+		t.Fatal("file download open response timed out")
+	}
+}
+
+func TestMCPStatusStoreTransitionsAndKeepsDisabledEntries(t *testing.T) {
+	store := newMCPStatusStore()
+	store.now = func() time.Time { return time.Date(2026, 8, 17, 12, 0, 0, 0, time.UTC) }
+	configs := []hubconfig.MCPServerConfig{
+		{ID: "neo4j-id", Name: "neo4j", Enabled: true, Transport: hubconfig.MCPTransportStdio, Command: "python"},
+		{ID: "disabled-id", Name: "disabled", Enabled: false, Transport: hubconfig.MCPTransportHTTP, URL: "https://mcp.example.test"},
+	}
+
+	snapshot := store.Sync(configs)
+	if got := mcpStatusState(snapshot, "neo4j"); got != mcpRuntimeStateNotStarted {
+		t.Fatalf("initial neo4j state = %q, want %q", got, mcpRuntimeStateNotStarted)
+	}
+	if got := mcpStatusState(snapshot, "disabled"); got != mcpRuntimeStateDisabled {
+		t.Fatalf("initial disabled state = %q, want %q", got, mcpRuntimeStateDisabled)
+	}
+
+	store.Observe(configs, []string{"neo4j"}, mcpRuntimeStateStarting, nil)
+	if got := mcpStatusState(store.Snapshot(), "neo4j"); got != mcpRuntimeStateStarting {
+		t.Fatalf("starting state = %q, want %q", got, mcpRuntimeStateStarting)
+	}
+	store.Observe(configs, []string{"neo4j"}, mcpRuntimeStateConnected, nil)
+	if got := mcpStatusState(store.Snapshot(), "neo4j"); got != mcpRuntimeStateConnected {
+		t.Fatalf("connected state = %q, want %q", got, mcpRuntimeStateConnected)
+	}
+	store.Observe(configs, []string{"neo4j"}, mcpRuntimeStateFailed, errors.New("failed to authenticate"))
+	failed := mcpStatusStateEntry(store.Snapshot(), "neo4j")
+	if mcpRuntimeState(failed.State) != mcpRuntimeStateFailed || failed.Error != "failed to authenticate" {
+		t.Fatalf("failed entry = %#v", failed)
+	}
+}
+
+func TestMCPStatusErrorRedactsCredentials(t *testing.T) {
+	configs := []hubconfig.MCPServerConfig{
+		{
+			ID: "neo4j-id", Name: "neo4j", Enabled: true,
+			Transport: hubconfig.MCPTransportHTTP,
+			URL:       "https://mcp.example.test/mcp",
+			Headers: map[string]hubconfig.MCPValue{
+				"Authorization": {Value: "Bearer super-secret-token", Secret: true},
+			},
+			Env: map[string]hubconfig.MCPValue{
+				"NEO4J_PASSWORD": {Value: "neo4j-password", Secret: true},
+			},
+		},
+	}
+	message := `request failed: https://user:pass@mcp.example.test/mcp?access_token=query-access-secret&refresh_token=query-refresh-secret Authorization: Bearer super-secret-token password=neo4j-password`
+	got := sanitizeMCPError(message, configs)
+	for _, secret := range []string{"user:pass", "query-access-secret", "query-refresh-secret", "super-secret-token", "neo4j-password"} {
+		if strings.Contains(got, secret) {
+			t.Fatalf("sanitized error contains %q: %q", secret, got)
+		}
+	}
+	if !strings.Contains(got, "[redacted]") {
+		t.Fatalf("sanitized error = %q, want redaction marker", got)
+	}
+}
+
+func TestMCPStatusErrorRedactsEnvironmentReferencedCredentials(t *testing.T) {
+	t.Setenv("MCP_RUNTIME_TOKEN", "runtime-secret-token")
+	configs := []hubconfig.MCPServerConfig{
+		{
+			ID: "remote-id", Name: "remote", Enabled: true,
+			Transport: hubconfig.MCPTransportHTTP,
+			URL:       "https://mcp.example.test/mcp",
+			Headers: map[string]hubconfig.MCPValue{
+				"Authorization": {Secret: true, EnvVar: "MCP_RUNTIME_TOKEN"},
+			},
+		},
+	}
+	got := sanitizeMCPError("remote rejected runtime-secret-token", configs)
+	if strings.Contains(got, "runtime-secret-token") {
+		t.Fatalf("sanitized error leaked environment secret: %q", got)
+	}
+}
+
+func TestMCPStatusErrorRedactsEnvironmentReferencedCredentialWithDefault(t *testing.T) {
+	t.Setenv("MCP_RUNTIME_TOKEN", "runtime-secret-token")
+	configs := []hubconfig.MCPServerConfig{
+		{
+			ID: "remote-id", Name: "remote", Enabled: true,
+			Transport: hubconfig.MCPTransportHTTP,
+			URL:       "https://mcp.example.test/mcp",
+			Headers: map[string]hubconfig.MCPValue{
+				"Authorization": {Value: "fallback-token", Secret: true, EnvVar: "MCP_RUNTIME_TOKEN"},
+			},
+		},
+	}
+	got := sanitizeMCPError("remote rejected runtime-secret-token", configs)
+	if strings.Contains(got, "runtime-secret-token") {
+		t.Fatalf("sanitized error leaked environment secret with default: %q", got)
+	}
+}
+
+func TestMCPStatusFailureOnlyMarksReportedServer(t *testing.T) {
+	store := newMCPStatusStore()
+	configs := []hubconfig.MCPServerConfig{
+		{ID: "broken-id", Name: "broken", Enabled: true, Transport: hubconfig.MCPTransportStdio, Command: "broken"},
+		{ID: "healthy-id", Name: "healthy", Enabled: true, Transport: hubconfig.MCPTransportStdio, Command: "healthy"},
+	}
+	store.Sync(configs)
+	store.Observe(configs, []string{"broken"}, mcpRuntimeStateFailed, errors.New("broken MCP process"))
+	if got := mcpStatusState(store.Snapshot(), "broken"); got != mcpRuntimeStateFailed {
+		t.Fatalf("broken state = %q, want failed", got)
+	}
+	if got := mcpStatusState(store.Snapshot(), "healthy"); got != mcpRuntimeStateNotStarted {
+		t.Fatalf("healthy state = %q, want not_started", got)
+	}
+}
+
+func mcpStatusState(snapshot MCPRuntimeStatusSnapshot, name string) mcpRuntimeState {
+	return mcpRuntimeState(mcpStatusStateEntry(snapshot, name).State)
+}
+
+func mcpStatusStateEntry(snapshot MCPRuntimeStatusSnapshot, name string) MCPRuntimeServerStatus {
+	for _, entry := range snapshot.Servers {
+		if strings.EqualFold(entry.Name, name) {
+			return entry
+		}
+	}
+	return MCPRuntimeServerStatus{}
+}
+
+func TestGitRevisionValidation(t *testing.T) {
+	for _, testCase := range []struct {
+		name  string
+		value string
+		want  string
+		valid bool
+	}{
+		{name: "head", value: "HEAD", want: "HEAD", valid: true},
+		{name: "sha", value: strings.Repeat("a", 40), want: strings.Repeat("a", 40), valid: true},
+		{name: "remote", value: "origin/main", want: "origin/main", valid: true},
+		{name: "tag", value: "v1.0.0", want: "v1.0.0", valid: true},
+		{name: "trim", value: "  HEAD  ", want: "HEAD", valid: true},
+		{name: "empty"},
+		{name: "spaces", value: "   "},
+		{name: "option", value: "--help"},
+		{name: "config option", value: "-cprotocol.file.allow=always"},
+		{name: "nul", value: "HEAD\x00evil"},
+		{name: "carriage return", value: "HEAD\revil"},
+		{name: "line feed", value: "HEAD\nevil"},
+		{name: "too long", value: strings.Repeat("a", maxGitRevisionBytes+1)},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			got, err := validateGitRevision(testCase.value)
+			if testCase.valid {
+				if err != nil || got != testCase.want {
+					t.Fatalf("validateGitRevision(%q)=(%q, %v), want %q", testCase.value, got, err, testCase.want)
+				}
+				return
+			}
+			if !errors.Is(err, errInvalidGitRevision) {
+				t.Fatalf("validateGitRevision(%q) err=%v", testCase.value, err)
+			}
+		})
+	}
+}
+
+func TestGitRevisionArgumentsTerminateOptions(t *testing.T) {
+	args, err := gitRevisionArgs(" HEAD ", "origin/main")
+	if err != nil {
+		t.Fatalf("gitRevisionArgs(): %v", err)
+	}
+	want := []string{"--end-of-options", "HEAD", "origin/main"}
+	if strings.Join(args, "\x00") != strings.Join(want, "\x00") {
+		t.Fatalf("gitRevisionArgs()=%q, want %q", args, want)
+	}
+
+	rangeArg, err := gitRevisionRangeArg(" main ", " feature ")
+	if err != nil {
+		t.Fatalf("gitRevisionRangeArg(): %v", err)
+	}
+	if rangeArg != "main..feature" {
+		t.Fatalf("gitRevisionRangeArg()=%q", rangeArg)
+	}
+}
+
+func TestReporterGitRevisionOptionsHaveNoSideEffects(t *testing.T) {
+	root := t.TempDir()
+	initGitRepo(t, root)
+	if err := os.WriteFile(filepath.Join(root, "tracked.txt"), []byte("content\n"), 0o644); err != nil {
+		t.Fatalf("write tracked file: %v", err)
+	}
+	runGitCmd(t, root, "add", "tracked.txt")
+	runGitCmd(t, root, "commit", "-m", "initial")
+
+	outputPath := filepath.Join(root, "injected-output.txt")
+	for _, malicious := range []string{"--output=" + outputPath, "--help", "-cprotocol.file.allow=always"} {
+		if _, err := gitRevisionArgs(malicious); !errors.Is(err, errInvalidGitRevision) {
+			t.Fatalf("gitRevisionArgs(%q) err=%v", malicious, err)
+		}
+	}
+	if _, err := os.Stat(outputPath); !os.IsNotExist(err) {
+		t.Fatalf("malicious revision created %s: %v", outputPath, err)
+	}
+}
+
+func TestReporterGitValidRevisionsRemainUsable(t *testing.T) {
+	root := t.TempDir()
+	initGitRepo(t, root)
+	if err := os.WriteFile(filepath.Join(root, "tracked.txt"), []byte("content\n"), 0o644); err != nil {
+		t.Fatalf("write tracked file: %v", err)
+	}
+	runGitCmd(t, root, "add", "tracked.txt")
+	runGitCmd(t, root, "commit", "-m", "initial")
+	runGitCmd(t, root, "tag", "v1.0.0")
+	runGitCmd(t, root, "update-ref", "refs/remotes/origin/main", "HEAD")
+	shaRaw, err := runGit(root, "rev-parse", "HEAD")
+	if err != nil {
+		t.Fatalf("git rev-parse HEAD: %v", err)
+	}
+	sha := strings.TrimSpace(shaRaw)
+
+	for _, revision := range []string{"HEAD", sha, "origin/main", "v1.0.0"} {
+		args, err := gitRevisionArgs(revision)
+		if err != nil {
+			t.Fatalf("gitRevisionArgs(%q): %v", revision, err)
+		}
+		if _, err := runGit(root, append([]string{"rev-parse"}, args...)...); err != nil {
+			t.Fatalf("git rev-parse %q: %v", revision, err)
+		}
+	}
+	rangeArg, err := gitRevisionRangeArg("HEAD", "origin/main")
+	if err != nil {
+		t.Fatalf("gitRevisionRangeArg(): %v", err)
+	}
+	args, err := gitRevisionArgs(rangeArg)
+	if err != nil {
+		t.Fatalf("gitRevisionArgs(range): %v", err)
+	}
+	if _, err := runGit(root, append([]string{"log", "--oneline"}, args...)...); err != nil {
+		t.Fatalf("git log range: %v", err)
+	}
+}
+
+func TestHubMCPServersReturnsOnlyEnabledEntries(t *testing.T) {
+	store := hubconfig.New(filepath.Join(t.TempDir(), "hub-config.json"))
+	if err := store.AddMCPServer(hubconfig.MCPServerConfig{
+		Name:      "disabled",
+		Enabled:   false,
+		Transport: hubconfig.MCPTransportStdio,
+		Command:   "disabled-mcp",
+	}, testMCPNow()); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.AddMCPServer(hubconfig.MCPServerConfig{
+		Name:      "neo4j",
+		Enabled:   true,
+		Transport: hubconfig.MCPTransportStdio,
+		Command:   "python",
+		Env: map[string]hubconfig.MCPValue{
+			"NEO4J_URI": {Value: "bolt://127.0.0.1:7687"},
+		},
+	}, testMCPNow()); err != nil {
+		t.Fatal(err)
+	}
+
+	servers, err := hubMCPServers(store)
+	if err != nil {
+		t.Fatalf("hubMCPServers: %v", err)
+	}
+	if len(servers) != 1 || servers[0].Name != "neo4j" {
+		t.Fatalf("effective MCP servers = %#v, want only enabled neo4j", servers)
+	}
+}
+
+func TestHubMCPServersResolvesEnvironmentReferencesAtRuntime(t *testing.T) {
+	t.Setenv("REMOTE_MCP_TOKEN", "runtime-token")
+	store := hubconfig.New(filepath.Join(t.TempDir(), "hub-config.json"))
+	if err := store.AddMCPServer(hubconfig.MCPServerConfig{
+		Name:      "remote",
+		Enabled:   true,
+		Transport: hubconfig.MCPTransportHTTP,
+		URL:       "https://example.test/mcp",
+		Headers: map[string]hubconfig.MCPValue{
+			"Authorization": {Secret: true, EnvVar: "REMOTE_MCP_TOKEN"},
+		},
+	}, testMCPNow()); err != nil {
+		t.Fatal(err)
+	}
+	servers, err := hubMCPServers(store)
+	if err != nil {
+		t.Fatalf("hubMCPServers: %v", err)
+	}
+	if len(servers) != 1 || len(servers[0].Headers) != 1 || servers[0].Headers[0].Value != "runtime-token" {
+		t.Fatalf("effective MCP headers = %#v, want runtime environment reference", servers)
+	}
+}
+
+func TestHubMCPServersOmitsUnsetEnvironmentReferences(t *testing.T) {
+	store := hubconfig.New(filepath.Join(t.TempDir(), "hub-config.json"))
+	if err := store.AddMCPServer(hubconfig.MCPServerConfig{
+		Name: "remote", Enabled: true, Transport: hubconfig.MCPTransportHTTP,
+		URL: "https://example.test/mcp",
+		Headers: map[string]hubconfig.MCPValue{
+			"Authorization": {Secret: true, EnvVar: "UNSET_REMOTE_MCP_TOKEN"},
+		},
+	}, testMCPNow()); err != nil {
+		t.Fatal(err)
+	}
+	servers, err := hubMCPServers(store)
+	if err != nil {
+		t.Fatalf("hubMCPServers: %v", err)
+	}
+	if len(servers) != 1 || len(servers[0].Headers) != 0 {
+		t.Fatalf("effective MCP headers = %#v, want unset reference omitted", servers)
+	}
+}
+
+func testMCPNow() time.Time {
+	return time.Date(2026, 8, 17, 12, 0, 0, 0, time.UTC)
+}
+
+func TestCloneSkillsSourceScopeSnapshotPreservesEmptyJSONArrays(t *testing.T) {
+	snapshot := tools.SkillsSourceScopeSnapshot{
+		Sources: []tools.SkillsSourceCatalogSnapshot{{
+			Source:    "https://github.com/acme/skills.git",
+			SourceKey: "github.com/acme/skills",
+			Status:    "stale",
+			Skills:    []tools.SkillsSourceCatalogSkillSnapshot{},
+		}},
+		UnmanagedSkills: []tools.SkillsSourceCatalogSkillSnapshot{},
+	}
+
+	raw, err := json.Marshal(cloneSkillsSourceScopeSnapshot(snapshot))
+	if err != nil {
+		t.Fatalf("marshal cloned skill source snapshot: %v", err)
+	}
+	if bytes.Contains(raw, []byte(`"skills":null`)) {
+		t.Fatalf("cloned source skills encoded as null: %s", raw)
+	}
+	if bytes.Contains(raw, []byte(`"unmanagedSkills":null`)) {
+		t.Fatalf("cloned unmanaged skills encoded as null: %s", raw)
+	}
 }

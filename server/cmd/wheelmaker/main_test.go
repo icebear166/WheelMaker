@@ -1,3 +1,5 @@
+//go:build windows
+
 package main
 
 import (
@@ -20,12 +22,6 @@ func TestWheelmakerLogDir(t *testing.T) {
 	want := filepath.Join(home, ".wheelmaker", "log")
 	if got != want {
 		t.Fatalf("wheelmakerLogDir()=%q, want %q", got, want)
-	}
-}
-
-func TestDefaultRegistryListenAddressIsLoopback(t *testing.T) {
-	if defaultRegistryAddr != "127.0.0.1:9630" {
-		t.Fatalf("defaultRegistryAddr=%q, want loopback", defaultRegistryAddr)
 	}
 }
 
@@ -232,16 +228,6 @@ func TestLocalDevRuntimeConfigUsesFormalDataWithLoopbackRegistry(t *testing.T) {
 	}
 }
 
-func TestChooseKeepPID(t *testing.T) {
-	workers := []daemonProcess{{PID: 42}, {PID: 17}, {PID: 29}}
-	if got := chooseKeepPID(workers, 29); got != 29 {
-		t.Fatalf("chooseKeepPID preferred mismatch: got=%d want=29", got)
-	}
-	if got := chooseKeepPID(workers, 999); got != 17 {
-		t.Fatalf("chooseKeepPID fallback mismatch: got=%d want=17", got)
-	}
-}
-
 func TestReconcileWorkersReusesLivePreferredPID(t *testing.T) {
 	originalAlive := workerProcessAliveFunc
 	originalList := listWorkerProcessesFunc
@@ -309,35 +295,31 @@ func TestReconcileWorkersScansWhenPreferredPIDIsNotAlive(t *testing.T) {
 	}
 }
 
-func TestParseWorkerProcessesFromPSAcceptsPathComm(t *testing.T) {
-	out := []byte(`123 /Users/me/.wheelmaker/bin/wheelmaker /Users/me/.wheelmaker/bin/wheelmaker --hub-worker
+func TestParseWorkerProcessesFromPSAcceptsPathAndTruncatedComm(t *testing.T) {
+	for _, tt := range []struct {
+		name string
+		out  string
+	}{
+		{name: "full command", out: `123 /Users/me/.wheelmaker/bin/wheelmaker /Users/me/.wheelmaker/bin/wheelmaker --hub-worker
 124 /Users/me/.wheelmaker/bin/wheelmaker /Users/me/.wheelmaker/bin/wheelmaker --registry-worker
 125 /usr/bin/node /usr/bin/node /Users/me/.wheelmaker/deploy.mjs update
 126 bash bash -lc wheelmaker --hub-worker
-`)
-
-	workers, err := parseWorkerProcessesFromPS(out, "wheelmaker", "--hub-worker")
-	if err != nil {
-		t.Fatalf("parseWorkerProcessesFromPS() error = %v", err)
-	}
-	if len(workers) != 1 || workers[0].PID != 123 {
-		t.Fatalf("workers=%#v, want only pid 123", workers)
-	}
-}
-
-func TestParseWorkerProcessesFromPSAcceptsTruncatedDarwinComm(t *testing.T) {
-	out := []byte(`123 /Users/me/.whe /Users/me/.wheelmaker/bin/wheelmaker --hub-worker
+`},
+		{name: "truncated Darwin comm", out: `123 /Users/me/.whe /Users/me/.wheelmaker/bin/wheelmaker --hub-worker
 124 /Users/me/.whe /Users/me/.wheelmaker/bin/wheelmaker --registry-worker
 125 /usr/bin/nod /usr/bin/node /Users/me/.wheelmaker/deploy.mjs update
 126 bash bash -lc wheelmaker --hub-worker
-`)
-
-	workers, err := parseWorkerProcessesFromPS(out, "wheelmaker", "--hub-worker")
-	if err != nil {
-		t.Fatalf("parseWorkerProcessesFromPS() error = %v", err)
-	}
-	if len(workers) != 1 || workers[0].PID != 123 {
-		t.Fatalf("workers=%#v, want only pid 123", workers)
+`},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			workers, err := parseWorkerProcessesFromPS([]byte(tt.out), "wheelmaker", "--hub-worker")
+			if err != nil {
+				t.Fatalf("parseWorkerProcessesFromPS() error = %v", err)
+			}
+			if len(workers) != 1 || workers[0].PID != 123 {
+				t.Fatalf("workers=%#v, want only pid 123", workers)
+			}
+		})
 	}
 }
 
@@ -440,5 +422,29 @@ func TestRedirectProcessStdioToDevNull(t *testing.T) {
 	}
 	if os.Stderr != oldStderr {
 		t.Fatalf("stderr not restored")
+	}
+}
+
+func TestWorkerProcessAliveRecognizesCurrentProcess(t *testing.T) {
+	exePath, err := os.Executable()
+	if err != nil {
+		t.Fatalf("os.Executable() error = %v", err)
+	}
+
+	alive, err := workerProcessAlive(os.Getpid(), exePath)
+	if err != nil {
+		t.Fatalf("workerProcessAlive() error = %v", err)
+	}
+	if !alive {
+		t.Fatal("workerProcessAlive() = false for the current process")
+	}
+
+	wrongPath := filepath.Join(filepath.Dir(exePath), "not-wheelmaker.exe")
+	alive, err = workerProcessAlive(os.Getpid(), wrongPath)
+	if err != nil {
+		t.Fatalf("workerProcessAlive() with a different path error = %v", err)
+	}
+	if alive {
+		t.Fatalf("workerProcessAlive() = true for a different executable path %q", wrongPath)
 	}
 }

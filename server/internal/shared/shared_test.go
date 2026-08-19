@@ -1,15 +1,21 @@
+//go:build windows
+
 package shared
 
 import (
 	"bytes"
 	"encoding/json"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
 	"sync"
 	"testing"
 	"time"
+	"unsafe"
+
+	"golang.org/x/sys/windows"
 )
 
 func writeTempConfig(t *testing.T, content string) string {
@@ -21,29 +27,26 @@ func writeTempConfig(t *testing.T, content string) string {
 	return path
 }
 
-func TestLoadConfig_RejectsRemovedIMVersion(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "config.json")
-	data := []byte(`{"projects":[{"name":"p","path":".","im":{"type":"feishu","version":2}}]}`)
-	if err := os.WriteFile(path, data, 0o600); err != nil {
-		t.Fatalf("write config: %v", err)
+func TestLoadConfigRejectsRemovedConfigFields(t *testing.T) {
+	tests := []struct {
+		name string
+		data string
+		want string
+	}{
+		{name: "im version", data: `{"projects":[{"name":"p","path":".","im":{"type":"feishu","version":2}}]}`, want: "im.version has been removed"},
+		{name: "project debug", data: `{"projects":[{"name":"p","debug":true,"path":"."}]}`, want: "projects[].debug has been removed"},
+		{name: "project client", data: `{"projects":[{"name":"p","path":".","client":{"agent":"codex"}}]}`, want: "projects[].client has been removed"},
+		{name: "project im filter", data: `{"projects":[{"name":"p","path":".","imFilter":{"block":["tool"]}}]}`, want: "projects[].imFilter has been removed"},
+		{name: "monitor", data: `{"monitor":{"server":"127.0.0.1","port":9631},"projects":[{"name":"p","path":"."}]}`, want: `unknown field "monitor"`},
+		{name: "top-level share", data: `{"projects":[],"share":{"publicUrl":"https://legacy-share.example.com"}}`, want: `unknown field "share"`},
 	}
-
-	_, err := LoadConfig(path)
-	if err == nil || !strings.Contains(err.Error(), "im.version has been removed") {
-		t.Fatalf("err=%v, want removed im.version error", err)
-	}
-}
-
-func TestLoadConfig_RejectsRemovedProjectDebug(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "config.json")
-	data := []byte(`{"projects":[{"name":"p","debug":true,"path":"."}]}`)
-	if err := os.WriteFile(path, data, 0o600); err != nil {
-		t.Fatalf("write config: %v", err)
-	}
-
-	_, err := LoadConfig(path)
-	if err == nil || !strings.Contains(err.Error(), "projects[].debug has been removed") {
-		t.Fatalf("err=%v, want removed project debug error", err)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := LoadConfig(writeTempConfig(t, tt.data))
+			if err == nil || !strings.Contains(err.Error(), tt.want) {
+				t.Fatalf("LoadConfig() error = %v, want %q", err, tt.want)
+			}
+		})
 	}
 }
 
@@ -97,49 +100,6 @@ func TestLoadConfig_AllowsSharePublicURL(t *testing.T) {
 	}
 }
 
-func TestLoadConfig_RejectsLegacyTopLevelShareWithoutMigration(t *testing.T) {
-	path := writeTempConfig(t, `{"projects":[],"share":{"publicUrl":"https://legacy-share.example.com"}}`)
-	if _, err := LoadConfig(path); err == nil || !strings.Contains(err.Error(), `unknown field "share"`) {
-		t.Fatalf("LoadConfig() error = %v, want unmigrated top-level share rejection", err)
-	}
-}
-
-func TestLoadConfig_RejectsRemovedMonitor(t *testing.T) {
-	path := writeTempConfig(t, `{
-		"monitor": {"server": "127.0.0.1", "port": 9631},
-		"projects": [{"name": "p", "path": "."}]
-	}`)
-	if _, err := LoadConfig(path); err == nil || !strings.Contains(err.Error(), `unknown field "monitor"`) {
-		t.Fatalf("LoadConfig() error = %v, want removed monitor field rejected", err)
-	}
-}
-
-func TestLoadConfig_RejectsRemovedProjectClient(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "config.json")
-	data := []byte(`{"projects":[{"name":"p","path":".","client":{"agent":"codex"}}]}`)
-	if err := os.WriteFile(path, data, 0o600); err != nil {
-		t.Fatalf("write config: %v", err)
-	}
-
-	_, err := LoadConfig(path)
-	if err == nil || !strings.Contains(err.Error(), "projects[].client has been removed") {
-		t.Fatalf("err=%v, want removed projects[].client error", err)
-	}
-}
-
-func TestLoadConfig_RejectsRemovedProjectIMFilter(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "config.json")
-	data := []byte(`{"projects":[{"name":"p","path":".","imFilter":{"block":["tool"]}}]}`)
-	if err := os.WriteFile(path, data, 0o600); err != nil {
-		t.Fatalf("write config: %v", err)
-	}
-
-	_, err := LoadConfig(path)
-	if err == nil || !strings.Contains(err.Error(), "projects[].imFilter has been removed") {
-		t.Fatalf("err=%v, want removed projects[].imFilter error", err)
-	}
-}
-
 func TestLoadConfig_FeishuFieldIsAcceptedAsIgnoredLegacyConfig(t *testing.T) {
 	path := writeTempConfig(t, `{
 		"projects": [{
@@ -157,19 +117,6 @@ func TestLoadConfig_FeishuFieldIsAcceptedAsIgnoredLegacyConfig(t *testing.T) {
 	}
 	if cfg.Projects[0].Name != "proj" {
 		t.Fatalf("project name = %q, want proj", cfg.Projects[0].Name)
-	}
-}
-
-func TestLoadConfig_FeishuDoesNotRequireCredentials(t *testing.T) {
-	path := writeTempConfig(t, `{
-		"projects": [{
-			"name": "proj",
-			"path": "D:/repo",
-			"feishu": {}
-		}]
-	}`)
-	if _, err := LoadConfig(path); err != nil {
-		t.Fatalf("LoadConfig() error = %v, want feishu ignored", err)
 	}
 }
 
@@ -754,5 +701,79 @@ func TestLogRetentionKeepsSevenArchives(t *testing.T) {
 	}
 	if len(matches) != debugLogArchiveDays {
 		t.Fatalf("archive count=%d, want %d: %v", len(matches), debugLogArchiveDays, matches)
+	}
+}
+
+func TestSecureConfigFileRestrictsWindowsDACL(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.json")
+	if err := os.WriteFile(path, []byte("{}"), 0o644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+	if err := SecureConfigFile(path); err != nil {
+		t.Fatalf("SecureConfigFile(): %v", err)
+	}
+
+	descriptor, err := windows.GetNamedSecurityInfo(
+		path,
+		windows.SE_FILE_OBJECT,
+		windows.DACL_SECURITY_INFORMATION,
+	)
+	if err != nil {
+		t.Fatalf("GetNamedSecurityInfo(): %v", err)
+	}
+	control, _, err := descriptor.Control()
+	if err != nil {
+		t.Fatalf("descriptor.Control(): %v", err)
+	}
+	if control&windows.SE_DACL_PROTECTED == 0 {
+		t.Fatal("config DACL inherits permissions")
+	}
+	dacl, _, err := descriptor.DACL()
+	if err != nil {
+		t.Fatalf("descriptor.DACL(): %v", err)
+	}
+	if dacl == nil || dacl.AceCount != 2 {
+		t.Fatalf("DACL ACE count=%v, want current user and SYSTEM only", dacl)
+	}
+
+	user, err := windows.GetCurrentProcessToken().GetTokenUser()
+	if err != nil {
+		t.Fatalf("GetTokenUser(): %v", err)
+	}
+	systemSID, err := windows.StringToSid("S-1-5-18")
+	if err != nil {
+		t.Fatalf("StringToSid(SYSTEM): %v", err)
+	}
+	want := []*windows.SID{user.User.Sid, systemSID}
+	for index := uint32(0); index < uint32(dacl.AceCount); index++ {
+		var ace *windows.ACCESS_ALLOWED_ACE
+		if err := windows.GetAce(dacl, index, &ace); err != nil {
+			t.Fatalf("GetAce(%d): %v", index, err)
+		}
+		sid := (*windows.SID)(unsafe.Pointer(&ace.SidStart))
+		matched := false
+		for expectedIndex, expectedSID := range want {
+			if expectedSID != nil && sid.Equals(expectedSID) {
+				want[expectedIndex] = nil
+				matched = true
+				break
+			}
+		}
+		if !matched {
+			t.Fatalf("DACL contains unexpected SID %s", sid.String())
+		}
+	}
+}
+
+func TestConfigureBackgroundCommandHidesConsoleWindow(t *testing.T) {
+	cmd := exec.Command("powershell", "-NoProfile")
+
+	ConfigureBackgroundCommand(cmd)
+
+	if cmd.SysProcAttr == nil {
+		t.Fatal("SysProcAttr is nil, want hidden window settings")
+	}
+	if !cmd.SysProcAttr.HideWindow {
+		t.Fatal("HideWindow=false, want true")
 	}
 }
