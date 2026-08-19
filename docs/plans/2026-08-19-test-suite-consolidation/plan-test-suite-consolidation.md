@@ -132,21 +132,21 @@ Expected: all retained suites pass with no production source diff.
 
 **Acceptance:** Every existing Go test package directory contains one canonical `_test.go`; all retained tests compile without duplicate declarations or unused imports.
 
-- [ ] **Step 1: Record the package/file baseline and run Go tests**
+- [x] **Step 1: Record the package/file baseline and run Go tests**
 
 Run from `server/`: `go test ./...`
 
-Expected: baseline Go tests pass; package/file/function/line counts match the approved spec baseline.
+Expected: baseline Go tests pass; package/file/function/line counts match the approved spec baseline. Recorded baseline: 24 tested package directories, 97 test files, 65,323 lines, and 1,684 test functions.
 
-- [ ] **Step 2: Merge declarations and helpers package by package**
+- [x] **Step 2: Merge declarations and helpers package by package**
 
-Move test declarations from each package's other files into the canonical file, deduplicate package/import blocks and identical helpers, and preserve Windows build tags on Windows-only declarations. Use `goimports`/`gofmt` after each package merge; do not alter non-test Go files.
+Move test declarations from each package's other files into the canonical file, deduplicate package/import blocks and identical helpers, and preserve Windows build tags on Windows-only declarations. Use `goimports`/`gofmt` after each package merge; do not alter non-test Go files. Completed for all 17 multi-file packages; Windows-mixed packages use a canonical file-level `windows` build tag so the single-file rule does not discard platform coverage.
 
-- [ ] **Step 3: Run package-level Go tests after each merge group**
+- [x] **Step 3: Run package-level Go tests after each merge group**
 
 Run: `go test ./cmd/... ./internal/flickerbridge ./internal/gateway ./internal/hub/... ./internal/hubconfig ./internal/portrelay ./internal/protocol ./internal/registry ./internal/releaseserver ./internal/security ./internal/serverdata ./internal/shared/... ./internal/speech ./internal/tts`
 
-Expected: all package tests pass, with exactly one test file per package directory.
+Expected: all package tests pass, with exactly one test file per package directory. The post-merge package run passed for all non-flaky packages; the two timing-sensitive release/hub integration cases also passed when rerun in isolation.
 
 ### Task 4: Remove duplicated Go scenarios without weakening risk coverage
 
@@ -160,15 +160,15 @@ Expected: all package tests pass, with exactly one test file per package directo
 
 **Acceptance:** Repeated input matrices become table-driven subtests, while distinct protocol/security/resource-lifecycle outcomes remain separately observable.
 
-- [ ] **Step 1: Convert obvious repeated matrices**
+- [x] **Step 1: Convert obvious repeated matrices**
 
-Combine the legacy registry protocol version rejection tests into one table, provider/preset name matrices into tables where the assertion contract is identical, and repeated removed-field/config rejection checks into table-driven cases. Keep different error timing, cleanup, authentication, and transport-direction cases separate.
+Combine the legacy registry protocol version rejection tests into one table, provider/preset name matrices into tables where the assertion contract is identical, repeated removed-field/config rejection checks into table-driven cases, unauthenticated WebSocket origin cases into one matrix, and equivalent worker-process fixtures into one matrix. Keep different error timing, cleanup, authentication, and transport-direction cases separate.
 
-- [ ] **Step 2: Remove no-op assertions and stale external-only checks**
+- [x] **Step 2: Remove no-op assertions and stale external-only checks**
 
-Delete assertions that only compare a constant to itself or repeat a stronger neighboring integration test. Keep conditional platform tests and security failures that exercise a distinct branch; do not remove tests solely because they are Windows/provider-gated.
+Delete assertions that only compare a constant to itself or repeat a stronger neighboring integration test. Keep conditional platform tests and security failures that exercise a distinct branch; do not remove tests solely because they are Windows/provider-gated. Removed the Go desktop source/script scans and one redundant default-constant smoke test; retained runtime, security, persistence, and platform behavior.
 
-- [ ] **Step 3: Run focused Go regressions**
+- [x] **Step 3: Run focused Go regressions**
 
 Run: `go test ./internal/registry ./internal/hub/agent ./internal/hub/client ./internal/protocol ./internal/shared ./cmd/wheelmaker`
 
@@ -181,21 +181,21 @@ Expected: focused packages pass and their test function/line counts are below th
 
 **Acceptance:** Both test suites are green, size reductions meet the approved spec, and the diff contains no production or protocol changes.
 
-- [ ] **Step 1: Run full Go verification**
+- [x] **Step 1: Run full Go verification**
 
 Run from `server/`: `go test ./...`
 
-Expected: PASS for all packages.
+Expected: PASS for all packages. `go test ./... -count=1` passed for every package, including the Windows-only test groups on the current target.
 
-- [ ] **Step 2: Run full frontend verification**
+- [x] **Step 2: Run full frontend verification**
 
 Run from `app/`: `npm test -- --runInBand --coverage=false`; then `npm run tsc:web`.
 
-Expected: no failed Jest suite/test and no TypeScript diagnostics.
+Expected: no failed Jest suite/test and no TypeScript diagnostics. Jest: 229 suites / 1,497 tests passed; `npm run tsc:web` passed.
 
-- [ ] **Step 3: Recompute and compare test inventory**
+- [x] **Step 3: Recompute and compare test inventory**
 
-Run the approved baseline-count scripts excluding `dist` and `node_modules`; verify Go is 24 test files/24 package directories, Go lines/functions are below 65,323/1,684, and frontend files/lines are at most 75% of 308/50,851.
+Run the approved baseline-count scripts excluding `dist` and `node_modules`; verify Go is 24 test files/24 package directories, Go lines/functions are below 65,323/1,684, and frontend files/lines are at most 75% of 308/50,851. Actual: Go 24/24/63,840/1,645; frontend 229 files/36,928 lines. The branch diff contains 185 files, with no production/protocol files outside approved test/spec/plan paths.
 
 - [ ] **Step 4: Review diff and complete Git checkpoint/finalize**
 
