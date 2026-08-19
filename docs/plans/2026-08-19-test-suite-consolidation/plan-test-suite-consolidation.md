@@ -43,17 +43,17 @@
 
 **Acceptance:** 纯源码/CSS/UI wiring 断言不再单独参与 Jest discovery；对应运行时行为由 colocated component tests、service tests 或状态模型 tests 覆盖。
 
-- [ ] **Step 1: Run the current replacement tests before deletion**
+- [x] **Step 1: Run the current replacement tests before deletion**
 
 Run: `npm test -- --runInBand --coverage=false web/src/app/ChatHubSkillManagement.test.tsx web/src/shell/ResponsiveShell.test.tsx web/src/chat/ChatSessionPanel.test.tsx web/src/registry/RegistryWorkspaceService.test.ts`
 
 Expected: replacement behavior suites pass before source-only suites are removed.
 
-- [ ] **Step 2: Delete the listed source-only suites**
+- [x] **Step 2: Delete the listed source-only suites**
 
 Remove only the listed test files; do not change production files or Jest discovery configuration.
 
-- [ ] **Step 3: Run the focused frontend regression set**
+- [x] **Step 3: Run the focused frontend regression set**
 
 Run: `npm test -- --runInBand --coverage=false web/src/app/ChatHubSkillManagement.test.tsx web/src/settings/SkillManagementContent.test.tsx web/src/shell/ResponsiveShell.test.tsx web/src/chat/ChatSessionPanel.test.tsx web/src/git/GitHistoryPanel.test.tsx`
 
