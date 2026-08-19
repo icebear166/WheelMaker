@@ -2,84 +2,16 @@
 
 Go daemon bridging local AI CLIs (Codex, Claude) to Workspace App sessions through the Registry.
 
-## Architecture
+## 约定
 
-App-only session runtime with per-agent isolation:
+- `acp.Conn` 只负责传输；Session/Client 负责会话和 agent 生命周期。
+- Agent 子进程按需创建，不在启动时创建；会话输出经 Registry 的 `session.*` 事件同步。
+- `state.json` 保存运行时状态，SQLite 保存会话持久化数据；Registry 是 App 对话的唯一同步通道。
+- 运行配置位于 `~/.wheelmaker/config.json`、`~/.wheelmaker/state.json` 和 `~/.wheelmaker/db/hub-config.json`。
+- 代码注释和标识符用英文；测试规则遵循根目录 `CLAUDE.md`。
 
-```text
-Hub
- +- registry.Reporter -- registry server (project snapshot + session event sync)
- +- client.Client -- Session by sessionId
-       +- Session -- AgentInstance -- AgentConn -- acp.Forwarder -- acp.Conn -- CLI subprocess
-       +- SessionStore (SQLite) -- persist/restore sessions
-```
+## 文档
 
-Key types in `internal/hub/client/`:
-
-| Type | File | Role |
-|------|------|------|
-| Session | session_type.go, session.go | Business session: lifecycle, prompt, agent switching |
-| AgentInstance | agent_instance.go | ACP executor bound to one Session (sole ACP interface visible to Session) |
-| AgentConn | agent_conn.go | ACP connection wrapper with ConnOwned/ConnShared modes |
-| AgentFactory | agent_factory.go | Creates AgentInstance, selects AgentConn policy |
-| SessionStore | session_store.go | Persistence interface for session snapshots |
-| SQLiteSessionStore | sqlite_store.go | SQLite-backed SessionStore (modernc.org/sqlite, CGo-free) |
-
-Full design: [../docs/wiki/architecture/server-runtime.md](../docs/wiki/architecture/server-runtime.md)
-
-## Package Map
-
-| Package | Role |
-|---------|------|
-| `internal/hub/` | Hub process domain (orchestration + per-project runtime) |
-| `internal/hub/client/` | Session lifecycle, ACP prompt handling, state persistence |
-| `internal/hub/agent/` | Unified ACP agent layer: provider, process, conn (owned/shared), instance, factory |
-| `internal/registry/` | Registry server and hub reporter |
-| `internal/shared/` | Shared config, logging, and registry protocol helpers |
-
-## Config Files
-
-- `~/.wheelmaker/config.json` - project config (agent, working dir, registry settings)
-- `~/.wheelmaker/state.json` - runtime state (session IDs, agent metadata)
-- `~/.wheelmaker/db/hub-config.json` - Hub-owned API keys and runtime feature settings
-
-## Dev Conventions
-
-- Interfaces first: ACP transport interfaces and agent factories stay injected across layers
-- Agent subprocess is lazy: created on first message (`ensureInstance`)
-- App conversations use `projectId + sessionId`; session control goes through `session.*` Registry methods
-- Code comments and identifiers: **English only**
-- Prefer extending existing `*_test.go` files instead of adding new test files unless separation is clearly justified
-- Completion gate is defined in repo root `CLAUDE.md`
-
-## Local Dev
-
-```bash
-# in server/
-go run ./cmd/wheelmaker/            # requires ~/.wheelmaker/config.json
-go test ./...
-go build -o bin/windows_amd64/wheelmaker.exe ./cmd/wheelmaker/
-
-# Release/deployment entrypoints live at the repository root
-node ../scripts/release.mjs          # prebuilt Hub + Web packages, no publish
-node ../scripts/release.mjs --publish # authenticated self-hosted publish
-../deploy-release-server.bat         # independently deploy the Go release service
-# target install/migration commands come from https://release.wheelmaker.top/
-# normal target updates use ~/.wheelmaker/deploy.mjs; there is no Go updater/deploy command
-```
-
-## Key Invariants (do not break)
-
-| # | Invariant |
-|---|-----------|
-| 1 | `acp.Conn` is pure transport - no business logic inside |
-| 2 | `client.Client` owns session lookup by sessionId; Session owns agent lifecycle and state |
-| 3 | Agent subprocess is created lazily - never at startup (`ensureInstance`) |
-| 4 | Session output flows through `SessionRecorder` to Registry `session.*` events |
-| 5 | `state.json` is the source of truth for runtime state; `SQLiteSessionStore` for session persistence |
-| 6 | Registry sync is the only App conversation transport |
-
-## Key Protocol Docs
-
-- ACP protocol: [../docs/wiki/protocols/acp.md](../docs/wiki/protocols/acp.md)
-- Registry protocol: [../docs/wiki/protocols/registry.md](../docs/wiki/protocols/registry.md)
+- 架构：[../docs/wiki/architecture/server-runtime.md](../docs/wiki/architecture/server-runtime.md)
+- ACP：[../docs/wiki/protocols/acp.md](../docs/wiki/protocols/acp.md)
+- Registry：[../docs/wiki/protocols/registry.md](../docs/wiki/protocols/registry.md)
