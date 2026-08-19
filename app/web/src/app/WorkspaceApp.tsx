@@ -19117,7 +19117,10 @@ export function App() {
             >
               <SessionIcon name="files" />
             </button>
-            <KnowledgeRegistryLink publicUrl={serverSettings.knowledgeRegistry.publicUrl} />
+            <KnowledgeRegistryLink
+              publicUrl={serverSettings.knowledgeRegistry.publicUrl}
+              onUnconfigured={setToastMessage}
+            />
             <button
               type="button"
               className={`chat-drawer-toggle${chatPreviewOpen && previewWorkbench.drawerMode === 'git' ? ' active' : ''}`}
