@@ -354,6 +354,27 @@ test('release homepage uses WheelMaker blue accent colors', async () => {
   );
 });
 
+test('release homepage explains the private Personal Wiki workflow below client downloads', async () => {
+  const html = await readFile(new URL('./index.html', import.meta.url), 'utf8');
+  const clientsPosition = html.indexOf('<section class="latest-clients"');
+  const wikiPosition = html.indexOf('<section class="personal-wiki"');
+  const footerPosition = html.indexOf('<footer class="site-foot"');
+  const wikiSection = html.slice(wikiPosition, footerPosition);
+
+  assert.ok(clientsPosition >= 0, 'client downloads section is present');
+  assert.ok(wikiPosition > clientsPosition, 'Personal Wiki guide follows client downloads');
+  assert.ok(footerPosition > wikiPosition, 'Personal Wiki guide appears before the footer');
+  assert.match(wikiSection, /Personal Wiki Kit/);
+  assert.match(wikiSection, /setup-wiki\.bat/);
+  assert.match(wikiSection, /project-routing\.json/);
+  assert.match(wikiSection, /multiple local projects[^<]*same Wiki project ID/i);
+  assert.match(wikiSection, /knowledgeRegistry\.publicUrl/);
+  assert.match(wikiSection, /open-wiki\.bat/);
+  assert.match(wikiSection, /publish-wiki\.bat/);
+  assert.match(wikiSection, /private Git repository/i);
+  assert.doesNotMatch(wikiSection, /wiki\.wheelbox\.top|Administrator|D:\\WheelMaker/i);
+});
+
 async function loadReleaseHomepage() {
   const source = await readFile(
     new URL('./release-home.js', import.meta.url),
