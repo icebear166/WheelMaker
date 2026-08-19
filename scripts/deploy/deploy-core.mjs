@@ -2014,7 +2014,7 @@ async function executeDeployment(internalUpdate, deps, runtime) {
       deps.reportStatus?.('Configuring runtime');
       await runtime.configureRuntime();
     }
-    if (!internalUpdate) {
+    if (!internalUpdate || platform === 'win32') {
       await runtime.writeWrappers();
     }
 

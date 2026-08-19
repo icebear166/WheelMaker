@@ -1495,7 +1495,7 @@ test('Unix legacy migration disables registrations and removes their files', asy
   }
 });
 
-test('successful internal update writes release schema v2 without registration changes', async (t) => {
+test('successful Windows internal update refreshes wrappers without registration changes', async (t) => {
   const fixture = await installFixture(t);
   await mkdir(join(fixture.home, 'desktop'), {recursive: true});
   await writeFile(join(fixture.home, 'desktop', 'WheelMakerDesktop.exe'), 'desktop');
@@ -1517,7 +1517,7 @@ test('successful internal update writes release schema v2 without registration c
     },
   );
   assert.equal(fixture.events.includes('configure-runtime'), false);
-  assert.equal(fixture.events.includes('write-wrappers'), false);
+  assert.equal(fixture.events.includes('write-wrappers'), true);
   assert.equal(
     await readFile(join(fixture.home, 'desktop', 'WheelMakerDesktop.exe'), 'utf8'),
     'desktop',
