@@ -343,6 +343,7 @@ type proxyServer struct {
 	catalog          []modelInfo
 	myFlickerVersion string
 	diagnosticWriter io.Writer
+	responses        *v2ResponsesStore
 }
 
 type workerFrame struct {
@@ -379,6 +380,8 @@ type v2RequestDiagnostic struct {
 	ImageParts     int
 	ImageDataChars int
 	ToolCount      int
+	ToolTypes      []string
+	PromptRoles    []string
 }
 
 type outboundProbe struct {
@@ -568,6 +571,16 @@ function catalogEntry(id, metadata) {
     }
   }
   const inputModalities = stringArray(source.inputModalities || source.input_modalities);
+  // The 0.3.16 catalog omits modality metadata for DeepSeek V4 Flash, but a
+  // live Responses probe confirms that this model accepts image inputs.
+  if (id === "deepseek-v4-flash-0731" &&
+      source.supportsImages === undefined &&
+      (inputModalities.length === 0 ||
+       (inputModalities.length === 1 && inputModalities[0] === "text"))) {
+    if (inputModalities.length === 0) inputModalities.push("text");
+    inputModalities.push("image");
+    capabilities.supportsImages = true;
+  }
   if (inputModalities.length > 0) capabilities.inputModalities = inputModalities;
   for (const key of ["supportsImages", "supportsFiles"]) {
     if (typeof source[key] === "boolean") capabilities[key] = source[key];
@@ -698,6 +711,19 @@ function stableJSON(value) {
     ).join(",") + "}";
   }
   return JSON.stringify(value);
+}
+
+function reviveV2Payload(value) {
+  if (Array.isArray(value)) return value.map(reviveV2Payload);
+  if (!value || typeof value !== "object") return value;
+  if (typeof value.__wheelmaker_url === "string" && Object.keys(value).length === 1) {
+    return new URL(value.__wheelmaker_url);
+  }
+  const result = {};
+  for (const [key, nested] of Object.entries(value)) {
+    result[key] = reviveV2Payload(nested);
+  }
+  return result;
 }
 
 function probeSystem(body) {
@@ -905,7 +931,7 @@ async function dispatch(runtime, frame) {
       runtime.internals.setContext(nextContext(runtime.internals.getContext()));
       const model = await runtime.wanqing.createModel(frame.model, runtime.wanqing);
       const metadata = runtime.wanqing.models && runtime.wanqing.models[frame.model] || {};
-      const payload = applyModelVariant(metadata, frame.payload, frame.effort);
+      const payload = applyModelVariant(metadata, reviveV2Payload(frame.payload), frame.effort);
       return await probeContext.run(
         {
           requestId:frame.requestId,
@@ -2139,6 +2165,7 @@ func newProxyServer(settings proxySettings, worker workerBackend, catalog []mode
 		catalog:          filtered,
 		myFlickerVersion: workerMyFlickerVersion(worker),
 		diagnosticWriter: os.Stderr,
+		responses:        newV2ResponsesStore(),
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/health", server.handleHealth)
@@ -2397,11 +2424,20 @@ func summarizeV2Request(model, effort string, payload map[string]any) v2RequestD
 	}
 	if tools, ok := payload["tools"].([]any); ok {
 		diagnostic.ToolCount = len(tools)
+		for _, rawTool := range tools {
+			tool, _ := rawTool.(map[string]any)
+			if typeName := firstText(tool["type"]); typeName != "" {
+				diagnostic.ToolTypes = append(diagnostic.ToolTypes, typeName)
+			}
+		}
 	}
 	prompt, _ := payload["prompt"].([]any)
 	diagnostic.PromptMessages = len(prompt)
 	for _, rawMessage := range prompt {
 		message, _ := rawMessage.(map[string]any)
+		if role := firstText(message["role"]); role != "" {
+			diagnostic.PromptRoles = append(diagnostic.PromptRoles, role)
+		}
 		switch content := message["content"].(type) {
 		case string:
 			diagnostic.PromptParts++
@@ -2465,7 +2501,7 @@ func logV2WorkerFailure(writer io.Writer, diagnostic v2RequestDiagnostic, err er
 		writer,
 		"[flicker-v2] worker request failed requestId=%q model=%q effort=%q "+
 			"payloadBytes=%d promptMessages=%d promptParts=%d imageParts=%d "+
-			"imageDataChars=%d tools=%d status=%d name=%q code=%q error=%q fingerprint=%q\n",
+			"imageDataChars=%d tools=%d toolTypes=%q promptRoles=%q status=%d name=%q code=%q error=%q fingerprint=%q\n",
 		sanitizeV2DiagnosticText(frame.RequestID),
 		sanitizeV2DiagnosticText(diagnostic.Model),
 		sanitizeV2DiagnosticText(diagnostic.Effort),
@@ -2475,6 +2511,8 @@ func logV2WorkerFailure(writer io.Writer, diagnostic v2RequestDiagnostic, err er
 		diagnostic.ImageParts,
 		diagnostic.ImageDataChars,
 		diagnostic.ToolCount,
+		diagnostic.ToolTypes,
+		diagnostic.PromptRoles,
 		frame.ErrorStatus,
 		sanitizeV2DiagnosticText(frame.ErrorName),
 		sanitizeV2DiagnosticText(frame.ErrorCode),

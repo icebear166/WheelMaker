@@ -17,7 +17,7 @@ func TestMaterializeWritesValidatedResponsesCatalog(t *testing.T) {
 		APIFormat:                 "openai",
 		EffortLevels:              []string{"low", "high"},
 		DefaultEffort:             "high",
-		InputModalities:           []string{"text"},
+		InputModalities:           []string{"text", "image"},
 		ContextWindow:             1048576,
 		MaxContextWindow:          1048576,
 		SupportsTools:             true,
@@ -51,8 +51,17 @@ func TestMaterializeWritesValidatedResponsesCatalog(t *testing.T) {
 		t.Fatalf("catalog models = %#v", document.Models)
 	}
 	model := document.Models[0]
-	if !reflect.DeepEqual(model.InputModalities, []string{"text"}) || model.DefaultReasoningLevel != "high" {
+	if !reflect.DeepEqual(model.InputModalities, []string{"text", "image"}) || model.DefaultReasoningLevel != "high" {
 		t.Fatalf("catalog capabilities = %#v", model)
+	}
+	if model.Description == "" || model.ShellType == "" || model.Visibility == "" ||
+		model.ReasoningSummaryFormat == "" || model.ModelMessages["instructions_variables"] == nil {
+		t.Fatalf("catalog compatibility fields = %#v", model)
+	}
+	for _, level := range model.SupportedReasoningLevels {
+		if level.Description == "" {
+			t.Fatalf("reasoning level missing description: %#v", model.SupportedReasoningLevels)
+		}
 	}
 	if !model.SupportedInAPI || !model.SupportsParallelToolCalls || !model.SupportsSearchTool {
 		t.Fatalf("catalog tool/API flags = %#v", model)
@@ -66,7 +75,8 @@ func TestMaterializeRejectsModelsThatCannotUseResponses(t *testing.T) {
 	for name, models := range map[string][]Model{
 		"empty":     nil,
 		"anthropic": {{ID: "claude", APIFormat: "anthropic"}},
-		"image":     {{ID: "deepseek", APIFormat: "openai", InputModalities: []string{"text", "image"}}},
+		"audio":     {{ID: "deepseek", APIFormat: "openai", InputModalities: []string{"text", "audio"}}},
+		"file":      {{ID: "deepseek", APIFormat: "openai", InputModalities: []string{"text", "file"}}},
 	} {
 		t.Run(name, func(t *testing.T) {
 			if _, err := Materialize(t.TempDir(), models); err == nil {

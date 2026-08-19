@@ -25,7 +25,7 @@ func NewCXFlickerProviderWithMCP(stateDir, apiKey string, store *FlickerModelSto
 	provider := newCodexAppProvider(codexAppProviderOptions{
 		Provider:       protocol.ACPProviderCXFlicker,
 		Title:          "Flicker Codex",
-		AllowImages:    false,
+		AllowImages:    true,
 		CodexHome:      homeDir,
 		SessionMapPath: filepath.Join(homeDir, "wheelmaker-sessions.json"),
 		Environment: []string{

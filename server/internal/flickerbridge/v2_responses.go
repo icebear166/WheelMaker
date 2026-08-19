@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -13,6 +14,107 @@ type v2ResponsesRequestConversion struct {
 	payload    map[string]any
 	effort     string
 	compaction bool
+	toolRefs   map[string]responsesToolRef
+}
+
+type responsesToolRef struct {
+	Namespace string
+	Name      string
+}
+
+const maxV2ResponseHistory = 128
+
+type v2ResponseHistory struct {
+	prompt []any
+	output []any
+}
+
+type v2ResponsesStore struct {
+	mu      sync.Mutex
+	entries map[string]v2ResponseHistory
+	order   []string
+}
+
+func newV2ResponsesStore() *v2ResponsesStore {
+	return &v2ResponsesStore{entries: make(map[string]v2ResponseHistory)}
+}
+
+func (store *v2ResponsesStore) put(response map[string]any, prompt any) {
+	if store == nil {
+		return
+	}
+	id := firstText(response["id"])
+	output, ok := response["output"].([]any)
+	if id == "" || !ok {
+		return
+	}
+	promptCopy := deepCopyJSON(prompt)
+	outputCopy := deepCopyJSON(output)
+	promptItems, ok := promptCopy.([]any)
+	if !ok {
+		return
+	}
+	outputItems, ok := outputCopy.([]any)
+	if !ok {
+		return
+	}
+	store.mu.Lock()
+	defer store.mu.Unlock()
+	if _, exists := store.entries[id]; !exists {
+		store.order = append(store.order, id)
+	}
+	store.entries[id] = v2ResponseHistory{prompt: promptItems, output: outputItems}
+	for len(store.order) > maxV2ResponseHistory {
+		oldest := store.order[0]
+		store.order = store.order[1:]
+		delete(store.entries, oldest)
+	}
+}
+
+func (store *v2ResponsesStore) get(id string) (v2ResponseHistory, bool) {
+	if store == nil || strings.TrimSpace(id) == "" {
+		return v2ResponseHistory{}, false
+	}
+	store.mu.Lock()
+	defer store.mu.Unlock()
+	history, ok := store.entries[strings.TrimSpace(id)]
+	if !ok {
+		return v2ResponseHistory{}, false
+	}
+	prompt, _ := deepCopyJSON(history.prompt).([]any)
+	output, _ := deepCopyJSON(history.output).([]any)
+	return v2ResponseHistory{prompt: prompt, output: output}, true
+}
+
+func (history v2ResponseHistory) promptWithOutput() ([]any, error) {
+	result := append([]any(nil), history.prompt...)
+	if len(history.output) == 0 {
+		return result, nil
+	}
+	callNames := responsesFunctionCallNames(history.output)
+	converted, err := responsesInputToV3(history.output, callNames, nil)
+	if err != nil {
+		return nil, err
+	}
+	return append(result, converted...), nil
+}
+
+func mergeV2ResponsePrompts(previous, current []any) []any {
+	currentSystem := make([]any, 0, len(current))
+	currentConversation := make([]any, 0, len(current))
+	for _, item := range current {
+		message, _ := item.(map[string]any)
+		if role := firstText(message["role"]); role == "system" || role == "developer" {
+			currentSystem = append(currentSystem, item)
+			continue
+		}
+		currentConversation = append(currentConversation, item)
+	}
+	merged := make([]any, 0, len(previous)+len(current))
+	merged = append(merged, currentSystem...)
+	merged = append(merged, previous...)
+	merged = append(merged, currentConversation...)
+	return merged
 }
 
 func responsesRequestToV3(request map[string]any) (v2ResponsesRequestConversion, error) {
@@ -48,6 +150,7 @@ func responsesRequestToV3(request map[string]any) (v2ResponsesRequestConversion,
 	payload := map[string]any{
 		"prompt": prompt,
 	}
+	toolRefs := map[string]responsesToolRef{}
 	if maxTokens, ok := responseInteger(request["max_output_tokens"]); ok {
 		if maxTokens <= 0 {
 			return v2ResponsesRequestConversion{}, errors.New("max_output_tokens must be a positive integer")
@@ -67,28 +170,111 @@ func responsesRequestToV3(request map[string]any) (v2ResponsesRequestConversion,
 		payload["stopSequences"] = value
 	}
 	if rawTools, ok := request["tools"]; ok && rawTools != nil {
-		tools, err := responsesToolsToV3(rawTools)
+		tools, refs, err := responsesToolsToV3(rawTools)
 		if err != nil {
 			return v2ResponsesRequestConversion{}, err
 		}
 		payload["tools"] = tools
+		toolRefs = refs
 	}
 	if value := request["tool_choice"]; value != nil {
 		toolChoice, err := responsesToolChoiceToV3(value)
 		if err != nil {
 			return v2ResponsesRequestConversion{}, err
 		}
-		payload["toolChoice"] = toolChoice
+		if toolChoice != nil {
+			payload["toolChoice"] = toolChoice
+		}
 	}
-	if format := request["text"]; format != nil {
-		payload["responseFormat"] = deepCopyJSON(format)
+	if format, err := responsesTextFormatToV3(request["text"]); err != nil {
+		return v2ResponsesRequestConversion{}, err
+	} else if format != nil {
+		payload["responseFormat"] = format
+	}
+	if providerOptions := responsesProviderOptionsToV3(request); len(providerOptions) > 0 {
+		payload["providerOptions"] = map[string]any{"wanqing": providerOptions}
 	}
 
 	effort := firstText(request["reasoning_effort"])
 	if reasoning, ok := request["reasoning"].(map[string]any); ok {
 		effort = firstText(reasoning["effort"], effort)
 	}
-	return v2ResponsesRequestConversion{payload: payload, effort: strings.TrimSpace(effort), compaction: compaction}, nil
+	return v2ResponsesRequestConversion{payload: payload, effort: strings.TrimSpace(effort), compaction: compaction, toolRefs: toolRefs}, nil
+}
+
+func responsesProviderOptionsToV3(request map[string]any) map[string]any {
+	options := map[string]any{}
+	for requestKey, providerKey := range map[string]string{
+		"include":                "include",
+		"conversation":           "conversation",
+		"metadata":               "metadata",
+		"service_tier":           "serviceTier",
+		"parallel_tool_calls":    "parallelToolCalls",
+		"max_tool_calls":         "maxToolCalls",
+		"prompt_cache_key":       "promptCacheKey",
+		"prompt_cache_retention": "promptCacheRetention",
+		"logprobs":               "logprobs",
+		"top_logprobs":           "topLogprobs",
+		"store":                  "store",
+		"truncation":             "truncation",
+		"safety_identifier":      "safetyIdentifier",
+		"user":                   "user",
+	} {
+		if value := request[requestKey]; value != nil {
+			options[providerKey] = deepCopyJSON(value)
+		}
+	}
+	if effort := firstText(request["reasoning_effort"]); effort != "" {
+		options["reasoningEffort"] = effort
+	}
+	if reasoning, ok := request["reasoning"].(map[string]any); ok {
+		if effort := firstText(reasoning["effort"]); effort != "" {
+			options["reasoningEffort"] = effort
+		}
+		if summary := firstText(reasoning["summary"]); summary != "" {
+			options["reasoningSummary"] = summary
+		}
+	}
+	if text, ok := request["text"].(map[string]any); ok {
+		if verbosity := firstText(text["verbosity"]); verbosity != "" {
+			options["textVerbosity"] = verbosity
+		}
+	}
+	return options
+}
+
+func responsesTextFormatToV3(raw any) (map[string]any, error) {
+	if raw == nil {
+		return nil, nil
+	}
+	text, ok := raw.(map[string]any)
+	if !ok {
+		return nil, errors.New("text must be an object")
+	}
+	format, ok := text["format"].(map[string]any)
+	if !ok {
+		return map[string]any{"type": "text"}, nil
+	}
+	typeName := firstText(format["type"], "text")
+	switch typeName {
+	case "text":
+		return map[string]any{"type": "text"}, nil
+	case "json_object":
+		return map[string]any{"type": "json"}, nil
+	case "json_schema":
+		result := map[string]any{"type": "json"}
+		for _, key := range []string{"name", "description", "strict", "schema"} {
+			if value := format[key]; value != nil {
+				result[key] = deepCopyJSON(value)
+			}
+		}
+		if result["schema"] == nil {
+			return nil, errors.New("text.format json_schema requires schema")
+		}
+		return result, nil
+	default:
+		return nil, fmt.Errorf("unsupported Responses text format %q", typeName)
+	}
 }
 
 func responsesInstructionsToV3(raw any) ([]any, error) {
@@ -123,6 +309,9 @@ func responsesFunctionCallNames(raw any) map[string]string {
 		}
 		callID := firstText(item["call_id"], item["id"])
 		name := firstText(item["name"])
+		if namespace := firstText(item["namespace"]); namespace != "" {
+			name = responsesNamespacedToolName(namespace, name)
+		}
 		if callID != "" && name != "" {
 			result[callID] = name
 		}
@@ -161,6 +350,9 @@ func responsesInputToV3(raw any, callNames map[string]string, compaction *bool) 
 			if name == "" {
 				return nil, errors.New("function_call requires name")
 			}
+			if namespace := firstText(item["namespace"]); namespace != "" {
+				name = responsesNamespacedToolName(namespace, name)
+			}
 			input, err := responseJSONValue(item["arguments"], map[string]any{})
 			if err != nil {
 				return nil, fmt.Errorf("function_call %q arguments: %w", callID, err)
@@ -189,24 +381,28 @@ func responsesInputToV3(raw any, callNames map[string]string, compaction *bool) 
 					"output":     output,
 				}},
 			})
-		case "apply_patch_call", "shell_call", "local_shell_call", "mcp_call", "file_search_call", "code_interpreter_call", "image_generation_call", "custom_tool_call", "web_search_call", "tool_search_call":
+		case "apply_patch_call", "shell_call", "local_shell_call", "mcp_call", "file_search_call", "code_interpreter_call", "image_generation_call", "custom_tool_call", "web_search_call", "tool_search_call", "computer_call":
 			message, err := responsesProviderCallToV3(item)
 			if err != nil {
 				return nil, err
 			}
 			result = append(result, message)
-		case "apply_patch_call_output", "shell_call_output", "local_shell_call_output", "custom_tool_call_output":
+		case "apply_patch_call_output", "shell_call_output", "local_shell_call_output", "custom_tool_call_output", "mcp_call_output", "file_search_call_output", "code_interpreter_call_output", "image_generation_call_output", "web_search_call_output", "tool_search_call_output", "computer_call_output":
 			message, err := responsesProviderOutputToV3(item)
 			if err != nil {
 				return nil, err
 			}
-			result = append(result, message)
+			if message != nil {
+				result = append(result, message)
+			}
 		case "reasoning":
 			message, err := responsesReasoningItemToV3(item)
 			if err != nil {
 				return nil, err
 			}
-			result = append(result, message)
+			if message != nil {
+				result = append(result, message)
+			}
 		case "compaction_trigger":
 			if compaction != nil {
 				*compaction = true
@@ -358,7 +554,16 @@ func validateResponsesModelInput(model modelInfo, raw any) error {
 }
 
 func responsesFilePart(item map[string]any, defaultMediaType string) (map[string]any, error) {
-	value := firstText(item["image_url"], item["file_url"], item["file_data"], item["url"], item["data"])
+	value := ""
+	for _, key := range []string{"image_url", "file_url", "file_data", "url", "data", "file_id"} {
+		candidate := item[key]
+		if object, ok := candidate.(map[string]any); ok {
+			candidate = firstText(object["url"], object["uri"])
+		}
+		if value = firstText(candidate); value != "" {
+			break
+		}
+	}
 	if value == "" {
 		return nil, errors.New("Responses file content requires a URL or data")
 	}
@@ -379,7 +584,14 @@ func responsesFilePart(item map[string]any, defaultMediaType string) (map[string
 		}
 		value = data
 	}
-	return map[string]any{"type": "file", "mediaType": mediaType, "data": value}, nil
+	part := map[string]any{"type": "file", "mediaType": mediaType, "data": value}
+	if lower := strings.ToLower(value); strings.HasPrefix(lower, "http://") || strings.HasPrefix(lower, "https://") {
+		part["data"] = map[string]any{"__wheelmaker_url": value}
+	}
+	if detail := firstText(item["detail"]); detail != "" && strings.HasPrefix(strings.ToLower(mediaType), "image/") {
+		part["providerOptions"] = map[string]any{"wanqing": map[string]any{"imageDetail": detail}}
+	}
+	return part, nil
 }
 
 func responsesReasoningItemToV3(item map[string]any) (map[string]any, error) {
@@ -392,65 +604,179 @@ func responsesReasoningItemToV3(item map[string]any) (map[string]any, error) {
 			parts = append(parts, map[string]any{"type": "reasoning", "text": text})
 		}
 	}
-	if len(parts) == 0 {
-		return nil, errors.New("reasoning item has no summary text")
+	encrypted := firstText(item["encrypted_content"], item["encryptedContent"])
+	if len(parts) == 0 && encrypted == "" {
+		return nil, nil
+	}
+	if encrypted != "" {
+		part := map[string]any{"type": "reasoning", "text": ""}
+		if len(parts) > 0 {
+			part = parts[0].(map[string]any)
+		}
+		part["providerMetadata"] = map[string]any{"azure": map[string]any{"reasoningEncryptedContent": encrypted}}
+		if len(parts) == 0 {
+			parts = append(parts, part)
+		} else {
+			parts[0] = part
+		}
 	}
 	return map[string]any{"role": "assistant", "content": parts}, nil
 }
 
-func responsesToolsToV3(raw any) ([]any, error) {
+func responsesToolsToV3(raw any) ([]any, map[string]responsesToolRef, error) {
 	items, ok := raw.([]any)
 	if !ok {
-		return nil, errors.New("tools must be an array")
+		return nil, nil, errors.New("tools must be an array")
 	}
 	result := make([]any, 0, len(items))
+	toolRefs := map[string]responsesToolRef{}
 	for _, rawTool := range items {
 		tool, ok := rawTool.(map[string]any)
 		if !ok {
-			return nil, errors.New("tools must contain objects")
+			return nil, nil, errors.New("tools must contain objects")
 		}
-		if firstText(tool["type"]) != "function" {
-			providerID, supported := responsesProviderToolID(firstText(tool["type"]))
-			if !supported {
-				return nil, fmt.Errorf("unsupported Responses tool type %q", firstText(tool["type"]))
+		typeName := firstText(tool["type"])
+		if typeName == "namespace" {
+			flattened, refs, err := responsesNamespaceToolsToV3(tool)
+			if err != nil {
+				return nil, nil, err
 			}
-			args := map[string]any{}
-			for key, value := range tool {
-				if key != "type" {
-					args[key] = deepCopyJSON(value)
-				}
+			result = append(result, flattened...)
+			for name, ref := range refs {
+				toolRefs[name] = ref
 			}
-			result = append(result, map[string]any{"type": "provider", "id": providerID, "args": args})
 			continue
 		}
-		name := firstText(tool["name"])
-		description := firstText(tool["description"])
-		parameters := tool["parameters"]
-		if parameters == nil {
-			if function, ok := tool["function"].(map[string]any); ok {
-				name = firstText(name, function["name"])
-				description = firstText(description, function["description"])
-				parameters = function["parameters"]
+		if typeName != "function" {
+			if converted, supported := responsesProviderToolToV3(tool); supported {
+				result = append(result, converted)
 			}
+			continue
 		}
-		if name == "" {
-			return nil, errors.New("function tool requires name")
-		}
-		if parameters == nil {
-			parameters = map[string]any{}
-		}
-		converted := map[string]any{
-			"type":        "function",
-			"name":        name,
-			"description": description,
-			"inputSchema": deepCopyJSON(parameters),
-		}
-		if strict := tool["strict"]; strict != nil {
-			converted["strict"] = strict
+		converted, err := responsesFunctionToolToV3(tool)
+		if err != nil {
+			return nil, nil, err
 		}
 		result = append(result, converted)
 	}
-	return result, nil
+	return result, toolRefs, nil
+}
+
+func responsesProviderToolToV3(tool map[string]any) (map[string]any, bool) {
+	typeName := firstText(tool["type"])
+	if typeName == "provider" {
+		typeName = firstText(tool["id"])
+	}
+	canonical := strings.TrimPrefix(typeName, "openai.")
+	name := ""
+	switch canonical {
+	case "apply_patch", "shell", "local_shell", "file_search", "code_interpreter", "image_generation", "tool_search":
+		name = canonical
+	case "web_search", "web_search_preview":
+		name = "web_search"
+	case "computer_use", "computer_use_preview":
+		name = "computer_use"
+	case "mcp":
+		name = "mcp"
+	case "custom":
+		args, _ := tool["args"].(map[string]any)
+		name = firstText(tool["name"], args["name"])
+	}
+	if name == "" {
+		return nil, false
+	}
+	args, _ := tool["args"].(map[string]any)
+	parameters := firstPresentValue(
+		tool["parameters"], tool["input_schema"],
+		args["parameters"], args["inputSchema"], args["input_schema"],
+		map[string]any{"type": "object"},
+	)
+	description := firstText(tool["description"], args["description"])
+	if description == "" {
+		description = "Codex " + strings.ReplaceAll(name, "_", " ") + " tool"
+	}
+	converted := map[string]any{
+		"type":        "function",
+		"name":        name,
+		"description": description,
+		"inputSchema": deepCopyJSON(parameters),
+	}
+	if strict := firstPresentValue(tool["strict"], args["strict"]); strict != nil {
+		converted["strict"] = strict
+	}
+	return converted, true
+}
+
+func responsesFunctionToolToV3(tool map[string]any) (map[string]any, error) {
+	name := firstText(tool["name"])
+	description := firstText(tool["description"])
+	parameters := tool["parameters"]
+	strict := tool["strict"]
+	if function, ok := tool["function"].(map[string]any); ok {
+		name = firstText(name, function["name"])
+		description = firstText(description, function["description"])
+		if parameters == nil {
+			parameters = function["parameters"]
+		}
+		if strict == nil {
+			strict = function["strict"]
+		}
+	}
+	if name == "" {
+		return nil, errors.New("function tool requires name")
+	}
+	if parameters == nil {
+		parameters = map[string]any{}
+	}
+	converted := map[string]any{
+		"type":        "function",
+		"name":        name,
+		"description": description,
+		"inputSchema": deepCopyJSON(parameters),
+	}
+	if strict != nil {
+		converted["strict"] = strict
+	}
+	return converted, nil
+}
+
+func responsesNamespaceToolsToV3(namespaceTool map[string]any) ([]any, map[string]responsesToolRef, error) {
+	namespace := firstText(namespaceTool["name"])
+	if namespace == "" {
+		return nil, nil, errors.New("namespace tool requires name")
+	}
+	items, ok := namespaceTool["tools"].([]any)
+	if !ok || len(items) == 0 {
+		return nil, nil, nil
+	}
+	result := make([]any, 0, len(items))
+	refs := make(map[string]responsesToolRef, len(items))
+	for _, rawTool := range items {
+		tool, ok := rawTool.(map[string]any)
+		if !ok {
+			return nil, nil, errors.New("namespace tools must contain objects")
+		}
+		if typeName := firstText(tool["type"], "function"); typeName != "function" {
+			return nil, nil, fmt.Errorf("unsupported namespace tool type %q", typeName)
+		}
+		converted, err := responsesFunctionToolToV3(tool)
+		if err != nil {
+			return nil, nil, err
+		}
+		name := firstText(converted["name"])
+		flattened := responsesNamespacedToolName(namespace, name)
+		converted["name"] = flattened
+		result = append(result, converted)
+		refs[flattened] = responsesToolRef{Namespace: namespace, Name: name}
+	}
+	return result, refs, nil
+}
+
+func responsesNamespacedToolName(namespace, name string) string {
+	if strings.HasSuffix(namespace, "_") || strings.HasPrefix(name, "_") {
+		return namespace + name
+	}
+	return namespace + "__" + name
 }
 
 func responsesProviderToolID(typeName string) (string, bool) {
@@ -476,6 +802,9 @@ func responsesProviderToolTypes(raw any) map[string]string {
 	for _, rawTool := range items {
 		tool, _ := rawTool.(map[string]any)
 		typeName := firstText(tool["type"])
+		if typeName == "provider" {
+			typeName = firstText(tool["id"])
+		}
 		if typeName == "" || typeName == "function" {
 			continue
 		}
@@ -536,10 +865,11 @@ func responsesToolChoiceToV3(raw any) (any, error) {
 		case "auto", "none", "required":
 			return map[string]any{"type": text}, nil
 		default:
-			if _, supported := responsesProviderToolID(text); supported {
-				return map[string]any{"type": "tool", "toolName": text}, nil
+			converted, supported := responsesProviderToolToV3(map[string]any{"type": text})
+			if !supported {
+				return nil, nil
 			}
-			return nil, fmt.Errorf("unsupported tool_choice %q", text)
+			return map[string]any{"type": "tool", "toolName": converted["name"]}, nil
 		}
 	}
 	choice, ok := raw.(map[string]any)
@@ -547,22 +877,21 @@ func responsesToolChoiceToV3(raw any) (any, error) {
 		return nil, errors.New("tool_choice must be a string or object")
 	}
 	choiceType := firstText(choice["type"])
-	if _, supported := responsesProviderToolID(choiceType); supported {
-		toolName := choiceType
-		if choiceType == "custom" {
-			toolName = firstText(choice["name"])
-		}
-		if toolName == "" {
-			return nil, errors.New("provider tool_choice requires a tool name")
-		}
-		return map[string]any{"type": "tool", "toolName": toolName}, nil
-	}
 	if choiceType != "function" {
-		return nil, fmt.Errorf("unsupported tool_choice type %q", choiceType)
+		converted, supported := responsesProviderToolToV3(choice)
+		if !supported {
+			return nil, nil
+		}
+		return map[string]any{"type": "tool", "toolName": converted["name"]}, nil
 	}
 	name := firstText(choice["name"])
 	if function, ok := choice["function"].(map[string]any); ok {
 		name = firstText(name, function["name"])
+		if namespace := firstText(choice["namespace"], function["namespace"]); namespace != "" {
+			name = responsesNamespacedToolName(namespace, name)
+		}
+	} else if namespace := firstText(choice["namespace"]); namespace != "" {
+		name = responsesNamespacedToolName(namespace, name)
 	}
 	if name == "" {
 		return nil, errors.New("function tool_choice requires name")
@@ -660,9 +989,18 @@ func responsesProviderOutputToV3(item map[string]any) (map[string]any, error) {
 			"type":       "tool-result",
 			"toolCallId": callID,
 			"toolName":   toolName,
-			"output":     responsesToolResultOutput(item["output"]),
+			"output":     responsesToolResultOutput(responsesProviderOutputValue(item)),
 		}},
 	}, nil
+}
+
+func responsesProviderOutputValue(item map[string]any) any {
+	for _, key := range []string{"output", "results", "outputs", "result", "error"} {
+		if value, ok := item[key]; ok {
+			return value
+		}
+	}
+	return nil
 }
 
 func responsesProviderCallToolName(typeName string, item map[string]any) string {
@@ -690,6 +1028,8 @@ func responsesProviderCallToolName(typeName string, item map[string]any) string 
 		return "web_search"
 	case "tool_search_call":
 		return "tool_search"
+	case "computer_call":
+		return "computer_use"
 	default:
 		return ""
 	}
@@ -709,23 +1049,43 @@ func responseInteger(raw any) (int, bool) {
 	}
 }
 
+func responsesIncompleteReason(raw any) string {
+	reason, _ := raw.(map[string]any)
+	value := firstText(reason["raw"], reason["unified"], raw)
+	switch value {
+	case "length", "max_tokens", "max_output_tokens":
+		return "max_output_tokens"
+	case "content_filter":
+		return "content_filter"
+	case "tool-calls", "stop", "end_turn", "tool_use", "":
+		return ""
+	default:
+		if strings.Contains(value, "max") || strings.Contains(value, "length") {
+			return "max_output_tokens"
+		}
+		return ""
+	}
+}
+
 // v2StreamPart is the single V2 model-stream representation consumed by both
 // protocol frontends. The worker still speaks AI SDK V3 parts; adapters do not
 // need to decode that wire shape independently.
 type v2StreamPart struct {
-	typeName         string
-	id               string
-	model            string
-	delta            string
-	toolName         string
-	toolCallID       string
-	input            any
-	result           any
-	signature        string
-	finish           any
-	usage            map[string]any
-	errorString      string
-	providerExecuted bool
+	typeName                  string
+	id                        string
+	model                     string
+	delta                     string
+	logprobs                  any
+	toolName                  string
+	toolCallID                string
+	input                     any
+	result                    any
+	signature                 string
+	reasoningEncryptedContent string
+	finish                    any
+	usage                     map[string]any
+	errorString               string
+	providerExecuted          bool
 }
 
 func decodeV2StreamPart(frame workerFrame) (v2StreamPart, error) {
@@ -744,6 +1104,7 @@ func decodeV2StreamPart(frame workerFrame) (v2StreamPart, error) {
 		id:               v2StringValue(part["id"]),
 		model:            v2StringValue(part["modelId"]),
 		delta:            v2StringValue(part["delta"]),
+		logprobs:         part["logprobs"],
 		toolName:         v2StringValue(part["toolName"]),
 		toolCallID:       v2StringValue(part["toolCallId"]),
 		input:            part["input"],
@@ -758,6 +1119,13 @@ func decodeV2StreamPart(frame workerFrame) (v2StreamPart, error) {
 	if result.signature == "" {
 		result.signature = v2StringValue(nestedValue(part, "providerMetadata", "wanqing", "signature"))
 	}
+	for _, provider := range []string{"azure", "wanqing", "openai"} {
+		result.reasoningEncryptedContent = firstText(
+			result.reasoningEncryptedContent,
+			nestedValue(part, "providerMetadata", provider, "reasoningEncryptedContent"),
+			nestedValue(part, "providerMetadata", provider, "reasoning_encrypted_content"),
+		)
+	}
 	return result, nil
 }
 
@@ -765,6 +1133,8 @@ type v2ResponsesToolState struct {
 	itemID       string
 	callID       string
 	name         string
+	namespace    string
+	displayName  string
 	arguments    string
 	responseType string
 	result       any
@@ -772,34 +1142,40 @@ type v2ResponsesToolState struct {
 }
 
 type v2ResponsesWriter struct {
-	emitter              *streamEmitter
-	payload              map[string]any
-	responseID           string
-	messageID            string
-	reasoningID          string
-	model                string
-	outputText           []string
-	reasoningText        []string
-	messageStarted       bool
-	contentStarted       bool
-	reasoningStarted     bool
-	textOutputIndex      int
-	reasoningOutputIndex int
-	nextOutputIndex      int
-	finishSeen           bool
-	toolCalls            map[string]*v2ResponsesToolState
-	toolOrder            []string
-	outputOrder          []string
-	providerToolTypes    map[string]string
-	usage                map[string]any
+	emitter                   *streamEmitter
+	payload                   map[string]any
+	responseID                string
+	createdAt                 int64
+	messageID                 string
+	reasoningID               string
+	model                     string
+	outputText                []string
+	textLogprobs              any
+	logprobsSeen              bool
+	reasoningText             []string
+	reasoningEncryptedContent string
+	messageStarted            bool
+	contentStarted            bool
+	reasoningStarted          bool
+	textOutputIndex           int
+	reasoningOutputIndex      int
+	nextOutputIndex           int
+	finishSeen                bool
+	toolCalls                 map[string]*v2ResponsesToolState
+	toolOrder                 []string
+	outputOrder               []string
+	providerToolTypes         map[string]string
+	toolRefs                  map[string]responsesToolRef
+	usage                     map[string]any
+	incompleteReason          string
 }
 
-func newV2ResponsesWriter(emitter *streamEmitter, model string, payload map[string]any) *v2ResponsesWriter {
+func newV2ResponsesWriter(emitter *streamEmitter, model string, payload map[string]any, toolRefs map[string]responsesToolRef) *v2ResponsesWriter {
 	return &v2ResponsesWriter{
-		emitter: emitter, payload: payload, responseID: "resp_" + strings.ReplaceAll(randomDeviceID(), "-", ""),
+		emitter: emitter, payload: payload, responseID: "resp_" + strings.ReplaceAll(randomDeviceID(), "-", ""), createdAt: time.Now().Unix(),
 		messageID: "msg_" + randomDeviceID(), reasoningID: "rs_" + randomDeviceID(), model: model,
 		textOutputIndex: -1, reasoningOutputIndex: -1, toolCalls: map[string]*v2ResponsesToolState{},
-		providerToolTypes: responsesProviderToolTypes(payload["tools"]), usage: map[string]any{},
+		providerToolTypes: responsesProviderToolTypes(payload["tools"]), toolRefs: toolRefs, usage: map[string]any{},
 	}
 }
 
@@ -812,8 +1188,30 @@ func (writer *v2ResponsesWriter) emit(value any) {
 func (writer *v2ResponsesWriter) base(status string, output []any) map[string]any {
 	inputTokens := usageInt(writer.usage, "inputTokens", "input_tokens", "prompt_tokens")
 	outputTokens := usageInt(writer.usage, "outputTokens", "output_tokens", "completion_tokens")
-	return map[string]any{
-		"id": writer.responseID, "object": "response", "created_at": time.Now().Unix(), "status": status,
+	cachedTokens := usageInt(writer.usage, "cachedTokens", "cached_tokens")
+	if cachedTokens == 0 {
+		for _, key := range []string{"inputTokens", "input_tokens"} {
+			if nested, ok := writer.usage[key].(map[string]any); ok {
+				cachedTokens = usageInt(nested, "cacheRead", "cachedTokens", "cached_tokens")
+				if cachedTokens != 0 {
+					break
+				}
+			}
+		}
+	}
+	reasoningTokens := usageInt(writer.usage, "reasoningTokens", "reasoning_tokens")
+	if reasoningTokens == 0 {
+		for _, key := range []string{"outputTokens", "output_tokens"} {
+			if nested, ok := writer.usage[key].(map[string]any); ok {
+				reasoningTokens = usageInt(nested, "reasoning", "reasoningTokens", "reasoning_tokens")
+				if reasoningTokens != 0 {
+					break
+				}
+			}
+		}
+	}
+	response := map[string]any{
+		"id": writer.responseID, "object": "response", "created_at": writer.createdAt, "status": status,
 		"error": nil, "incomplete_details": nil, "instructions": writer.payload["instructions"],
 		"max_output_tokens": writer.payload["max_output_tokens"], "model": writer.model, "output": output,
 		"parallel_tool_calls":  firstPresentValue(writer.payload["parallel_tool_calls"], true),
@@ -825,10 +1223,31 @@ func (writer *v2ResponsesWriter) base(status string, output []any) map[string]an
 		"top_p": writer.payload["top_p"], "truncation": firstPresentValue(writer.payload["truncation"], "disabled"),
 		"usage": map[string]any{
 			"input_tokens": inputTokens, "output_tokens": outputTokens, "total_tokens": inputTokens + outputTokens,
-			"input_tokens_details":  map[string]any{"cached_tokens": usageInt(writer.usage, "cachedTokens")},
-			"output_tokens_details": map[string]any{"reasoning_tokens": usageInt(writer.usage, "reasoningTokens")},
+			"input_tokens_details":  map[string]any{"cached_tokens": cachedTokens},
+			"output_tokens_details": map[string]any{"reasoning_tokens": reasoningTokens},
 		},
 	}
+	for key, fallback := range map[string]any{
+		"background":        nil,
+		"conversation":      nil,
+		"logprobs":          nil,
+		"max_tool_calls":    nil,
+		"metadata":          map[string]any{},
+		"prompt_cache_key":  nil,
+		"safety_identifier": nil,
+		"service_tier":      nil,
+		"top_logprobs":      nil,
+		"user":              nil,
+	} {
+		response[key] = firstPresentValue(writer.payload[key], fallback)
+	}
+	if writer.incompleteReason != "" && (status == "completed" || status == "incomplete") {
+		if status == "completed" {
+			response["status"] = "incomplete"
+		}
+		response["incomplete_details"] = map[string]any{"reason": writer.incompleteReason}
+	}
+	return response
 }
 
 func (writer *v2ResponsesWriter) start() {
@@ -862,10 +1281,18 @@ func (writer *v2ResponsesWriter) add(frame workerFrame) error {
 	case "text-delta":
 		writer.ensureText()
 		writer.outputText = append(writer.outputText, part.delta)
-		writer.emit(map[string]any{"type": "response.output_text.delta", "response_id": writer.responseID, "item_id": writer.messageID, "output_index": writer.textOutputIndex, "content_index": 0, "delta": part.delta})
+		event := map[string]any{"type": "response.output_text.delta", "response_id": writer.responseID, "item_id": writer.messageID, "output_index": writer.textOutputIndex, "content_index": 0, "delta": part.delta}
+		if part.logprobs != nil {
+			writer.logprobsSeen = true
+			writer.textLogprobs = mergeV2Logprobs(writer.textLogprobs, part.logprobs)
+			event["logprobs"] = deepCopyJSON(part.logprobs)
+		}
+		writer.emit(event)
 	case "reasoning-start":
+		writer.reasoningEncryptedContent = firstText(writer.reasoningEncryptedContent, part.reasoningEncryptedContent)
 		writer.ensureReasoning()
 	case "reasoning-delta":
+		writer.reasoningEncryptedContent = firstText(writer.reasoningEncryptedContent, part.reasoningEncryptedContent)
 		writer.ensureReasoning()
 		writer.reasoningText = append(writer.reasoningText, part.delta)
 		writer.emit(map[string]any{"type": "response.reasoning_summary_text.delta", "response_id": writer.responseID, "item_id": writer.reasoningID, "output_index": writer.reasoningOutputIndex, "summary_index": 0, "delta": part.delta})
@@ -888,6 +1315,7 @@ func (writer *v2ResponsesWriter) add(frame workerFrame) error {
 		state.result = deepCopyJSON(part.result)
 	case "finish":
 		writer.finishSeen = true
+		writer.incompleteReason = responsesIncompleteReason(part.finish)
 		return nil
 	}
 	return nil
@@ -933,8 +1361,19 @@ func (writer *v2ResponsesWriter) ensureReasoning() {
 	writer.outputOrder = append(writer.outputOrder, "reasoning")
 	writer.emit(map[string]any{
 		"type": "response.output_item.added", "response_id": writer.responseID, "output_index": writer.reasoningOutputIndex,
-		"item": map[string]any{"id": writer.reasoningID, "type": "reasoning", "status": "in_progress", "summary": []any{}},
+		"item": writer.reasoningItem("in_progress"),
 	})
+}
+
+func (writer *v2ResponsesWriter) reasoningItem(status string) map[string]any {
+	item := map[string]any{
+		"id": writer.reasoningID, "type": "reasoning", "status": status,
+		"summary": []any{},
+	}
+	if writer.reasoningEncryptedContent != "" {
+		item["encrypted_content"] = writer.reasoningEncryptedContent
+	}
+	return item
 }
 
 func (writer *v2ResponsesWriter) ensureText() {
@@ -962,12 +1401,25 @@ func (writer *v2ResponsesWriter) ensureText() {
 func (writer *v2ResponsesWriter) ensureTool(key, callID, name string) *v2ResponsesToolState {
 	key = firstText(key, callID, "call_"+randomDeviceID())
 	state := writer.toolCalls[key]
+	if state == nil && callID != "" {
+		for _, candidate := range writer.toolCalls {
+			if candidate.callID == callID {
+				state = candidate
+				break
+			}
+		}
+	}
 	if state == nil {
 		responseType := writer.providerToolTypes[name]
 		if responseType == "" {
 			responseType = responsesProviderResponseItemType(name)
 		}
-		state = &v2ResponsesToolState{itemID: "fc_" + randomDeviceID(), callID: firstText(callID, key), name: name, responseType: responseType, outputIndex: writer.nextOutputIndex}
+		ref := writer.toolRefs[name]
+		state = &v2ResponsesToolState{
+			itemID: "fc_" + randomDeviceID(), callID: firstText(callID, key), name: name,
+			namespace: ref.Namespace, displayName: firstText(ref.Name, name),
+			responseType: responseType, outputIndex: writer.nextOutputIndex,
+		}
 		writer.nextOutputIndex++
 		writer.toolCalls[key] = state
 		writer.toolOrder = append(writer.toolOrder, key)
@@ -982,6 +1434,10 @@ func (writer *v2ResponsesWriter) ensureTool(key, callID, name string) *v2Respons
 		}
 		if name != "" {
 			state.name = name
+			if ref, ok := writer.toolRefs[name]; ok {
+				state.namespace = ref.Namespace
+				state.displayName = ref.Name
+			}
 		}
 	}
 	return state
@@ -991,7 +1447,11 @@ func (writer *v2ResponsesWriter) toolItem(state *v2ResponsesToolState, status st
 	if state.responseType != "" {
 		return writer.providerToolItem(state, status)
 	}
-	return map[string]any{"id": state.itemID, "type": "function_call", "status": status, "call_id": state.callID, "name": state.name, "arguments": firstText(state.arguments, "{}")}
+	item := map[string]any{"id": state.itemID, "type": "function_call", "status": status, "call_id": state.callID, "name": firstText(state.displayName, state.name), "arguments": firstText(state.arguments, "{}")}
+	if state.namespace != "" {
+		item["namespace"] = state.namespace
+	}
+	return item
 }
 
 func (writer *v2ResponsesWriter) providerToolItem(state *v2ResponsesToolState, status string) map[string]any {
@@ -1005,38 +1465,66 @@ func (writer *v2ResponsesWriter) providerToolItem(state *v2ResponsesToolState, s
 		}
 	}
 	item := map[string]any{"id": state.itemID, "type": state.responseType, "status": status}
+	for key, value := range input {
+		switch key {
+		case "type", "id", "callId", "call_id", "toolCallId", "tool_call_id":
+			continue
+		case "containerId":
+			item["container_id"] = deepCopyJSON(value)
+		case "pendingSafetyChecks":
+			item["pending_safety_checks"] = deepCopyJSON(value)
+		default:
+			item[key] = deepCopyJSON(value)
+		}
+	}
+	callID := firstText(input["callId"], input["call_id"], input["toolCallId"], input["tool_call_id"], state.callID)
+	if callID != "" {
+		item["call_id"] = callID
+	}
 	switch state.responseType {
 	case "apply_patch_call":
 		operation, _ := input["operation"].(map[string]any)
 		if operation == nil {
 			operation = map[string]any{"type": "update_file", "path": "", "diff": ""}
 		}
-		item["call_id"] = firstText(input["callId"], state.callID)
+		item["call_id"] = callID
 		item["operation"] = operation
 	case "shell_call", "local_shell_call":
-		item["call_id"] = firstText(input["callId"], state.callID)
+		item["call_id"] = callID
 		action, _ := input["action"].(map[string]any)
 		if action == nil {
 			action = map[string]any{}
 		}
 		item["action"] = action
 	case "mcp_call":
-		item["call_id"] = firstText(input["callId"], state.callID)
+		item["call_id"] = callID
 		item["name"] = strings.TrimPrefix(state.name, "mcp.")
 		item["arguments"] = input
 		if state.result != nil {
 			item["output"] = deepCopyJSON(state.result)
 		}
 	case "custom_tool_call":
-		item["call_id"] = firstText(input["callId"], state.callID)
+		item["call_id"] = callID
 		item["name"] = state.name
 		item["input"] = firstText(input["input"], state.arguments)
 	case "web_search_call":
 		item["action"] = firstPresentValue(input["action"], map[string]any{})
+	case "file_search_call":
+		if state.result != nil {
+			item["results"] = deepCopyJSON(state.result)
+		}
+	case "code_interpreter_call":
+		if state.result != nil {
+			item["outputs"] = deepCopyJSON(state.result)
+		}
+	case "image_generation_call":
+		if state.result != nil {
+			item["result"] = deepCopyJSON(state.result)
+		}
 	default:
-		item["id"] = state.itemID
-		item["status"] = status
-		item["call_id"] = firstText(input["callId"], state.callID)
+		if state.result != nil {
+			item["output"] = deepCopyJSON(state.result)
+		}
 	}
 	return item
 }
@@ -1044,15 +1532,34 @@ func (writer *v2ResponsesWriter) providerToolItem(state *v2ResponsesToolState, s
 func (writer *v2ResponsesWriter) outputItem(key, status string) any {
 	switch key {
 	case "reasoning":
-		return map[string]any{"id": writer.reasoningID, "type": "reasoning", "status": status, "summary": []any{map[string]any{"type": "summary_text", "text": strings.Join(writer.reasoningText, "")}}}
+		item := writer.reasoningItem(status)
+		item["summary"] = []any{map[string]any{"type": "summary_text", "text": strings.Join(writer.reasoningText, "")}}
+		return item
 	case "message":
-		return map[string]any{"id": writer.messageID, "type": "message", "status": status, "role": "assistant", "content": []any{map[string]any{"type": "output_text", "text": strings.Join(writer.outputText, ""), "annotations": []any{}}}}
+		return map[string]any{"id": writer.messageID, "type": "message", "status": status, "role": "assistant", "content": []any{writer.outputTextContent()}}
 	default:
 		if strings.HasPrefix(key, "tool:") {
 			return writer.toolItem(writer.toolCalls[strings.TrimPrefix(key, "tool:")], status)
 		}
 	}
 	return nil
+}
+
+func (writer *v2ResponsesWriter) outputTextContent() map[string]any {
+	content := map[string]any{"type": "output_text", "text": strings.Join(writer.outputText, ""), "annotations": []any{}}
+	if writer.logprobsSeen {
+		content["logprobs"] = deepCopyJSON(writer.textLogprobs)
+	}
+	return content
+}
+
+func mergeV2Logprobs(current, next any) any {
+	if currentItems, ok := current.([]any); ok {
+		if nextItems, ok := next.([]any); ok {
+			return append(append([]any(nil), currentItems...), nextItems...)
+		}
+	}
+	return deepCopyJSON(next)
 }
 
 func (writer *v2ResponsesWriter) outputItems() []any {
@@ -1089,8 +1596,12 @@ func (writer *v2ResponsesWriter) stop(compaction bool) map[string]any {
 	}
 	if writer.messageStarted {
 		text := strings.Join(writer.outputText, "")
-		writer.emit(map[string]any{"type": "response.output_text.done", "response_id": writer.responseID, "item_id": writer.messageID, "output_index": writer.textOutputIndex, "content_index": 0, "text": text})
-		writer.emit(map[string]any{"type": "response.content_part.done", "response_id": writer.responseID, "item_id": writer.messageID, "output_index": writer.textOutputIndex, "content_index": 0, "part": map[string]any{"type": "output_text", "text": text, "annotations": []any{}}})
+		textDone := map[string]any{"type": "response.output_text.done", "response_id": writer.responseID, "item_id": writer.messageID, "output_index": writer.textOutputIndex, "content_index": 0, "text": text}
+		if writer.logprobsSeen {
+			textDone["logprobs"] = deepCopyJSON(writer.textLogprobs)
+		}
+		writer.emit(textDone)
+		writer.emit(map[string]any{"type": "response.content_part.done", "response_id": writer.responseID, "item_id": writer.messageID, "output_index": writer.textOutputIndex, "content_index": 0, "part": writer.outputTextContent()})
 		writer.emit(map[string]any{"type": "response.output_item.done", "response_id": writer.responseID, "output_index": writer.textOutputIndex, "item": writer.outputItem("message", "completed")})
 	}
 	items := writer.outputItems()
@@ -1101,8 +1612,14 @@ func (writer *v2ResponsesWriter) stop(compaction bool) map[string]any {
 		}
 		writer.emit(map[string]any{"type": "response.output_item.done", "response_id": writer.responseID, "output_index": state.outputIndex, "item": writer.outputItem("tool:"+key, "completed")})
 	}
-	response := writer.base("completed", items)
-	writer.emit(map[string]any{"type": "response.completed", "response": response})
+	status := "completed"
+	eventType := "response.completed"
+	if writer.incompleteReason != "" {
+		status = "incomplete"
+		eventType = "response.incomplete"
+	}
+	response := writer.base(status, items)
+	writer.emit(map[string]any{"type": eventType, "response": response})
 	return response
 }
 
@@ -1149,6 +1666,17 @@ func (s *proxyServer) handleResponses(response http.ResponseWriter, request *htt
 		writeResponsesError(response, http.StatusBadRequest, err.Error())
 		return
 	}
+	if previousID := firstText(input["previous_response_id"]); previousID != "" {
+		if history, ok := s.responses.get(previousID); ok {
+			previousPrompt, err := history.promptWithOutput()
+			if err != nil {
+				writeResponsesError(response, http.StatusBadRequest, fmt.Sprintf("previous_response_id %q cannot be resolved: %v", previousID, err))
+				return
+			}
+			currentPrompt, _ := conversion.payload["prompt"].([]any)
+			conversion.payload["prompt"] = mergeV2ResponsePrompts(previousPrompt, currentPrompt)
+		}
+	}
 	frames, err := s.worker.Request(request.Context(), model.ID, conversion.effort, conversion.payload)
 	if err != nil {
 		logV2WorkerFailure(s.diagnosticWriter, summarizeV2Request(model.ID, conversion.effort, conversion.payload), err)
@@ -1156,10 +1684,12 @@ func (s *proxyServer) handleResponses(response http.ResponseWriter, request *htt
 		return
 	}
 	if stream, _ := input["stream"].(bool); stream {
-		s.writeResponsesStream(response, request, model.ID, input, frames, conversion.compaction)
+		prompt, _ := conversion.payload["prompt"].([]any)
+		s.writeResponsesStream(response, request, model.ID, input, prompt, frames, conversion.compaction, conversion.toolRefs,
+			summarizeV2Request(model.ID, conversion.effort, conversion.payload))
 		return
 	}
-	writer := newV2ResponsesWriter(nil, model.ID, input)
+	writer := newV2ResponsesWriter(nil, model.ID, input, conversion.toolRefs)
 	for frame := range frames {
 		if err := writer.add(frame); err != nil {
 			logV2WorkerFailure(s.diagnosticWriter, summarizeV2Request(model.ID, conversion.effort, conversion.payload), err)
@@ -1171,10 +1701,12 @@ func (s *proxyServer) handleResponses(response http.ResponseWriter, request *htt
 		writeResponsesError(response, http.StatusBadGateway, "AI SDK stream ended without a finish part")
 		return
 	}
-	writeV2JSON(response, http.StatusOK, writer.stop(conversion.compaction))
+	result := writer.stop(conversion.compaction)
+	s.responses.put(result, conversion.payload["prompt"])
+	writeV2JSON(response, http.StatusOK, result)
 }
 
-func (s *proxyServer) writeResponsesStream(response http.ResponseWriter, request *http.Request, model string, payload map[string]any, frames <-chan workerFrame, compaction bool) {
+func (s *proxyServer) writeResponsesStream(response http.ResponseWriter, request *http.Request, model string, payload map[string]any, prompt []any, frames <-chan workerFrame, compaction bool, toolRefs map[string]responsesToolRef, diagnostic v2RequestDiagnostic) {
 	flusher, ok := response.(http.Flusher)
 	if !ok {
 		writeResponsesError(response, http.StatusInternalServerError, "streaming is unavailable")
@@ -1186,11 +1718,12 @@ func (s *proxyServer) writeResponsesStream(response http.ResponseWriter, request
 	response.Header().Set("X-Accel-Buffering", "no")
 	response.WriteHeader(http.StatusOK)
 	emitter := newStreamEmitter(response)
-	writer := newV2ResponsesWriter(&emitter, model, payload)
+	writer := newV2ResponsesWriter(&emitter, model, payload, toolRefs)
 	writer.start()
 	for frame := range frames {
 		if err := writer.add(frame); err != nil {
 			if request.Context().Err() == nil {
+				logV2WorkerFailure(s.diagnosticWriter, diagnostic, err)
 				writer.fail(err)
 			}
 			fmt.Fprint(response, "data: [DONE]\n\n")
@@ -1211,7 +1744,8 @@ func (s *proxyServer) writeResponsesStream(response http.ResponseWriter, request
 		}
 		return
 	}
-	writer.stop(compaction)
+	result := writer.stop(compaction)
+	s.responses.put(result, prompt)
 	fmt.Fprint(response, "data: [DONE]\n\n")
 	flusher.Flush()
 }

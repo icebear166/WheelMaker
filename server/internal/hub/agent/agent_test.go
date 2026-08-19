@@ -9284,7 +9284,7 @@ func TestCXFlickerProviderLaunchUsesV2ResponsesBridge(t *testing.T) {
 		APIFormat:                 "openai",
 		EffortLevels:              []string{"low", "high"},
 		DefaultEffort:             "high",
-		InputModalities:           []string{"text"},
+		InputModalities:           []string{"text", "image"},
 		ContextWindow:             1048576,
 		MaxContextWindow:          1048576,
 		SupportsTools:             true,
@@ -9321,8 +9321,8 @@ func TestCXFlickerProviderLaunchUsesV2ResponsesBridge(t *testing.T) {
 	if !slices.Contains(env, "MYFLICKER_WANQING_PROXY_KEY=bridge-key") {
 		t.Fatalf("env = %v, missing bridge key", env)
 	}
-	if profile := provider.connectionProfile(); profile.AllowImages {
-		t.Fatal("cx-flicker unexpectedly allows images for the text-only DeepSeek catalog")
+	if profile := provider.connectionProfile(); !profile.AllowImages {
+		t.Fatal("cx-flicker should allow image inputs through the Responses bridge")
 	}
 }
 

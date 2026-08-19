@@ -12,7 +12,7 @@ import (
 )
 
 const (
-	ModelID               = "deepseek-v4-flash-0731"
+	ModelID              = "deepseek-v4-flash-0731"
 	MinimumCodexVersion  = "0.144.0"
 	CatalogFileName      = "models.json"
 	defaultContextWindow = 1048576
@@ -35,26 +35,51 @@ type Model struct {
 }
 
 type reasoningLevel struct {
-	Effort string `json:"effort"`
+	Effort      string `json:"effort"`
+	Description string `json:"description"`
 }
 
 type catalogModel struct {
-	Slug                      string           `json:"slug"`
-	DisplayName               string           `json:"display_name"`
-	Aliases                   []string         `json:"aliases,omitempty"`
-	ApplyPatchToolType        string           `json:"apply_patch_tool_type"`
-	WebSearchToolType         string           `json:"web_search_tool_type"`
-	InputModalities           []string         `json:"input_modalities"`
-	SupportsParallelToolCalls bool             `json:"supports_parallel_tool_calls"`
-	ContextWindow             int              `json:"context_window"`
-	MaxContextWindow          int              `json:"max_context_window"`
-	DefaultReasoningLevel     string           `json:"default_reasoning_level"`
-	SupportedReasoningLevels  []reasoningLevel `json:"supported_reasoning_levels"`
-	MinimalClientVersion      string           `json:"minimal_client_version"`
-	SupportedInAPI            bool             `json:"supported_in_api"`
-	SupportsSearchTool        bool             `json:"supports_search_tool"`
-	ModelMessages             map[string]any   `json:"model_messages"`
-	BaseInstructions          string           `json:"base_instructions"`
+	Slug                           string           `json:"slug"`
+	PreferWebsockets               bool             `json:"prefer_websockets"`
+	SupportVerbosity               bool             `json:"support_verbosity"`
+	DefaultVerbosity               string           `json:"default_verbosity"`
+	DisplayName                    string           `json:"display_name"`
+	Description                    string           `json:"description"`
+	Aliases                        []string         `json:"aliases,omitempty"`
+	ApplyPatchToolType             string           `json:"apply_patch_tool_type"`
+	WebSearchToolType              string           `json:"web_search_tool_type"`
+	InputModalities                []string         `json:"input_modalities"`
+	SupportsImageDetailOriginal    bool             `json:"supports_image_detail_original"`
+	TruncationPolicy               map[string]any   `json:"truncation_policy"`
+	SupportsParallelToolCalls      bool             `json:"supports_parallel_tool_calls"`
+	ToolMode                       any              `json:"tool_mode"`
+	MultiAgentVersion              string           `json:"multi_agent_version"`
+	UseResponsesLite               bool             `json:"use_responses_lite"`
+	IncludeSkillsUsageInstructions bool             `json:"include_skills_usage_instructions"`
+	AutoReviewModelOverride        any              `json:"auto_review_model_override"`
+	ContextWindow                  int              `json:"context_window"`
+	MaxContextWindow               int              `json:"max_context_window"`
+	EffectiveContextWindowPercent  int              `json:"effective_context_window_percent"`
+	AutoCompactTokenLimit          any              `json:"auto_compact_token_limit"`
+	CompHash                       string           `json:"comp_hash"`
+	ReasoningSummaryFormat         string           `json:"reasoning_summary_format"`
+	DefaultReasoningSummary        string           `json:"default_reasoning_summary"`
+	DefaultReasoningLevel          string           `json:"default_reasoning_level"`
+	SupportedReasoningLevels       []reasoningLevel `json:"supported_reasoning_levels"`
+	ShellType                      string           `json:"shell_type"`
+	Visibility                     string           `json:"visibility"`
+	MinimalClientVersion           string           `json:"minimal_client_version"`
+	SupportedInAPI                 bool             `json:"supported_in_api"`
+	AvailabilityNUX                any              `json:"availability_nux"`
+	Upgrade                        any              `json:"upgrade"`
+	Priority                       int              `json:"priority"`
+	ModelMessages                  map[string]any   `json:"model_messages"`
+	ExperimentalSupportedTools     []any            `json:"experimental_supported_tools"`
+	SupportsSearchTool             bool             `json:"supports_search_tool"`
+	DefaultServiceTier             any              `json:"default_service_tier"`
+	SupportsReasoningSummaries     bool             `json:"supports_reasoning_summaries"`
+	BaseInstructions               string           `json:"base_instructions"`
 }
 
 type catalogDocument struct {
@@ -80,8 +105,9 @@ func normalizeModel(model Model) (catalogModel, error) {
 	if len(modalities) == 0 {
 		modalities = []string{"text"}
 	}
-	for _, modality := range modalities {
-		if !strings.EqualFold(modality, "text") {
+	for index, modality := range modalities {
+		modalities[index] = strings.ToLower(modality)
+		if modalities[index] != "text" && modalities[index] != "image" {
 			return catalogModel{}, fmt.Errorf("cx-flicker model %q has unsupported input modality %q", model.ID, modality)
 		}
 	}
@@ -103,22 +129,46 @@ func normalizeModel(model Model) (catalogModel, error) {
 	}
 	aliases := cleanStrings(model.Aliases)
 	return catalogModel{
-		Slug:                      model.ID,
-		DisplayName:               model.Name,
-		Aliases:                   aliases,
-		ApplyPatchToolType:        "freeform",
-		WebSearchToolType:         "text",
-		InputModalities:           modalities,
-		SupportsParallelToolCalls: model.SupportsParallelToolCalls || model.SupportsTools,
-		ContextWindow:             contextWindow,
-		MaxContextWindow:          maxContextWindow,
-		DefaultReasoningLevel:     defaultEffort,
-		SupportedReasoningLevels:  reasoningLevels(efforts),
-		MinimalClientVersion:      MinimumCodexVersion,
-		SupportedInAPI:            true,
-		SupportsSearchTool:        true,
-		ModelMessages:             map[string]any{"instructions_template": defaultBaseInstructions},
-		BaseInstructions:          defaultBaseInstructions,
+		Slug:                          model.ID,
+		PreferWebsockets:              false,
+		SupportVerbosity:              true,
+		DefaultVerbosity:              "low",
+		DisplayName:                   model.Name,
+		Description:                   "DeepSeek-V4 Flash through the Flicker Responses bridge.",
+		Aliases:                       aliases,
+		ApplyPatchToolType:            "freeform",
+		WebSearchToolType:             "text",
+		InputModalities:               modalities,
+		SupportsImageDetailOriginal:   contains(modalities, "image"),
+		TruncationPolicy:              map[string]any{"mode": "tokens", "limit": 10000},
+		SupportsParallelToolCalls:     model.SupportsParallelToolCalls || model.SupportsTools,
+		MultiAgentVersion:             "v2",
+		EffectiveContextWindowPercent: 95,
+		ContextWindow:                 contextWindow,
+		MaxContextWindow:              maxContextWindow,
+		CompHash:                      "wheelmaker-cxflicker-v2",
+		ReasoningSummaryFormat:        "experimental",
+		DefaultReasoningSummary:       "none",
+		DefaultReasoningLevel:         defaultEffort,
+		SupportedReasoningLevels:      reasoningLevels(efforts),
+		ShellType:                     "shell_command",
+		Visibility:                    "list",
+		MinimalClientVersion:          MinimumCodexVersion,
+		SupportedInAPI:                true,
+		Priority:                      1,
+		ModelMessages: map[string]any{
+			"instructions_template": defaultBaseInstructions,
+			"instructions_variables": map[string]string{
+				"personality_default":   "",
+				"personality_friendly":  "",
+				"personality_pragmatic": "",
+			},
+			"approvals": nil,
+		},
+		ExperimentalSupportedTools: []any{},
+		SupportsSearchTool:         true,
+		SupportsReasoningSummaries: true,
+		BaseInstructions:           defaultBaseInstructions,
 	}, nil
 }
 
@@ -173,9 +223,23 @@ func contains(values []string, expected string) bool {
 func reasoningLevels(efforts []string) []reasoningLevel {
 	levels := make([]reasoningLevel, 0, len(efforts))
 	for _, effort := range efforts {
-		levels = append(levels, reasoningLevel{Effort: effort})
+		levels = append(levels, reasoningLevel{
+			Effort:      effort,
+			Description: reasoningDescription(effort),
+		})
 	}
 	return levels
+}
+
+func reasoningDescription(effort string) string {
+	switch strings.ToLower(strings.TrimSpace(effort)) {
+	case "low":
+		return "Fast responses with lighter reasoning"
+	case "max", "xhigh":
+		return "Maximum reasoning depth for the hardest problems"
+	default:
+		return "Extra high reasoning depth for complex problems"
+	}
 }
 
 var catalogLocks sync.Map

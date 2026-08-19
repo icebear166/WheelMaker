@@ -360,7 +360,8 @@ LQ();var UM4=H0(l4(),1);import vd2 from"fs";
 			break
 		}
 	}
-	if !slices.Equal(v2StringSlice(flash.Metadata["inputModalities"]), []string{"text"}) ||
+	if !slices.Equal(v2StringSlice(flash.Metadata["inputModalities"]), []string{"text", "image"}) ||
+		flash.Metadata["supportsImages"] != true ||
 		flash.Metadata["supportsTools"] != true || flash.Metadata["supportsParallelToolCalls"] != true {
 		t.Fatalf("flash capabilities = %#v", flash.Metadata)
 	}
@@ -2281,15 +2282,15 @@ func TestV2ResponsesEndpointConvertsCodexProviderTools(t *testing.T) {
 	if firstText(tools[0].(map[string]any)["type"]) != "function" {
 		t.Fatalf("function tool = %#v", tools[0])
 	}
-	for index, expectedID := range []string{"openai.apply_patch", "openai.web_search_preview", "openai.mcp"} {
+	for index, expectedName := range []string{"apply_patch", "web_search", "mcp"} {
 		tool := tools[index+1].(map[string]any)
-		if firstText(tool["type"]) != "provider" || firstText(tool["id"]) != expectedID {
-			t.Fatalf("provider tool %d = %#v, want %q", index, tool, expectedID)
+		if firstText(tool["type"]) != "function" || firstText(tool["name"]) != expectedName {
+			t.Fatalf("Codex tool %d = %#v, want function %q", index, tool, expectedName)
 		}
 	}
 	toolChoice, ok := payload["toolChoice"].(map[string]any)
 	if !ok || firstText(toolChoice["type"]) != "tool" || firstText(toolChoice["toolName"]) != "apply_patch" {
-		t.Fatalf("provider tool choice = %#v", payload["toolChoice"])
+		t.Fatalf("Codex tool choice = %#v", payload["toolChoice"])
 	}
 }
 

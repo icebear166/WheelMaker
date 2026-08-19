@@ -3583,8 +3583,15 @@ func openAIFinishToAnthropicStop(reason string) string {
 
 func usageInt(usage map[string]any, keys ...string) int {
 	for _, key := range keys {
-		if value := firstPresentInt(usage[key]); value >= 0 {
-			return value
+		value, ok := usage[key]
+		if !ok || value == nil {
+			continue
+		}
+		if nested, ok := value.(map[string]any); ok {
+			return usageTotal(nested)
+		}
+		if parsed := firstPresentInt(value); parsed >= 0 {
+			return parsed
 		}
 	}
 	return 0
