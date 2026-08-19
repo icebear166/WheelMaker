@@ -198,8 +198,8 @@ Expected: no failed Jest suite/test and no TypeScript diagnostics. Jest: 229 sui
 
 Run the approved baseline-count scripts excluding `dist` and `node_modules`; verify Go has one test file per tested package directory, Go lines/functions are below 65,323/1,684, and frontend files/lines are at most 75% of 308/50,851. Actual after rebasing remote additions: Go 25 files/25 package directories/64,883 lines/1,667 functions; frontend 229 files/36,906 lines. The branch diff contains 185 files relative to `origin/main`, with no production/protocol files outside approved test/spec/plan paths.
 
-- [ ] **Step 4: Review diff and complete Git checkpoint/finalize**
+- [x] **Step 4: Review diff and complete Git checkpoint/finalize**
 
 Run: `git diff --check`, `git status --short`, `git diff --stat`, and `git diff -- server app/web`.
 
-Expected: only approved test/spec/plan files changed; checkpoint each completed independent work unit and finalize with the actual verification result.
+Expected: only approved test/spec/plan files changed; checkpoint each completed independent work unit and finalize with the actual verification result. Final review passed with `git diff --check`; relative to `origin/main`, all changed paths are approved test/spec/plan files and no production/protocol/wiki file changed.
