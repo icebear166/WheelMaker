@@ -1,5 +1,3 @@
-import fs from 'fs';
-import path from 'path';
 import {
   buildChatDisplayIndex,
   chatDisplayItemContainsTurn,
@@ -451,16 +449,4 @@ describe('chat display index', () => {
     expect(paramReadCount).toBe(readsAfterFirstBuild);
   });
 
-  test('does not keep a manual virtual range implementation', () => {
-    const source = fs.readFileSync(
-      path.join(__dirname, '..', 'web', 'src', 'chat', 'turns', 'chatDisplayIndex.ts'),
-      'utf8',
-    );
-
-    expect(source).not.toContain('getChatDisplayIndexRange');
-    expect(source).not.toContain('ChatDisplayRange');
-    expect(source).not.toContain('paddingTop');
-    expect(source).not.toContain('paddingBottom');
-    expect(source).not.toContain('totalEstimatedHeight');
-  });
 });

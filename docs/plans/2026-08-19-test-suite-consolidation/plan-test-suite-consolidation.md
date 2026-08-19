@@ -79,21 +79,23 @@ Expected: all retained runtime component tests pass and no deleted suite is list
 
 **Acceptance:** 每个保留文件的主要断言针对导入的函数、服务或真实渲染结果；删除 stale API 调用、源码布局断言和 CSS 数值断言，同时保留 package metadata、PWA/native gating、persistence、usage partial-failure、composer model、plan interaction 和 settings model 的行为证据。
 
-- [ ] **Step 1: Preserve focused runtime behavior before trimming**
+本轮同步移除重复的页面源码/CSS wiring 套件，以及已由 colocated 组件、状态模型、服务或协议测试覆盖的低信息 smoke 套件；未修改生产代码。
+
+- [x] **Step 1: Preserve focused runtime behavior before trimming**
 
 Run: `npm test -- --runInBand --coverage=false __tests__/web-chat-composer-status.test.ts __tests__/web-chat-plan-surface.test.tsx __tests__/web-agent-package-update-settings.test.ts __tests__/web-skill-management-service.test.ts __tests__/web-settings-navigation.test.ts __tests__/web-mobile-enter-key-settings.test.ts __tests__/web-setup.test.js __tests__/web-native-pwa-gating.test.ts __tests__/web-responsive-ui-state.test.ts __tests__/web-chat-turn-rendering.test.ts __tests__/web-chat-display-index.test.ts __tests__/web-chat-draft-sessions.test.ts __tests__/web-chat-turn-markdown.test.tsx __tests__/web-usage-history.test.ts`
 
 Expected: record the current behavior failures separately from source-structure failures; do not add production changes to make this command pass.
 
-- [ ] **Step 2: Keep concrete behavior and remove static branches**
+- [x] **Step 2: Keep concrete behavior and remove static branches**
 
 Retain the pure helper assertions in `web-chat-composer-status.test.ts`, actual React renderer interactions in `web-chat-plan-surface.test.tsx`, current release metadata/service calls in `web-agent-package-update-settings.test.ts`, current repository methods in `web-skill-management-service.test.ts`, imported settings model cases in `web-settings-navigation.test.ts`, direct `normalizeMobileEnterKeyBehavior` cases in `web-mobile-enter-key-settings.test.ts`, and real usage-history partial failure in `web-usage-history.test.ts`. Remove their `readFileSync`/CSS/source-order helpers and all calls to methods no longer present in `RegistryRepository`.
 
-- [ ] **Step 3: Compact build and platform boundary checks**
+- [x] **Step 3: Compact build and platform boundary checks**
 
 Reduce `web-setup.test.js` to a small set covering entrypoint/PWA integration, service-worker message behavior, release output/cache isolation, and CSS extraction. Reduce `web-native-pwa-gating.test.ts` to the native-shell registration boundary and keep native detection behavior in `web-native-runtime.test.ts`.
 
-- [ ] **Step 4: Run the mixed-suite regression tests**
+- [x] **Step 4: Run the mixed-suite regression tests**
 
 Run: `npm test -- --runInBand --coverage=false __tests__/web-chat-composer-status.test.ts __tests__/web-chat-plan-surface.test.tsx __tests__/web-agent-package-update-settings.test.ts __tests__/web-skill-management-service.test.ts __tests__/web-settings-navigation.test.ts __tests__/web-mobile-enter-key-settings.test.ts __tests__/web-setup.test.js __tests__/web-native-pwa-gating.test.ts __tests__/web-responsive-ui-state.test.ts __tests__/web-chat-turn-rendering.test.ts __tests__/web-chat-display-index.test.ts __tests__/web-chat-draft-sessions.test.ts __tests__/web-chat-turn-markdown.test.tsx __tests__/web-usage-history.test.ts`
 

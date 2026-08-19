@@ -1,86 +1,30 @@
-import fs from 'fs';
-import path from 'path';
+import {
+  DEFAULT_MOBILE_ENTER_KEY_BEHAVIOR,
+  isMobileEnterKeyBehavior,
+  MOBILE_ENTER_KEY_BEHAVIOR_OPTIONS,
+  normalizeMobileEnterKeyBehavior,
+} from '../web/src/chat/mobileEnterKeyBehavior';
 
-function readSourceText(filePath: string): string {
-  return fs.readFileSync(filePath, 'utf8').replace(/\r\n/g, '\n');
-}
-
-describe('web mobile enter key settings', () => {
-  test('defines send as the default mobile enter key behavior', () => {
-    const projectRoot = path.join(__dirname, '..');
-    const chatBehaviorPath = path.join(projectRoot, 'web', 'src', 'chat', 'mobileEnterKeyBehavior.ts');
-
-    expect(fs.existsSync(chatBehaviorPath)).toBe(true);
-    const chatBehaviorTs = readSourceText(chatBehaviorPath);
-    expect(chatBehaviorTs).toContain("export type MobileEnterKeyBehavior = 'send' | 'newline';");
-    expect(chatBehaviorTs).toContain("export const DEFAULT_MOBILE_ENTER_KEY_BEHAVIOR: MobileEnterKeyBehavior = 'send';");
-    expect(chatBehaviorTs).toContain("{id: 'send', label: 'Send'}");
-    expect(chatBehaviorTs).toContain("{id: 'newline', label: 'New Line'}");
-    expect(chatBehaviorTs).toContain('export function isMobileEnterKeyBehavior');
-    expect(chatBehaviorTs).toContain('export function normalizeMobileEnterKeyBehavior');
+describe('mobile enter key behavior', () => {
+  test.each([
+    ['send', 'send'],
+    ['newline', 'newline'],
+  ])('accepts %s as a mobile behavior', (value, expected) => {
+    expect(isMobileEnterKeyBehavior(value)).toBe(true);
+    expect(normalizeMobileEnterKeyBehavior(value)).toBe(expected);
   });
 
-  test('persists mobile enter key behavior and exposes it in Chat settings', () => {
-    const projectRoot = path.join(__dirname, '..');
-    const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));
-    const settingsRootTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'settings', 'SettingsRootContent.tsx'));
-    const persistence = readSourceText(path.join(projectRoot, 'web', 'src', 'workspace', 'WorkspacePersistence.ts'));
-
-    expect(persistence).toContain('mobileEnterKeyBehavior: MobileEnterKeyBehavior;');
-    expect(persistence).toContain("mobileEnterKeyBehavior: 'mobileEnterKeyBehavior',");
-    expect(persistence).toContain('mobileEnterKeyBehavior: DEFAULT_MOBILE_ENTER_KEY_BEHAVIOR,');
-    expect(persistence).toContain('mobileEnterKeyBehavior: normalizeMobileEnterKeyBehavior(input.mobileEnterKeyBehavior, base.mobileEnterKeyBehavior),');
-    expect(persistence).toContain('const rows = globalRowsForPatch(patch, next, now);');
-    expect(persistence).toContain('{k: GLOBAL_KEYS.mobileEnterKeyBehavior, v: serialize(this.state.global.mobileEnterKeyBehavior), updatedAt}');
-
-    expect(mainTsx).toContain('const [mobileEnterKeyBehavior, setMobileEnterKeyBehavior] = useState<MobileEnterKeyBehavior>(');
-    expect(mainTsx).toContain('normalizeMobileEnterKeyBehavior(persistedGlobal.mobileEnterKeyBehavior)');
-    expect(mainTsx).toContain('mobileEnterKeyBehavior,');
-    expect(mainTsx).toContain('mobileEnterKeyBehavior={mobileEnterKeyBehavior}');
-    expect(mainTsx).toContain('setMobileEnterKeyBehavior={setMobileEnterKeyBehavior}');
-
-    expect(settingsRootTsx).toContain('mobileEnterKeyBehavior: MobileEnterKeyBehavior;');
-    expect(settingsRootTsx).toContain('setMobileEnterKeyBehavior: (value: MobileEnterKeyBehavior) => void;');
-    expect(settingsRootTsx).toContain('Mobile Enter Key');
-    expect(settingsRootTsx).toContain('value={mobileEnterKeyBehavior}');
-    expect(settingsRootTsx).toContain('if (isMobileEnterKeyBehavior(next)) setMobileEnterKeyBehavior(next);');
-    expect(settingsRootTsx).toContain('MOBILE_ENTER_KEY_BEHAVIOR_OPTIONS.map(item => (');
-    expect(settingsRootTsx).toContain('{!isWide ? (');
-
-    const chatStart = settingsRootTsx.indexOf('<SettingsSection id="chat"');
-    const codeStart = settingsRootTsx.indexOf('<SettingsSection id="code"', chatStart);
-    const settingStart = settingsRootTsx.indexOf('Mobile Enter Key');
-    const mobileOnlyStart = settingsRootTsx.lastIndexOf('{!isWide ? (', settingStart);
-    const mobileOnlyEnd = settingsRootTsx.indexOf(') : null}', settingStart);
-    expect(chatStart).toBeGreaterThanOrEqual(0);
-    expect(codeStart).toBeGreaterThan(chatStart);
-    expect(settingStart).toBeGreaterThan(chatStart);
-    expect(settingStart).toBeLessThan(codeStart);
-    expect(mobileOnlyStart).toBeGreaterThan(chatStart);
-    expect(mobileOnlyStart).toBeLessThan(settingStart);
-    expect(mobileOnlyEnd).toBeGreaterThan(settingStart);
-    expect(mobileOnlyEnd).toBeLessThan(codeStart);
+  test('falls back to send for unknown persisted values', () => {
+    expect(isMobileEnterKeyBehavior('submit')).toBe(false);
+    expect(normalizeMobileEnterKeyBehavior('submit')).toBe(DEFAULT_MOBILE_ENTER_KEY_BEHAVIOR);
+    expect(normalizeMobileEnterKeyBehavior(null, 'newline')).toBe('newline');
   });
 
-  test('uses mobile enter preference for keyboard hint and plain Enter send ownership', () => {
-    const projectRoot = path.join(__dirname, '..');
-    const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));
-
-    expect(mainTsx).toContain("enterKeyHint={isWide ? undefined : mobileEnterKeyBehavior === 'send' ? 'send' : 'enter'}");
-    expect(mainTsx).toContain("const shouldSendChatOnEnter = event.key === 'Enter' && !event.shiftKey && !event.altKey && !event.nativeEvent.isComposing;");
-    expect(mainTsx).toContain("const mobileEnterShouldSend = !isWide && mobileEnterKeyBehavior === 'send';");
-    expect(mainTsx).toContain('if (isWide || mobileEnterShouldSend) {');
-    expect(mainTsx).toContain('event.preventDefault();');
-    expect(mainTsx).toContain('sendChatMessage().catch(() => undefined);');
-  });
-
-  test('sends on Enter for every desktop platform, not only Windows', () => {
-    const projectRoot = path.join(__dirname, '..');
-    const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));
-
-    const enterHandlerStart = mainTsx.indexOf('const shouldSendChatOnEnter');
-    const enterHandlerEnd = mainTsx.indexOf('sendChatMessage().catch(() => undefined);', enterHandlerStart);
-    const enterHandler = mainTsx.slice(enterHandlerStart, enterHandlerEnd);
-    expect(enterHandler).not.toContain('isWindowsPlatform');
+  test('publishes the default and the two user-facing choices', () => {
+    expect(DEFAULT_MOBILE_ENTER_KEY_BEHAVIOR).toBe('send');
+    expect(MOBILE_ENTER_KEY_BEHAVIOR_OPTIONS).toEqual([
+      {id: 'send', label: 'Send'},
+      {id: 'newline', label: 'New Line'},
+    ]);
   });
 });

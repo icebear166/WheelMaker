@@ -184,7 +184,7 @@ test('copies the full sha from the commit header and keeps file rows free of sta
       ?? (child as TestRenderer.ReactTestInstance).props['aria-label']
       ?? ''));
   expect(childOrder.indexOf('git-short-sha'))
-    .toBeLessThan(childOrder.findIndex(item => item.startsWith('Copy full SHA')));
+    .toBeLessThan(childOrder.indexOf('git-commit-copy'));
 
   await act(async () => {
     root.findByProps({'aria-label': 'Copy full SHA abc'}).props.onClick();
