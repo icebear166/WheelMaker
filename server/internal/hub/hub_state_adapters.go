@@ -197,7 +197,7 @@ func (r *Reporter) actionHubStateSkills(ctx context.Context, action string, para
 		}, nil
 	case "inspectRepo", "detail", "operation":
 		return r.runHubStateTool(ctx, hubToolMethodSkills, hubStateToolPayload(r.cfg.HubID, action, params))
-	case "addRepo", "refreshRepo", "updateRepo", "install", "installAll", "uninstall", "removeRepo":
+	case "addRepo", "refreshRepo", "updateRepo", "updateScope", "install", "installAll", "installAllScope", "uninstall", "removeRepo":
 		return r.runSkillsStateAction(ctx, action, params)
 	default:
 		return nil, fmt.Errorf("unsupported %s action %q", hubStateSectionSkills, action)
