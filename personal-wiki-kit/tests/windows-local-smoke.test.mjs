@@ -8,7 +8,7 @@ import path from 'node:path';
 import process from 'node:process';
 import test from 'node:test';
 
-import {stageReleaseTree} from '../scripts/build-release.mjs';
+import {buildRelease} from '../scripts/build-release.mjs';
 
 const kitRoot = path.resolve(import.meta.dirname, '..');
 
@@ -28,8 +28,8 @@ async function freePort() {
 test('staged Windows Kit works without host Node or Go on PATH', {skip: process.platform !== 'win32', timeout: 180_000}, async (t) => {
   const root = await mkdtemp(path.join(tmpdir(), 'wiki-kit-windows-smoke-'));
   t.after(() => rm(root, {recursive: true, force: true, maxRetries: 5, retryDelay: 100}));
-  const stage = path.join(root, 'kit');
-  await stageReleaseTree({kitRoot, destination: stage, platform: 'windows-x64', runtimeExecutable: process.execPath, serverExecutable: path.join(kitRoot, 'server', 'wiki-server.exe'), readerRoot: path.join(kitRoot, 'reader-dist')});
+  const released = await buildRelease({kitRoot, outputRoot: root, platform: 'windows-x64', runtimeExecutable: process.execPath, readerRoot: path.join(kitRoot, 'reader-dist')});
+  const stage = released.destination;
   const env = commandEnvironment(root);
   assert.equal(spawnSync('where.exe', ['node.exe'], {env, encoding: 'utf8'}).status, 1);
   assert.equal(spawnSync('where.exe', ['go.exe'], {env, encoding: 'utf8'}).status, 1);

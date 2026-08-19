@@ -50,7 +50,7 @@
 
 ### 功能设计
 
-新用户下载 WheelMaker 发布页中的 Personal Wiki Kit Windows 包并运行 `setup-wiki.bat`。初始化器引导选择本地目录、站点名称和可选网站地址，创建空白私人 Git 仓库、三份注册表、示例/空白内容、版本锁和 BAT；随后安装两个中文 Codex Skill，并写入独立用户配置。GitHub CLI 可用时提供“创建私人远端”选择，但默认本地完成，不要求服务器。
+新用户从 `https://release.wheelmaker.top/setup-wiki.bat` 下载并运行固定安装器。安装器从 Personal Wiki Kit 独立稳定通道下载并校验 Windows 包，再由初始化器引导选择本地目录、站点名称和可选网站地址，创建空白私人 Git 仓库、三份注册表、示例/空白内容、版本锁和 BAT；随后安装两个中文 Codex Skill，并写入独立用户配置。GitHub CLI 可用时提供“创建私人远端”选择，但默认本地完成，不要求 Wiki 服务器。
 
 日常使用时，`open-wiki.bat` 在 loopback 启动只读 Wiki；AI 在实质任务开始通过 `lookup-knowledge` 查询已提交快照，结束时由 `publish-knowledge` 提议可靠知识，获得明确批准后更新私人仓库。用户双击 `publish-wiki.bat` 完成内容白名单检查、构建、测试、提交和可选推送；配置了在线部署的仓库在 push 后由 Action 完成受保护发布。Kit 有新版时只提示，用户显式运行更新入口后才升级。
 

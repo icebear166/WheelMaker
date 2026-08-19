@@ -34,7 +34,6 @@ jobs:
           npm ci --ignore-scripts
           npm test
           npm run typecheck
-          npm run build
           npm run check:public
           npm run build:release -- --platform ${{ matrix.platform }} --output .wiki-kit-out
       - name: Test Kit server
@@ -62,7 +61,7 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     permissions:
-      contents: write
+      contents: read
     steps:
       - uses: actions/checkout@v4
         with:
@@ -75,7 +74,7 @@ jobs:
           pattern: personal-wiki-kit-*
           path: ${{ runner.temp }}/personal-wiki-kit-assets
           merge-multiple: true
-      - name: Publish exact Kit tag and assets
+      - name: Publish exact Kit version to Release Server
         env:
-          GH_TOKEN: ${{ github.token }}
-        run: node scripts/personal-wiki-kit-release.mjs --assets "${{ runner.temp }}/personal-wiki-kit-assets"
+          WHEELMAKER_RELEASE_TOKEN: ${{ secrets.WHEELMAKER_RELEASE_TOKEN }}
+        run: node scripts/personal-wiki-kit-release.mjs --assets "${{ runner.temp }}/personal-wiki-kit-assets" --setup personal-wiki-kit/setup-wiki.bat

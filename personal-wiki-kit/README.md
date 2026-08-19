@@ -12,7 +12,13 @@ Personal Wiki Kit 是 WheelMaker 仓库内独立版本化的公共工具包。�
 
 ## 版本规则
 
-当前 Kit 版本由 `kit.json` 唯一声明。私人 Wiki 通过 `wiki-kit.lock.json` 固定精确版本；`latest` 不是合法版本，也不会自动升级。
+当前 Kit 版本由 `kit.json` 唯一声明。私人 Wiki 通过 `wiki-kit.lock.json` 固定精确版本；`latest` 不是合法版本，也不会自动升级。Kit 使用 `https://release.wheelmaker.top/personal-wiki-kit/` 下独立于 WheelMaker 正式版本的稳定指针和不可变版本目录。
+
+## Windows 一键安装
+
+从 `https://release.wheelmaker.top/setup-wiki.bat` 下载并运行固定安装器。安装器会读取 Kit 稳定指针，下载 Windows 包并校验大小与 SHA-256，然后把精确版本安装到 `%USERPROFILE%/.personal-wiki/kit/versions/<version>`，再启动设置向导。
+
+向导创建独立私人 Git 仓库，并在仓库根生成 `open-wiki.bat`、`publish-wiki.bat` 和 `update-wiki-kit.bat`。重复运行固定安装器时，完整安装只能选择检查更新或退出；残缺安装会停止并拒绝覆盖。更新必须显示当前/目标版本并确认，失败时回滚活动版本、launcher、版本锁和 Skills，不修改文章、registry、用户配置或工程路由。
 
 ## 在线仓库生成
 
@@ -29,7 +35,7 @@ Personal Wiki Kit 是 WheelMaker 仓库内独立版本化的公共工具包。�
 ```powershell
 node src/cli.mjs migrate-repository `
   --repository D:\path\to\private-wiki `
-  --kit-source https://github.com/owner/repo/releases/download/personal-wiki-kit-v0.1.0/personal-wiki-kit-v0.1.0-linux-x64.tar.gz `
+  --kit-source https://release.example.com/personal-wiki-kit/releases/v0.1.0/personal-wiki-kit-v0.1.0-linux-x64.tar.gz `
   --kit-sha256 <64位小写SHA-256> `
   --deployment-config D:\path\to\deployment.json `
   --dry-run `

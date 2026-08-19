@@ -41,7 +41,6 @@ jobs:
           npm ci --ignore-scripts
           npm test
           npm run typecheck
-          npm run build
           npm run check:public
           npm run build:release -- --platform linux-x64 --output .wiki-kit-out
       - name: Test Personal Wiki server

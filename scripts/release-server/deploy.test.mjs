@@ -366,6 +366,8 @@ test('release homepage explains the private Personal Wiki workflow below client 
   assert.ok(footerPosition > wikiPosition, 'Personal Wiki guide appears before the footer');
   assert.match(wikiSection, /Personal Wiki Kit/);
   assert.match(wikiSection, /setup-wiki\.bat/);
+  assert.match(wikiSection, /href="\/setup-wiki\.bat"[^>]*download/u);
+  assert.match(wikiSection, /Download setup-wiki\.bat/u);
   assert.match(wikiSection, /project-routing\.json/);
   assert.match(wikiSection, /multiple local projects[^<]*same Wiki project ID/i);
   assert.match(wikiSection, /knowledgeRegistry\.publicUrl/);
@@ -373,6 +375,7 @@ test('release homepage explains the private Personal Wiki workflow below client 
   assert.match(wikiSection, /publish-wiki\.bat/);
   assert.match(wikiSection, /private Git repository/i);
   assert.doesNotMatch(wikiSection, /wiki\.wheelbox\.top|Administrator|D:\\WheelMaker/i);
+  assert.doesNotMatch(wikiSection, /github\.com\/swm8023\/WheelMaker\/releases/u);
 });
 
 async function loadReleaseHomepage() {

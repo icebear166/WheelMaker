@@ -46,6 +46,7 @@
     "build": "npm run build:reader",
     "build:reader": "webpack --config reader/webpack.config.cjs && node src/site-builder.mjs seal-reader reader-dist kit.json",
     "build:release": "node scripts/build-release.mjs",
+    "pretest": "npm run build",
     "test": "node --test tests/*.test.mjs",
     "check:public": "node --test --test-name-pattern=\"public boundary\" tests/kit-manifest.test.mjs",
     "smoke:windows-local": "node --test tests/windows-local-smoke.test.mjs",

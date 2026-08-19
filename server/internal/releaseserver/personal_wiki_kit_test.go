@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestPersonalWikiKitCommitPublishesIndependentStableAndAnonymousAssets(t *testing.T) {
@@ -138,6 +139,26 @@ func TestPersonalWikiKitCommitDoesNotChangeWheelMakerReleaseState(t *testing.T) 
 		if !bytes.Equal(got, want) {
 			t.Fatalf("WheelMaker %s changed to %s", name, got)
 		}
+	}
+}
+
+func TestPersonalWikiKitStaleSessionCleanupRemovesOnlyKitStaging(t *testing.T) {
+	current := time.Date(2026, 8, 19, 9, 0, 0, 0, time.UTC)
+	server, root := newSessionTestServer(t, func() time.Time { return current })
+	started := startKitTestSession(t, server, "0.1.0", strings.Repeat("e", 40))
+	keep := filepath.Join(root, "public", "setup-wiki.bat")
+	if err := os.WriteFile(keep, []byte("keep"), 0o640); err != nil {
+		t.Fatal(err)
+	}
+	current = current.Add(staleSessionAge + time.Minute)
+	if err := server.cleanupStaleSessions(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(server.kitSessionDirectory(started.SessionID)); !os.IsNotExist(err) {
+		t.Fatalf("stale Kit session remains: %v", err)
+	}
+	if got, err := os.ReadFile(keep); err != nil || string(got) != "keep" {
+		t.Fatalf("public file changed: %q, %v", got, err)
 	}
 }
 

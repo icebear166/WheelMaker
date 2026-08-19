@@ -123,7 +123,7 @@ Expected: FAIL because release orchestration is absent.
 
 - [x] **Step 3: Implement minimal release entry and workflow**
 
-Use GitHub Actions `contents: write` only in the dedicated workflow. Build source remains in WheelMaker; private Wiki content is never checked out or referenced. Update security gates to scan Kit source and artifacts.
+Use the dedicated workflow with `contents: read` and the existing `WHEELMAKER_RELEASE_TOKEN` secret to upload into the Release Server's independent Personal Wiki Kit channel. Build source remains in WheelMaker; private Wiki content is never checked out or referenced. Update security gates to scan Kit source and artifacts.
 
 - [x] **Step 4: Verify GREEN and workflow syntax contracts**
 

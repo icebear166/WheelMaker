@@ -6,7 +6,7 @@ Knowledge Registry 是一个独立于具体工程的个人知识库。它把经�
 
 核心原则是：**原始材料不是知识，只有经过整理、确认、验证和版本化的结论才进入知识库。** 任意本地工程都可以提供知识来源，用户级 `publish-knowledge` Skill 负责项目路由和发布流程，Personal Wiki 独立仓库负责内容、索引、构建与发布，服务器只负责认证、安全读取和原子切换版本。
 
-本文同时记录线上现状和本地待发布实现。服务器、域名、认证、Git 发布和原子 release 是线上现行能力；“按知识类型 / 按项目”双视图、项目注册表和本机 Skill 项目路由已于 2026-08-17 在本地实现，完成验证和发布前不得描述为线上现状。
+本文同时记录线上现状和本地待发布实现。服务器、域名、认证、Git 发布和原子 release 是线上现行能力；双视图、YAML 注册表、本机 Skill 项目路由、公共 Kit 安装更新和 WheelMaker 快捷入口已经在本地实现，只有完成对应发布与公网验证后才算线上生效。
 
 ## 对话沉淀的决策基线
 
@@ -33,13 +33,16 @@ Knowledge Registry 是一个独立于具体工程的个人知识库。它把经�
 | Markdown、Git、构建与密码保护网站 | 已实现 | 当前 Personal Wiki 的内容和发布基础 |
 | DNS、Gateway、`wiki-server`、原子 release | 已实现 | 当前线上访问和部署链路 |
 | 按知识类型浏览 | 已实现 | 线上现行目录模式 |
-| 文章稳定 `projectId` 元数据 | 本地已实现，待发布 | 现有名称已迁移为注册 ID |
-| `content/projects.json` 项目注册表 | 本地已实现，待发布 | 项目身份唯一事实源 |
+| `content/registry/articles.yaml` 文章目录 | 本地已实现，待发布 | 集中维护文章分类、项目归属和顺序 |
+| `content/registry/projects.yaml` 项目注册表 | 本地已实现，待发布 | 项目身份唯一事实源 |
+| `content/registry/taxonomy.yaml` 知识目录 | 本地已实现，待发布 | 一级、二级目录及顺序可由用户直接编辑 |
 | 按项目浏览 | 本地已实现，待发布 | 与知识类型视图共用同一文章数据 |
 | 本机 Skill 项目路由 | 本地已实现并安装验证，待随 Wiki 发布 | 不读取 WheelMaker 代码或配置 |
 | `publish-knowledge` 项目候选与校验 | 本地已实现并安装验证，待随 Wiki 发布 | 只生成候选默认值，不绕过用户批准 |
+| 公共 Kit 独立版本通道与固定安装器 | 本地已实现并验证，待部署发布 | Release Server 复用发布凭据，但不混入 WheelMaker stable |
+| WheelMaker 页头 Wiki 快捷入口 | 本地已实现并验证，待发布 WheelMaker | 未配置地址也显示按钮，点击时提示如何配置 |
 
-本方案不修改 `~/.wheelmaker/config.json`，也不要求 WheelMaker 发布兼容版本。项目路由是用户级 Skill 的本机私有能力。
+项目路由不修改 `~/.wheelmaker/config.json`，是用户级 Skill 的本机私有能力。知识内容的日常发布不要求重新发布 WheelMaker；只有首次上线或更新公共 Kit、Release Server、发布页说明、WheelMaker 页头快捷入口时，才发布对应的 WheelMaker 基础设施或产品版本。
 
 下表是本文最后核对于 2026-08-13 的实例关系；它记录部署地址，不表示 2026-08-17 确认的双视图功能已经上线：
 
@@ -65,9 +68,10 @@ flowchart LR
     end
 
     subgraph WikiRepo["Personal Wiki 独立 Git 仓库"]
-        Markdown["content/**/*.md<br/>唯一文章事实源"]
-        Sections["content/sections.json<br/>知识类型定义"]
-        Projects["content/projects.json<br/>项目定义"]
+        Markdown["content/articles/**/*.md<br/>唯一文章正文"]
+        Articles["content/registry/articles.yaml<br/>文章分类、项目归属、顺序"]
+        Taxonomy["content/registry/taxonomy.yaml<br/>知识一级/二级目录"]
+        Projects["content/registry/projects.yaml<br/>项目定义"]
         Build["检查与构建"]
         TopicIndex["按知识类型索引"]
         ProjectIndex["按项目索引"]
@@ -93,7 +97,8 @@ flowchart LR
     ProjectRouting -.->|默认项目归属| Skill
     Skill --> Review
     Review -->|批准后写入| Markdown
-    Sections --> Build
+    Articles --> Build
+    Taxonomy --> Build
     Projects --> Build
     Markdown --> Build
     Build --> TopicIndex
@@ -114,7 +119,7 @@ Knowledge Registry 同时有一条“知识发布路径”和一条“网页访�
 2. `publish-knowledge` 根据候选来源路径匹配 Skill 自己的 `project-routing.json`；每个来源选择最长匹配根，取得并去重对应的 Wiki `projectId`，没有匹配时使用“未指定项目”。
 3. Agent 去重、清洗、核实来源，并把内容整理成候选标题、知识类型、关联项目、结论、置信度和变更方式。用户可以在候选审核时增加或移除关联项目。
 4. 用户在当前对话明确批准精确候选；一般性的开发批准不等于知识发布批准。
-5. Agent 把获批内容写入独立 Personal Wiki 仓库的 `content/**/*.md`，并更新必要的目录数据。Skill 映射引用未知项目 ID 时不得按普通文章直接发布；Agent 可以提示修正本机映射，或把新项目定义与首批文章作为同一批候选一起审批。
+5. Agent 把获批正文写入独立 Personal Wiki 仓库的 `content/articles/**/*.md`，并更新必要的 YAML 注册表。Skill 映射引用未知项目 ID 时不得按普通文章直接发布；Agent 可以提示修正本机映射，或把新项目定义与首批文章作为同一批候选一起审批。
 6. 内容检查确认 schema、文章 ID、知识类型、项目 ID、链接、来源、附件和敏感信息均符合合同。
 7. 只提交获批文件并 push `main`；Git 保存每次知识变化的历史。
 8. GitHub Actions 运行测试、构建静态站点，并使用专用部署密钥把 release 包上传服务器。
@@ -233,7 +238,7 @@ Windows 用户直接运行 `setup-wiki.bat`。安装器读取稳定指针，下�
 
 `scripts/resolve-projects.mjs` 对来源文件执行最长包含根匹配；多来源结果取并集并去重，没有具体来源时才使用当前工作区。多个 `roots` 可以指向同一个 `projectId`，因此多个本地工程可以汇总到同一个 Wiki 项目。对于混合用途文档目录，应像上例一样映射已确认的精确文档路径，不能为了省事把整个目录错误归给某个项目。
 
-路由文件只保存本机路径和稳定项目 ID，不保存显示名称、仓库凭据或服务器密钥。`content/projects.json` 仍是项目身份的唯一正式注册表；Skill 映射引用未知 ID 时停止普通发布，不能静默回退或自动登记。没有任何匹配时文章保存 `projects: []`，网页把它显示为“未指定项目”，不会把 `unassigned` 写成正式 ID。
+路由文件只保存本机路径和稳定项目 ID，不保存显示名称、仓库凭据或服务器密钥。`content/registry/projects.yaml` 是项目身份的唯一正式注册表；Skill 映射引用未知 ID 时停止普通发布，不能静默回退或自动登记。没有任何匹配时，`content/registry/articles.yaml` 中该文章保存 `projects: []`，网页把它显示为“未指定项目”，不会把 `unassigned` 写成正式 ID。
 
 该映射只影响运行此 Skill 的电脑。其他电脑可以安装同一发布 Skill，但应维护自己的工程根路径；这不会要求任何被扫描工程实现接口或修改配置。Knowledge Registry 的日常新增知识、项目路由和网站访问均不需要 WheelMaker 发布。
 
@@ -259,7 +264,7 @@ Unity 和 Unreal Engine 先在顶层分开，同一引擎内部使用文章的�
 
 ### 项目注册表与项目视图
 
-`content/projects.json` 保存稳定项目 ID、显示名称、说明和顺序。文章与本机 Skill 路由只引用 ID；项目改名只修改注册表，不批量改写文章。初始迁移把现有名称合并为两个正式项目：
+`content/registry/projects.yaml` 保存稳定项目 ID、显示名称、说明和顺序。文章目录与本机 Skill 路由只引用 ID；项目改名只修改注册表，不批量改写文章。初始迁移把现有名称合并为两个正式项目：
 
 | 稳定 ID | 显示名称 | 合并的现有值 |
 | --- | --- | --- |
@@ -268,44 +273,44 @@ Unity 和 Unreal Engine 先在顶层分开，同一引擎内部使用文章的�
 
 目标注册表形状如下，ID 使用稳定 kebab-case，显示名称和说明可以独立演进：
 
-```json
-[
-  {
-    "id": "wheelmaker",
-    "title": "WheelMaker",
-    "description": "WheelMaker 产品、Personal Wiki 和相关工具链。",
-    "order": 10
-  },
-  {
-    "id": "unity-engine-projects",
-    "title": "Unity Engine Projects",
-    "description": "由现有 C1、Z1 和 SLGWorld 知识合并形成的项目视图。",
-    "order": 20
-  }
-]
+```yaml
+schema: 1
+projects:
+  - id: wheelmaker
+    title: WheelMaker
+    description: WheelMaker 产品、Personal Wiki 和相关工具链。
+    order: 10
+  - id: unity-engine-projects
+    title: Unity Engine Projects
+    description: 由现有 C1、Z1 和 SLGWorld 知识合并形成的项目视图。
+    order: 20
 ```
 
 重复 ID、重复顺序、非法 ID 或文章引用未知 ID 都是内容校验错误。已登记但没有文章的项目保留在注册表中，但不显示在阅读目录里。
 
 项目关联不改变文章的知识类型。例如原 `SLGWorld` 文章仍可属于 `Unreal Engine` 知识类型，但在项目视图中归入 `Unity Engine Projects`。
 
-文章可以关联多个项目，并在每个关联项目下出现。没有项目关联的文章保持 `projects: []`，构建器把它们汇总到自动生成的“未指定项目”；该伪项目不写入 `projects.json`。项目视图只显示当前至少包含一篇文章的正式项目和“未指定项目”。
+文章可以关联多个项目，并在每个关联项目下出现。没有项目关联的文章在 `articles.yaml` 中保持 `projects: []`，构建器把它们汇总到自动生成的“未指定项目”；该伪项目不写入 `projects.yaml`。项目视图只显示当前至少包含一篇文章的正式项目和“未指定项目”。
 
 按项目浏览时，目录结构为“项目 → 知识类型 → 二级分类 → 文章”。项目不是第二套知识源，也不拥有独立分类体系。
 
 ### 文章元数据
 
-每篇文章必须具有稳定 ID、明确标题、一句话摘要、分类、排序、标签、当前状态、更新时间、置信度、关联项目和可追溯来源。文章正文先给出当前结论，再说明适用范围、约束、证据和操作含义。旧结论不在正文中保留副本，历史由 Git 负责。
+每篇文章必须具有稳定 ID、明确标题、一句话摘要、分类、排序、标签、当前状态、更新时间、置信度、关联项目和可追溯来源。稳定 ID 来自文件名；标题、摘要、标签、状态、更新时间、置信度和来源写在 Markdown 头部；知识分类、项目归属和排序集中写在 `content/registry/articles.yaml`。文章正文先给出当前结论，再说明适用范围、约束、证据和操作含义。旧结论不在正文中保留副本，历史由 Git 负责。
 
-`projects` 保存稳定 ID，不保存显示名称：
+文章目录项保存稳定 ID，不保存显示名称：
 
 ```yaml
-section: software-development
-category: architecture
-projects: [wheelmaker, unity-engine-projects]
+schema: 1
+articles:
+  - id: example-article
+    section: software-development
+    category: architecture
+    projects: [wheelmaker, unity-engine-projects]
+    order: 10
 ```
 
-`projects` 表示关联和适用项目，用于浏览与检索；它不代替 `sources`。Agent 先根据来源路径生成默认值，用户可以在候选审核时明确增加或移除项目。
+`projects` 表示关联和适用项目，用于浏览与检索；它不代替 Markdown 头部的 `sources`。Agent 先根据来源路径生成默认值，用户可以在候选审核时明确增加或移除项目。
 
 置信度使用三档：
 
@@ -345,7 +350,7 @@ Knowledge Registry 与本地工程的联动发生在 Agent 知识工作流中，
 3. 每个来源选择最长的包含根并取得对应 `projectId`；
 4. 多个来源映射到同一 ID 时去重，映射到不同 ID 时保留多个关联项目；
 5. 没有具体来源时使用当前工作区；仍无法匹配时使用“未指定项目”；
-6. 映射引用 `projects.json` 中不存在的 ID 时停止普通发布，并提示修正本机映射或审批登记新项目。
+6. 映射引用 `content/registry/projects.yaml` 中不存在的 ID 时停止普通发布，并提示修正本机映射或审批登记新项目。
 
 来源路径决定默认值，不决定最终关联。候选清单必须展示项目归属，用户可以在批准时调整；文章同时保存精确 `sources` 以追溯证据。
 
@@ -408,7 +413,7 @@ Agent 把原始材料整理成少量可复用文章，而不是“一份文档�
 4. 一句话结论；
 5. 置信度和证据；
 6. 新建文章还是更新现有文章；
-7. 如果引用尚未登记的项目，列出新增 `projects.json` 项目的精确 ID、名称、说明和顺序。
+7. 如果引用尚未登记的项目，列出新增 `content/registry/projects.yaml` 项目的精确 ID、名称、说明和顺序。
 
 这一步只做提案，不修改 Personal Wiki 文件、不创建 Wiki commit、不推送。审核发生在当前对话中，Wiki 页面不建立 Inbox、Draft、Review Queue 或审批界面。
 
@@ -430,13 +435,13 @@ Agent 把原始材料整理成少量可复用文章，而不是“一份文档�
 
 ### 5. 写入审核后的 Markdown
 
-获批后才读取 Personal Wiki 的 `AGENTS.md`、`content/sections.json`、文章合同和相关现有文章。写入时：
+获批后才读取 Personal Wiki 的 `AGENTS.md`、三个 `content/registry/*.yaml`、文章合同和相关现有文章。写入时：
 
 - 保留任务开始前的无关工作树改动；目标文章存在重叠修改时停止；
 - 主题已存在时更新原文，不制造“v2”“新版”“归档版”等平行页面；
 - 填写精确范围、置信度、更新日期和来源；
-- 文章 `projects` 只使用 `content/projects.json` 中的稳定 ID；没有归属时使用空数组，不把“未指定项目”写成正式 ID；
-- 新项目只在用户明确批准该项目定义后写入 `projects.json`；不根据任何工程配置或目录名自动创建；
+- `articles.yaml` 中的 `projects` 只使用 `projects.yaml` 中的稳定 ID；没有归属时使用空数组，不把“未指定项目”写成正式 ID；
+- 新项目只在用户明确批准该项目定义后写入 `projects.yaml`；不根据任何工程配置或目录名自动创建；
 - 不使用原始 HTML；
 - Wiki 内部文章链接使用稳定文章 ID；
 - 不写密码、Token、私钥、访问码、Session 数据或原始对话；
@@ -471,7 +476,7 @@ npm run build
 双视图落地后的构建流程会：
 
 1. 清理旧的 `.wiki-out/site`；
-2. 读取并验证 Markdown、`sections.json` 和 `projects.json`；
+2. 读取并验证 Markdown、`articles.yaml`、`taxonomy.yaml` 和 `projects.yaml`；
 3. 生成文章 JSON、按知识类型目录、按项目目录和全局搜索索引；
 4. 用 webpack 生成静态阅读界面；
 5. 把源 Git commit 写入 release metadata；
@@ -605,7 +610,7 @@ readlink -f /srv/personal-wiki/current
 
 双视图和项目注册表属于 Personal Wiki 的静态内容、构建器和 React 阅读界面变更，完成验证后通过 Personal Wiki `main` 的既有 Actions 发布到 `wiki.wheelbox.top`；它不要求替换服务器上的 `wiki-server`。
 
-本轮不修改 WheelMaker 源码、协议或 `config.json`，也不要求执行 WheelMaker 正式产品发布。双视图只发布 Personal Wiki 的静态 release。
+双视图和私人知识仍只发布 Personal Wiki 的静态 release。WheelMaker 源码中的可选页头快捷入口、Release Server 的 Kit 通道以及公开安装指引属于独立集成能力：它们只在自身变化时随 WheelMaker/Release Server 发布，不会让日常文章发布依赖 WheelMaker，也不会让 WheelMaker 读取私人内容、项目路由或 Wiki 凭据。
 
 本机全局 `publish-knowledge` Skill 与文章合同同步增加项目解析和校验规则。该 Skill 的本机更新不能证明其他电脑已经具备相同能力；多机使用时应分别安装同一版本，并维护各自的 `project-routing.json`。
 
@@ -637,7 +642,7 @@ readlink -f /srv/personal-wiki/current
 
 ### 登记或调整项目
 
-新 Wiki 项目不从任何工程配置自动同步。第一次贡献时，Agent 可以把项目定义与首批候选文章一起提出；用户明确批准后，同一批次更新 `content/projects.json` 和文章。项目改名只改注册表显示名称，稳定 ID 保持不变；合并项目时先提出旧 ID 到新 ID 的完整文章迁移范围。
+新 Wiki 项目不从任何工程配置自动同步。第一次贡献时，Agent 可以把项目定义与首批候选文章一起提出；用户明确批准后，同一批次更新 `content/registry/projects.yaml`、`content/registry/articles.yaml` 和文章。项目改名只改注册表显示名称，稳定 ID 保持不变；合并项目时先提出旧 ID 到新 ID 的完整文章迁移范围。
 
 ### 修改已有知识
 
@@ -698,11 +703,11 @@ WheelMaker 仓库：
 Personal Wiki 独立仓库：
 
 - `README.md`、`AGENTS.md`：仓库边界和基本工作流。
-- `content/sections.json`、`content/projects.json`：知识类型和项目身份定义。
-- `app/src/App.tsx`、`app/src/routes.ts`、`app/src/types.ts`：双视图交互、上下文路由和公开数据类型。
-- `scripts/publish-wiki.mjs`、`scripts/lib/content.mjs`：内容与项目检查、双目录构建、manifest 和 SSH 发布。
-- `server/internal/wiki/`：Argon2id、Session、限流、安全 Header 和 release 校验。
-- `ops/provision.sh`、`ops/activate-release.sh`、`ops/personal-wiki.service`、`ops/wiki.caddy`：安装、原子激活、systemd 沙箱和 Gateway 路由。
+- `content/articles/**/*.md`：审核后的唯一知识正文。
+- `content/registry/articles.yaml`：文章知识分类、项目归属和顺序。
+- `content/registry/taxonomy.yaml`、`content/registry/projects.yaml`：用户可编辑的知识目录和项目身份定义。
+- `wiki.config.json`、`wiki-kit.lock.json`：仓库级非秘密配置和已确认 Kit 版本。
+- `open-wiki.bat`、`publish-wiki.bat`、`update-wiki-kit.bat`：Setup 生成的日常入口。
 - `.github/workflows/publish.yml`：私有仓库的 push-to-main 自动发布。
 
 用户级知识发布合同：

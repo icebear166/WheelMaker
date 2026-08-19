@@ -451,6 +451,40 @@ func (s *Server) writeKitSession(session kitPublishSession) error {
 	return writeJSONFileAtomic(filepath.Join(s.kitSessionDirectory(session.SessionID), "session.json"), session, 0o600)
 }
 
+func (s *Server) cleanupStaleKitSessions() error {
+	root := filepath.Join(s.config.DataRoot, "staging", "personal-wiki-kit")
+	entries, err := os.ReadDir(root)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("read Kit staging directory: %w", err)
+	}
+	for _, entry := range entries {
+		if !entry.IsDir() || !validLowerHex(entry.Name(), 16) {
+			continue
+		}
+		sessionID := entry.Name()
+		lock := s.sessionLock(sessionID)
+		lock.Lock()
+		session, loadErr := s.loadKitSession(sessionID)
+		if loadErr == nil {
+			updatedAt, parseErr := time.Parse(time.RFC3339, session.UpdatedAt)
+			if parseErr == nil && s.now().UTC().Sub(updatedAt) > staleSessionAge {
+				loadErr = os.RemoveAll(s.kitSessionDirectory(sessionID))
+				if loadErr == nil {
+					s.removeSessionLock(sessionID, lock)
+				}
+			}
+		}
+		lock.Unlock()
+		if loadErr != nil && !errors.Is(loadErr, os.ErrNotExist) {
+			return fmt.Errorf("clean stale Kit session %s: %w", sessionID, loadErr)
+		}
+	}
+	return nil
+}
+
 func (s *Server) readKitStable() (*kitStableDocument, error) {
 	raw, err := os.ReadFile(filepath.Join(s.config.DataRoot, "public", "personal-wiki-kit", "stable.json"))
 	if errors.Is(err, os.ErrNotExist) {

@@ -463,7 +463,7 @@ func (s *Server) cleanupStaleSessions() error {
 			return fmt.Errorf("clean stale session %s: %w", sessionID, loadErr)
 		}
 	}
-	return nil
+	return s.cleanupStaleKitSessions()
 }
 
 func (s *Server) createSession(session publishSession) (bool, error) {

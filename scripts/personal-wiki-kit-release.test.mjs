@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
-import {mkdtemp, mkdir, rm, writeFile} from 'node:fs/promises';
+import {mkdtemp, mkdir, readFile, rm, writeFile} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -106,4 +106,15 @@ test('failed upload cancels the Kit session without committing', async (t) => {
   await assert.rejects(() => runPersonalWikiKitRelease({...paths, repositoryRoot: paths.root}, fake.dependencies), /upload failed/u);
   assert.deepEqual(fake.calls.filter(([kind]) => kind === 'commit'), []);
   assert.deepEqual(fake.calls.filter(([kind]) => kind === 'cancel').map(([, sessionId]) => sessionId), ['b'.repeat(32)]);
+});
+
+test('dedicated workflow publishes to Release Server with the reused token and no GitHub release write', async () => {
+  const workflow = await readFile(path.resolve(import.meta.dirname, '..', '.github', 'workflows', 'publish-personal-wiki-kit.yml'), 'utf8');
+  assert.match(workflow, /workflow_dispatch/u);
+  assert.match(workflow, /windows-x64/u);
+  assert.match(workflow, /linux-x64/u);
+  assert.match(workflow, /WHEELMAKER_RELEASE_TOKEN/u);
+  assert.match(workflow, /personal-wiki-kit-release\.mjs/u);
+  assert.match(workflow, /--setup/u);
+  assert.doesNotMatch(workflow, /contents:\s*write|GH_TOKEN|gh release/u);
 });
