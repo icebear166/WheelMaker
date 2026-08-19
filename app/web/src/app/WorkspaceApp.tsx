@@ -777,7 +777,6 @@ import type {
   RegistryPortRelaySnapshot,
   RegistrySkillCommandResponse,
   RegistrySkillDetail,
-  RegistrySkillRepoSnapshot,
   RegistrySkillScope,
   RegistryWheelMakerUpdateResponse,
   RegistryGatewayUpdateResponse,
@@ -6961,7 +6960,6 @@ export function App() {
         onRequestGatewayUpdate={handleChatHubGatewayUpdate}
         onRequestNpmUpdate={handleChatHubNpmUpdate}
         onPackageAction={handleChatHubPackageAction}
-        onInspectSkillRepo={inspectSkillRepo}
         onAddSkillRepo={requestSkillAddRepo}
         onRequestSkillDetail={requestSkillDetail}
         onUpdateSkillScope={requestSkillScopeUpdate}
@@ -13800,17 +13798,6 @@ export function App() {
       observeSkillOperation(hubId, skillHub.data?.operation);
     }
   }, [observeSkillOperation, skillHubs]);
-
-  const inspectSkillRepo = useCallback(async (
-    target: SkillScopeTarget,
-    source: string,
-  ): Promise<RegistrySkillRepoSnapshot> => {
-    const result = await service.inspectSkillRepo({...target, source});
-    if (!result.ok || !result.repo) {
-      throw new Error(skillCommandErrorMessage(result));
-    }
-    return result.repo;
-  }, []);
 
   const executeSkillOperation = useCallback(async (target: SkillOperationTarget) => {
     const skillName = target.skillName || (target.skills?.length === 1 ? target.skills[0] : undefined);

@@ -2957,10 +2957,6 @@ export class RegistryRepository {
     };
   }
 
-  async inspectSkillRepo(payload: RegistrySkillRepoPayload): Promise<RegistrySkillCommandResponse> {
-    return this.runSkillRepoAction('inspectRepo', payload);
-  }
-
   async addSkillRepo(payload: RegistrySkillRepoPayload): Promise<RegistrySkillCommandResponse> {
     return this.runSkillRepoAction('addRepo', payload);
   }
@@ -3029,7 +3025,7 @@ export class RegistryRepository {
   }
 
   private async runSkillRepoAction(
-    action: 'inspectRepo' | 'addRepo' | 'refreshRepo' | 'updateRepo' | 'installAll' | 'removeRepo',
+    action: 'addRepo' | 'refreshRepo' | 'updateRepo' | 'installAll' | 'removeRepo',
     payload: RegistrySkillRepoPayload,
   ): Promise<RegistrySkillCommandResponse> {
     const {hubId, ...params} = payload;

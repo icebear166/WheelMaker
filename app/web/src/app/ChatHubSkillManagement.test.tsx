@@ -40,13 +40,6 @@ const catalog: RegistrySkillSourceScopeSnapshot = {
 
 function createActions(): ChatHubSkillActions {
   return {
-    onInspectRepo: jest.fn().mockResolvedValue({
-      source: 'https://github.com/acme/skills.git',
-      sourceKey: 'github.com/acme/skills',
-      commit: '1234567890abcdef',
-      updateAvailable: false,
-      skills: [],
-    }),
     onAddRepo: jest.fn(),
     onDetail: jest.fn(),
     onUpdateScope: jest.fn(),
@@ -328,46 +321,30 @@ test('collapsing a source hides its list but keeps the error visible', async () 
     .toContain('Network unavailable');
 });
 
-test('adds a repository from the full-width bottom row after inspect', async () => {
+test('adds a repository directly from the inline form without selecting skills', async () => {
   const {renderer, actions} = await renderScope();
   act(() => renderer.root.findByProps({className: 'chat-hub-skill-add-repository-trigger'}).props.onClick());
   const input = renderer.root.findByProps({'aria-label': 'Git repository URL'});
   act(() => input.props.onChange({target: {value: 'acme/new-skills'}}));
-  await act(async () => {
-    await renderer.root.findByProps({children: 'Inspect'}).props.onClick();
-  });
-  expect(actions.onInspectRepo).toHaveBeenCalledWith(hubTarget, 'acme/new-skills');
-  await act(async () => {
-    renderer.root.findByProps({children: 'Add repository'}).props.onClick();
-  });
+  act(() => renderer.root.findByProps({children: 'Add'}).props.onClick());
   expect(actions.onAddRepo).toHaveBeenCalledWith(hubTarget, 'acme/new-skills');
+  expect(renderer.root.findByProps({className: 'chat-hub-skill-add-repository-trigger'})).toBeTruthy();
 });
 
-test('shows selectable skills in the inline repository inspection result', async () => {
-  const actions = createActions();
-  actions.onInspectRepo = jest.fn().mockResolvedValue({
-    source: 'https://github.com/acme/new-skills.git',
-    sourceKey: 'github.com/acme/new-skills',
-    commit: '1234567890abcdef',
-    updateAvailable: false,
-    skills: [
-      {name: 'alpha', skillPath: 'skills/alpha/SKILL.md', contentSha256: 'a'.repeat(64)},
-      {name: 'beta', skillPath: 'skills/beta/SKILL.md', contentSha256: 'b'.repeat(64)},
-    ],
-  });
-  const {renderer} = await renderScope({actions});
-
+test('submits the repository with Enter from the input', async () => {
+  const {renderer, actions} = await renderScope();
   act(() => renderer.root.findByProps({className: 'chat-hub-skill-add-repository-trigger'}).props.onClick());
   const input = renderer.root.findByProps({'aria-label': 'Git repository URL'});
   act(() => input.props.onChange({target: {value: 'acme/new-skills'}}));
-  await act(async () => {
-    await renderer.root.findByProps({children: 'Inspect'}).props.onClick();
-  });
+  act(() => input.props.onKeyDown({key: 'Enter'}));
+  expect(actions.onAddRepo).toHaveBeenCalledWith(hubTarget, 'acme/new-skills');
+});
 
-  const alpha = renderer.root.findByProps({'aria-label': 'Select alpha'});
-  expect(alpha).toBeTruthy();
-  expect(alpha.props.checked).toBe(true);
-  act(() => alpha.props.onChange({target: {checked: false}}));
-  expect(renderer.root.findByProps({'aria-label': 'Select alpha'}).props.checked).toBe(false);
-  expect(renderer.root.findByProps({'aria-label': 'Select beta'})).toBeTruthy();
+test('requires a repository URL before adding', async () => {
+  const {renderer, actions} = await renderScope();
+  act(() => renderer.root.findByProps({className: 'chat-hub-skill-add-repository-trigger'}).props.onClick());
+  act(() => renderer.root.findByProps({children: 'Add'}).props.onClick());
+  expect(actions.onAddRepo).not.toHaveBeenCalled();
+  expect(renderer.root.findByProps({className: 'chat-hub-skill-source-error'}).children.join(''))
+    .toContain('Git repository is required.');
 });

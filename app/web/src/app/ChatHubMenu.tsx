@@ -13,7 +13,6 @@ import type {
   RegistryHubMCPRuntimeStatusData,
   RegistrySkillProjectSnapshot,
   RegistrySkillOperation,
-  RegistrySkillRepoSnapshot,
   RegistrySkillSnapshot,
   RegistrySkillSourceScopeSnapshot,
 } from '../registry/registryTypes';
@@ -246,7 +245,6 @@ export interface ChatHubMenuProps {
   onRequestGatewayUpdate: (hubId: string) => void;
   onRequestNpmUpdate: (hubId: string) => void;
   onPackageAction: (hubId: string, action: 'install' | 'update' | 'uninstall', pkg: ChatHubNpmPackageView) => void;
-  onInspectSkillRepo: (target: SkillScopeTarget, source: string) => Promise<RegistrySkillRepoSnapshot>;
   onAddSkillRepo: (target: SkillScopeTarget, source: string) => void;
   onRequestSkillDetail: (target: SkillDetailTarget) => void;
   onUpdateSkillScope: (target: SkillScopeTarget) => void;
@@ -1031,7 +1029,6 @@ function ChatHubBlock(props: ChatHubMenuProps & {hubId: string}): React.JSX.Elem
     onRequestGatewayUpdate,
     onRequestNpmUpdate,
     onPackageAction,
-    onInspectSkillRepo,
     onAddSkillRepo,
     onRequestSkillDetail,
     onUpdateSkillScope,
@@ -1061,7 +1058,6 @@ function ChatHubBlock(props: ChatHubMenuProps & {hubId: string}): React.JSX.Elem
   const sectionOpen = (section: ChatHubDetailId) => openSections.includes(section);
   const visibleProjectCount = treeItem.projects.filter(project => !hiddenProjectIdSet.has(project.projectId)).length;
   const skillActions: ChatHubSkillActions = {
-    onInspectRepo: onInspectSkillRepo,
     onAddRepo: onAddSkillRepo,
     onDetail: onRequestSkillDetail,
     onUpdateScope: onUpdateSkillScope,

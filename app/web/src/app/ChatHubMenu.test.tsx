@@ -41,13 +41,6 @@ function createHarness(overrides: Partial<ChatHubMenuProps> = {}) {
     onRequestGatewayUpdate: jest.fn(),
     onRequestNpmUpdate: jest.fn(),
     onPackageAction: jest.fn(),
-    onInspectSkillRepo: jest.fn().mockResolvedValue({
-      source: 'https://github.com/acme/skills.git',
-      sourceKey: 'github.com/acme/skills',
-      commit: '1234567890abcdef',
-      updateAvailable: false,
-      skills: [],
-    }),
     onAddSkillRepo: jest.fn(),
     onRequestSkillDetail: jest.fn(),
     onUpdateSkillScope: jest.fn(),

@@ -1267,11 +1267,6 @@ export class RegistryWorkspaceService {
     return this.repository.reindexSkills(hubId);
   }
 
-  async inspectSkillRepo(payload: RegistrySkillRepoPayload): Promise<RegistrySkillCommandResponse> {
-    if (!this.repository) throw new Error('session is not ready');
-    return this.repository.inspectSkillRepo(payload);
-  }
-
   async addSkillRepo(payload: RegistrySkillRepoPayload): Promise<RegistrySkillCommandResponse> {
     if (!this.repository) throw new Error('session is not ready');
     return this.repository.addSkillRepo(payload);
