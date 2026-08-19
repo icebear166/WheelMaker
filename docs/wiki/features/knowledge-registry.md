@@ -1,4 +1,4 @@
-> 摘要：本页维护 Knowledge Registry 个人 Wiki 的当前设计，包括知识治理、双视图信息架构、本机 Skill 项目路由、服务器访问、审核和 Git 发布流程。
+> 摘要：本页维护 Knowledge Registry 个人 Wiki 的当前设计，包括知识治理、双视图信息架构、公共 Kit 安装更新、本机 Skill 项目路由、服务器访问、审核和 Git 发布流程。
 
 # Knowledge Registry：个人 Wiki 当前设计
 
@@ -21,8 +21,9 @@ Knowledge Registry 是一个独立于具体工程的个人知识库。它把经�
 - 知识类型仍是文章的唯一主题归属。Unity 与 Unreal Engine 是独立顶层目录；每个引擎再通过稳定的 `category` 二级分类组织 BRG、Animation、Rendering、Gameplay、Tools 等主题。
 - 项目使用稳定 ID 和独立项目注册表。文章可关联多个项目；项目视图按“项目 → 知识类型 → 二级分类 → 文章”组织，未关联项目的文章进入自动生成的“未指定项目”。
 - `E:/文档`、WheelMaker 代码、测试、项目文档和经过验证的对话结论都是候选来源；原始材料默认留在原位置，不整批复制进 Wiki。
-- 本机 `publish-knowledge` Skill 的 `references/project-routing.json` 保存“本机来源路径 → Wiki projectId”映射。多个工程根或精确文档路径可以映射到同一个 Wiki 项目；没有匹配时使用“未指定项目”。
-- Personal Wiki 不读取 WheelMaker 代码或 `config.json`，不要求 WheelMaker 提供项目映射、网站入口或协议字段。两者当前只共用服务器 Gateway，文章、密码、Git 发布和 Wiki 会话不进入 WheelMaker Registry。
+- 用户级 `~/.personal-wiki/project-routing.json` 保存“本机来源路径 → Wiki projectId”映射。多个工程根或精确文档路径可以映射到同一个 Wiki 项目；没有匹配时使用“未指定项目”。
+- Personal Wiki 不读取 WheelMaker 工程的 `config.json`，也不要求 WheelMaker 提供项目映射或知识协议字段。WheelMaker 页头只提供一个可选的 Wiki 地址快捷入口；文章、密码、Git 发布、项目路由和 Wiki 会话都不进入 WheelMaker Registry。
+- 公共 Personal Wiki Kit 与私人知识仓库分离发布。Release Server 匿名提供固定安装入口和经过摘要校验的版本包；安装器在用户选择的私人仓库中生成日常入口，不下载或公开任何私人文章、配置、映射和凭据。
 - 一旦用户批准精确知识候选，`publish-knowledge` 可以完成写入、检查、提交和推送；`main` 分支 push 触发 GitHub Actions，通过专用 Wiki 部署密钥发布到服务器。
 
 ## 实施状态与生效边界
@@ -58,7 +59,7 @@ Knowledge Registry 是一个独立于具体工程的个人知识库。它把经�
 flowchart LR
     subgraph LocalWork["任意本地工程与 Codex 对话"]
         Sources["代码、测试、项目文档<br/>外部资料和对话结论"]
-        ProjectRouting["publish-knowledge/references/project-routing.json<br/>工程根路径 → Wiki projectId"]
+        ProjectRouting["~/.personal-wiki/project-routing.json<br/>工程根路径 → Wiki projectId"]
         Skill["publish-knowledge<br/>整理、匹配、校验"]
         Review["候选知识<br/>用户明确批准"]
     end
@@ -133,7 +134,8 @@ Knowledge Registry 同时有一条“知识发布路径”和一条“网页访�
 | --- | --- | --- |
 | 任意本地工程 | 提供代码、测试、项目文档和当前工作区上下文 | 不需要实现 Wiki 接口，不保存 Wiki 密码，不代理 Personal Wiki 的 Git 操作 |
 | `publish-knowledge` Skill | 保存本机工程路由、盘点材料、解析默认项目、提议候选知识、执行获批后的整理和发布流程 | 不替用户批准内容，不自动创建项目，不读取 WheelMaker 配置，不把对话原文直接写入 Wiki |
-| Personal Wiki 仓库 | 保存审核后的 Markdown、知识类型和项目注册表、附件、构建器、认证服务和部署脚本 | 不保存原始资料库、草稿队列和任何凭据 |
+| 公共 Personal Wiki Kit | 保存可复用的阅读器、认证服务、构建/发布程序、中文 Skills 和私人仓库模板 | 不包含私人文章、本机路径、项目映射、凭据或服务器秘密 |
+| Personal Wiki 私有仓库 | 保存审核后的 Markdown、知识类型和项目注册表、附件及用户生成入口 | 不保存公共 Kit 程序副本、原始资料库、草稿队列和任何凭据 |
 | Git | 保存当前知识和完整变更历史 | 不代替内容审核 |
 | `wiki-server` | 密码认证、会话管理和受保护的静态文件读取 | 不编辑知识，不直接面向公网监听 |
 | 服务器 Gateway | 为 `wiki.wheelbox.top` 提供公网入口、TLS 和反向代理 | 不读取密码，不直接暴露静态发布目录 |
@@ -143,41 +145,61 @@ Knowledge Registry 同时有一条“知识发布路径”和一条“网页访�
 
 ### Personal Wiki 定位配置
 
-Codex 通过用户级配置 `~/.codex/personal-wiki.json` 定位独立知识库：
+Codex 通过用户级配置 `~/.personal-wiki/config.json` 定位独立知识库：
 
 ```json
 {
+  "schema": 1,
   "repositoryPath": "D:/path/to/personal-wiki",
-  "remote": "origin",
-  "defaultBranch": "main",
   "publicUrl": "https://wiki.wheelbox.top"
 }
 ```
 
-该文件只保存路径、远端名、默认分支和公开地址，不得保存密码、Token、私钥或会话数据。`remote` 字段只是预期远端名称；实际仓库仍必须正确配置对应 Git remote 和认证。
+该文件只保存私人仓库路径和可选网站地址，不得保存密码、Token、私钥或会话数据。Git remote 和默认分支由私人仓库自己的 Git 元数据推导，不在用户配置中重复维护。本机工程映射单独保存在 `~/.personal-wiki/project-routing.json`，便于用户编辑且不会进入业务仓库。
 
-Personal Wiki 仓库在双视图落地后的目标核心结构如下；其中 `projects.json` 是新增文件，其余目录沿用现行职责：
+Personal Wiki 私有仓库是数据仓库，核心结构如下：
 
 ```text
 personal-wiki/
-├─ content/                    # 唯一知识源，按主题保存 Markdown
-│  ├─ sections.json           # 顶层分类和顺序
-│  ├─ projects.json           # 稳定项目 ID、显示名称和顺序
-│  └─ <section>/*.md          # 审核后的知识文章
+├─ content/
+│  ├─ articles/               # 审核后的 Markdown，唯一知识正文
+│  └─ registry/
+│     ├─ articles.yaml        # 文章归属、排序和元数据目录
+│     ├─ projects.yaml        # 稳定项目 ID、显示名称和顺序
+│     └─ taxonomy.yaml        # 知识一级/二级目录及顺序
 ├─ attachments/               # 仅保存明确批准的附件
-├─ app/                       # React 阅读界面
-├─ server/                    # Go 密码保护服务
-├─ scripts/                   # 内容检查、构建和发布
-├─ ops/                       # systemd、激活脚本和 Gateway 路由
-├─ .github/workflows/         # main 分支自动发布工作流
+├─ wiki.config.json           # 仓库级非秘密发布配置
+├─ wiki-kit.lock.json         # 已确认的 Kit 版本和兼容性锁
+├─ open-wiki.bat              # 本地阅读入口，由 Setup 生成
+├─ publish-wiki.bat           # 校验并发布入口，由 Setup 生成
+├─ update-wiki-kit.bat        # 确认式安全更新入口，由 Setup 生成
+├─ .github/workflows/         # 可选的私有仓库自动发布工作流
 └─ .wiki-out/                 # 本地生成物，不提交、不手工编辑
 ```
 
-`content/**/*.md` 是文章正文的唯一事实源；`sections.json` 和 `projects.json` 分别是知识类型与项目身份的唯一目录定义。网页 JSON、两种目录索引、搜索索引、HTML、JavaScript 和发布包全部是可重新生成的产物。
+`content/articles/**/*.md` 是文章正文的唯一事实源；三个 registry 文件分别维护文章归属、项目身份和可编辑的一级/二级知识目录。阅读器、认证服务和构建程序来自已锁定的公共 Kit 版本；网页 JSON、两种目录索引、搜索索引、HTML、JavaScript 和发布包全部是可重新生成的产物。
+
+### 公共 Kit 安装与更新
+
+Release Server 为 Personal Wiki Kit 维护独立于 WheelMaker 正式版本的稳定指针和不可变版本目录：固定入口是 `/setup-wiki.bat`，稳定指针是 `/personal-wiki-kit/stable.json`，版本产物位于 `/personal-wiki-kit/releases/v<semver>/`。Windows 包用于本机安装，Linux 包用于服务器部署；公开产物只包含程序、模板和 Skills。
+
+Windows 用户直接运行 `setup-wiki.bat`。安装器读取稳定指针，下载精确版本，校验文件大小和 SHA-256，再安装到 `%USERPROFILE%/.personal-wiki/kit/versions/<version>`。设置向导选择或创建独立私人 Git 仓库，并在仓库根生成 `open-wiki.bat`、`publish-wiki.bat` 和 `update-wiki-kit.bat`。Kit 的用户级布局为：
+
+```text
+~/.personal-wiki/
+├─ config.json                # 私人仓库路径和可选网站地址
+├─ project-routing.json       # 本机来源路径 → Wiki projectId
+├─ bin/personal-wiki.cmd      # 指向当前活动 Kit 的统一启动器
+└─ kit/
+   ├─ active-version.txt      # 当前活动版本
+   └─ versions/<version>/     # 校验过的不可变 Kit 安装
+```
+
+重复运行 Setup 时，完整安装只显示现有 Wiki 路径并让用户选择更新或退出；检测到残缺安装则报告问题并停止，不覆盖也不删除。`update-wiki-kit.bat` 显示当前和目标版本并要求确认，在临时目录完成下载、摘要校验、兼容性检查和迁移后才原子切换；失败或取消时回滚启动器、版本锁和 Skills，同时保留文章、registry、用户配置与项目路由。
 
 ### 本机 `publish-knowledge` Skill 项目路由
 
-项目归属由用户级 `publish-knowledge` Skill 自己维护，不进入任何业务工程配置。Skill 的 `references/project-routing.json` 保存可自定义的本机路径映射：
+项目归属由用户级 Personal Wiki 配置维护，不进入任何业务工程配置。`~/.personal-wiki/project-routing.json` 保存可自定义的本机路径映射：
 
 ```json
 {
@@ -319,7 +341,7 @@ Knowledge Registry 与本地工程的联动发生在 Agent 知识工作流中，
 候选的默认项目归属按本机 Skill 路由解析：
 
 1. 收集支撑候选结论的文件或仓库路径；
-2. 与 `publish-knowledge/references/project-routing.json` 中的工程根比较；
+2. 与 `~/.personal-wiki/project-routing.json` 中的工程根比较；
 3. 每个来源选择最长的包含根并取得对应 `projectId`；
 4. 多个来源映射到同一 ID 时去重，映射到不同 ID 时保留多个关联项目；
 5. 没有具体来源时使用当前工作区；仍无法匹配时使用“未指定项目”；
@@ -335,7 +357,7 @@ Personal Wiki 的 Markdown 阅读器沿用 WheelMaker 已验证的能力组合�
 
 ### 本机 Skill 与网络入口
 
-Codex 通过 `~/.codex/personal-wiki.json` 定位 Wiki 仓库和网站地址，通过 `publish-knowledge` Skill 自己的路由文件解析项目。业务工程不保存这些信息，也不向浏览器投影本机路径。
+Codex 通过 `~/.personal-wiki/config.json` 定位 Wiki 仓库和网站地址，通过 `~/.personal-wiki/project-routing.json` 解析项目。业务工程不保存这些信息，也不向浏览器投影本机路径。
 
 Knowledge Registry 当前与 WheelMaker 共用同一个 Gateway 和服务器 IP。Gateway 根据域名和端口把请求路由给不同内部服务；这是部署基础设施复用，不构成产品代码、配置或身份系统依赖。日常文章更新不会修改 WheelMaker 业务代码，也不会重新发布 WheelMaker。
 
@@ -345,7 +367,7 @@ Knowledge Registry 当前与 WheelMaker 共用同一个 Gateway 和服务器 IP�
 - WheelMaker 登录与 Wiki 密码不是同一身份，也没有单点登录。
 - 对话、代码提交和 `docs/wiki` 不会自动发布到 Personal Wiki。
 - 项目映射只生成候选默认值，不绕过当前对话中的精确批准。
-- WheelMaker 前端目前没有 Knowledge Registry 菜单或内嵌页面。
+- WheelMaker 前端可显示 Personal Wiki 快捷按钮；它只打开服务器配置的 `knowledgeRegistry.publicUrl`，不内嵌 Wiki，也不读取私人仓库或本机配置。未配置地址时按钮仍显示并给出配置提示。
 - 项目映射不进入 Registry 协议，也不读取 WheelMaker 配置。
 - Wiki 的 GitHub Deploy Key、服务器密码哈希和登录 Session 不进入任何业务工程配置。
 
@@ -669,7 +691,9 @@ readlink -f /srv/personal-wiki/current
 WheelMaker 仓库：
 
 - [`../architecture/gateway.md`](../architecture/gateway.md)：Gateway、TLS、站点声明和公网入口边界。
-- 本页所在仓库只记录当前服务器 Gateway 的基础设施关系；Knowledge Registry 不要求修改 WheelMaker 代码或配置。
+- `personal-wiki-kit/`：可公开复用的阅读器、认证服务、构建发布程序、中文 Skills、私人仓库模板和测试。
+- `scripts/personal-wiki-kit-release.mjs`：构建、上传并验证独立 Kit 发布通道。
+- WheelMaker 仅提供可选页头快捷入口和公共 Kit 分发；Knowledge Registry 不读取 WheelMaker 工程配置，也不把私人内容放入 WheelMaker 仓库。
 
 Personal Wiki 独立仓库：
 
@@ -685,5 +709,5 @@ Personal Wiki 独立仓库：
 
 - `~/.codex/skills/publish-knowledge/SKILL.md`
 - `~/.codex/skills/publish-knowledge/references/article-contract.md`
-- `~/.codex/skills/publish-knowledge/references/project-routing.json`
+- `~/.personal-wiki/project-routing.json`
 - `~/.codex/skills/publish-knowledge/scripts/resolve-projects.mjs`
