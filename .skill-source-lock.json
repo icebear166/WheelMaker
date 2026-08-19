@@ -4,7 +4,10 @@
     {
       "source": "https://github.com/anthropics/skills.git",
       "sourceKey": "github.com/anthropics/skills",
-      "managedSkills": null
+      "branch": "main",
+      "commit": "0a64e398ec6bb34a494f0c347e8ccae53a862f8e",
+      "updatedAt": "2026-08-19T13:31:20Z",
+      "managedSkills": []
     },
     {
       "source": "https://github.com/better-auth/better-icons.git",
@@ -16,9 +19,20 @@
       ]
     },
     {
+      "source": "https://github.com/emilkowalski/skills.git",
+      "sourceKey": "github.com/emilkowalski/skills",
+      "branch": "main",
+      "commit": "e879241fab3cdb22e8d95587cdbf40b57a88d7da",
+      "updatedAt": "2026-08-19T13:35:30Z",
+      "managedSkills": []
+    },
+    {
       "source": "https://github.com/ibelick/ui-skills.git",
       "sourceKey": "github.com/ibelick/ui-skills",
-      "managedSkills": null
+      "branch": "main",
+      "commit": "0a8411b1f8732d52923e78773d54b67a65ef9587",
+      "updatedAt": "2026-08-19T13:33:14Z",
+      "managedSkills": []
     }
   ]
 }
