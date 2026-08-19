@@ -71,7 +71,7 @@ internal fun qwenCallbackCredential(
         names.forEach { name ->
             queryParameter(target, name)?.takeIf { it.isNotBlank() }?.let { return it }
         }
-        json?.let { findJsonString(it, names)?.let { value -> return value } }
+        json?.let { findJsonString(it, *names)?.let { value -> return value } }
         names.forEach { name -> form[name]?.takeIf { it.isNotBlank() }?.let { return it } }
         return null
     }
@@ -130,7 +130,7 @@ private fun queryParameter(target: String, name: String): String? {
     }
 }
 
-private fun isQwenLoginUrl(rawUrl: String?): Boolean {
+internal fun isQwenLoginUrl(rawUrl: String?): Boolean {
     val parsed = try { URI(rawUrl ?: "") } catch (_: Exception) { return false }
     val host = parsed.host?.lowercase() ?: return false
     return parsed.scheme.equals("https", true) && (parsed.port == -1 || parsed.port == 443) && host in QWEN_LOGIN_HOSTS
