@@ -78,6 +78,20 @@ test('apply preserves knowledge bytes, removes legacy programs, and creates reco
   assert.match(await readFile(path.join(fixture.repository, 'migration', 'personal-wiki-kit.json'), 'utf8'), /"equivalent": true/u);
 });
 
+test('local apply removes legacy programs without creating an online workflow', async (t) => {
+  const fixture = await legacyFixture(t);
+  const localLock = {...kitLock, source: 'local-kit'};
+  await migrateRepository({repository: fixture.repository, kitRoot, kitLock: localLock, apply: true});
+  await assert.rejects(() => readFile(path.join(fixture.repository, 'app', 'App.tsx')));
+  await assert.rejects(() => readFile(path.join(fixture.repository, '.github', 'workflows', 'publish.yml')));
+  assert.deepEqual(JSON.parse(await readFile(path.join(fixture.repository, 'wiki.config.json'), 'utf8')), {
+    schema: 1,
+    title: 'Personal Wiki',
+    language: 'zh-CN',
+    online: false,
+  });
+});
+
 test('unknown tracked files and dirty apply both fail closed', async (t) => {
   const fixture = await legacyFixture(t);
   await writeFile(path.join(fixture.repository, 'mystery.bin'), 'unknown\n');

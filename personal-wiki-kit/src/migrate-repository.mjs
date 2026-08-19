@@ -256,7 +256,6 @@ export async function migrateRepository(options = {}, dependencies = {}) {
   const deployment = options.deployment === undefined
     ? undefined
     : parseDeploymentConfig(options.deployment);
-  if (apply && !deployment) throw new Error('online migration apply requires deployment config');
 
   const tracked = parseNullList(await git(repository, ['ls-files', '-z']));
   const classification = classifyRepositoryPaths(tracked);
