@@ -190,7 +190,10 @@ async function renderCodeRenderer(options: Parameters<typeof markdownCodeRendere
   await act(async () => {
     renderer = create(<>{markdownCodeRenderer(options)}</>);
   });
-  for (let i = 0; i < 100; i++) {
+  // Shiki loads asynchronously and can take several seconds when the suite runs
+  // with parallel workers; poll until the real HTML replaces the pending fallback.
+  const deadline = Date.now() + 25000;
+  while (Date.now() < deadline) {
     await act(async () => {
       await new Promise(resolve => setTimeout(resolve, 10));
     });
@@ -201,6 +204,7 @@ async function renderCodeRenderer(options: Parameters<typeof markdownCodeRendere
 }
 
 describe('markdownCodeRenderer adaptive code theme', () => {
+  jest.setTimeout(30000);
   it('renders fenced code with light/dark CSS variables in adaptive mode', async () => {
     const renderer = await renderCodeRenderer({...adaptiveCodeOptions, adaptiveCodeTheme: true});
 

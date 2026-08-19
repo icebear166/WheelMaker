@@ -5,6 +5,10 @@ import ReactTestRenderer from 'react-test-renderer';
 import { ShikiCodeBlock } from '../web/src/code/ShikiCodeBlock';
 
 describe('web shiki code fallback', () => {
+  // Rendering ShikiCodeBlock pulls in the real ESM shiki bundle, which is slow
+  // to transform and initialize when the suite runs with parallel workers.
+  jest.setTimeout(30000);
+
   test('renders readable plain code while shiki is loading or unavailable', () => {
     const projectRoot = path.join(__dirname, '..');
     const shikiBlock = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'code', 'ShikiCodeBlock.tsx'), 'utf8');
