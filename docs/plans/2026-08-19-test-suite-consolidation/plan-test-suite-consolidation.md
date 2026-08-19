@@ -113,6 +113,7 @@ Expected: all retained suites pass with no production source diff.
 - Modify: `server/internal/hub/hub_test.go`
 - Modify: `server/internal/hub/agent/agent_test.go`
 - Modify: `server/internal/hub/agent/cxdeepseek/catalog_test.go`
+- Modify: `server/internal/hub/agent/cxflicker/catalog_test.go`
 - Modify: `server/internal/hub/client/client_test.go`
 - Modify: `server/internal/hub/terminal/manager_test.go`
 - Modify: `server/internal/hub/tools/tools_test.go`
@@ -130,7 +131,7 @@ Expected: all retained suites pass with no production source diff.
 - Modify: `server/internal/tts/client_test.go`
 - Delete: all other `*_test.go` files in those 24 package directories after their declarations are merged into the canonical file.
 
-**Acceptance:** Every existing Go test package directory contains one canonical `_test.go`; all retained tests compile without duplicate declarations or unused imports.
+**Acceptance:** Every existing Go test package directory contains one canonical `_test.go`; all retained tests compile without duplicate declarations or unused imports. The rebased remote additions in `internal/flickerbridge`, `internal/hub/agent`, and `internal/hub/agent/cxflicker` are included in the same rule.
 
 - [x] **Step 1: Record the package/file baseline and run Go tests**
 
@@ -140,7 +141,7 @@ Expected: baseline Go tests pass; package/file/function/line counts match the ap
 
 - [x] **Step 2: Merge declarations and helpers package by package**
 
-Move test declarations from each package's other files into the canonical file, deduplicate package/import blocks and identical helpers, and preserve Windows build tags on Windows-only declarations. Use `goimports`/`gofmt` after each package merge; do not alter non-test Go files. Completed for all 17 multi-file packages; Windows-mixed packages use a canonical file-level `windows` build tag so the single-file rule does not discard platform coverage.
+Move test declarations from each package's other files into the canonical file, deduplicate package/import blocks and identical helpers, and preserve Windows build tags on Windows-only declarations. Use `goimports`/`gofmt` after each package merge; do not alter non-test Go files. Completed for the original 17 multi-file packages and the three remote-added multi-file groups; Windows-mixed packages use a canonical file-level `windows` build tag so the single-file rule does not discard platform coverage.
 
 - [x] **Step 3: Run package-level Go tests after each merge group**
 
@@ -185,17 +186,17 @@ Expected: focused packages pass and their test function/line counts are below th
 
 Run from `server/`: `go test ./...`
 
-Expected: PASS for all packages. `go test ./... -count=1` passed for every package, including the Windows-only test groups on the current target.
+Expected: PASS for all packages. `go test ./... -json -count=1` passed for every package, including the Windows-only test groups and the rebased `cxflicker` package on the current target; a serial `go test ./... -p 1 -count=1` retry also passed.
 
 - [x] **Step 2: Run full frontend verification**
 
 Run from `app/`: `npm test -- --runInBand --coverage=false`; then `npm run tsc:web`.
 
-Expected: no failed Jest suite/test and no TypeScript diagnostics. Jest: 229 suites / 1,497 tests passed; `npm run tsc:web` passed.
+Expected: no failed Jest suite/test and no TypeScript diagnostics. Jest: 229 suites / 1,499 tests passed; `npm run tsc:web` passed.
 
 - [x] **Step 3: Recompute and compare test inventory**
 
-Run the approved baseline-count scripts excluding `dist` and `node_modules`; verify Go is 24 test files/24 package directories, Go lines/functions are below 65,323/1,684, and frontend files/lines are at most 75% of 308/50,851. Actual: Go 24/24/63,840/1,645; frontend 229 files/36,928 lines. The branch diff contains 185 files, with no production/protocol files outside approved test/spec/plan paths.
+Run the approved baseline-count scripts excluding `dist` and `node_modules`; verify Go has one test file per tested package directory, Go lines/functions are below 65,323/1,684, and frontend files/lines are at most 75% of 308/50,851. Actual after rebasing remote additions: Go 25 files/25 package directories/64,883 lines/1,667 functions; frontend 229 files/36,906 lines. The branch diff contains 185 files relative to `origin/main`, with no production/protocol files outside approved test/spec/plan paths.
 
 - [ ] **Step 4: Review diff and complete Git checkpoint/finalize**
 
