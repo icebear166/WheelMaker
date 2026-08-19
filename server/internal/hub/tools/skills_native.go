@@ -22,11 +22,11 @@ func normalizeNativeSkillSource(raw string) (string, string, *skillsCommandError
 	if strings.ContainsAny(raw, "#\r\n\x00") {
 		return "", "", &skillsCommandError{Code: rp.CodeInvalidArgument, Message: "skill source refs are unsupported; use the repository default branch"}
 	}
-	normalized, sourceKey, err := normalizeSkillGitSource(raw)
+	identity, err := normalizeSkillSourceInput(raw)
 	if err != nil {
 		return "", "", &skillsCommandError{Code: rp.CodeForbidden, Message: err.Error()}
 	}
-	return normalized, sourceKey, nil
+	return identity.Source, identity.SourceKey, nil
 }
 
 func (c *SkillsCommand) nativeStore() *skillSourceStore {

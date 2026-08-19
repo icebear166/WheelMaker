@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"net"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -36,6 +37,19 @@ type skillSourceLock struct {
 	Version       int                   `json:"version"`
 	HashAlgorithm string                `json:"-"` // Legacy V2 compatibility; never written in V3.
 	Sources       []skillSourceSnapshot `json:"sources"`
+}
+
+type skillSourceKind string
+
+const (
+	skillSourceKindGit       skillSourceKind = "git"
+	skillSourceKindWellKnown skillSourceKind = "well-known"
+)
+
+type skillSourceIdentity struct {
+	Kind      skillSourceKind
+	Source    string
+	SourceKey string
 }
 
 type skillSourceSnapshot struct {
@@ -470,6 +484,147 @@ func normalizeSkillGitSource(raw string) (string, string, error) {
 	return parsed.String(), keyHost + "/" + strings.ToLower(keyPath), nil
 }
 
+func normalizeSkillSourceInput(raw string) (skillSourceIdentity, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return skillSourceIdentity{}, errors.New("skill source is required")
+	}
+	if len(raw) >= 3 && raw[1] == ':' && (raw[2] == '/' || raw[2] == '\\') {
+		return skillSourceIdentity{}, errors.New("local skill sources are unsupported")
+	}
+	if skillSourceRepoPattern.MatchString(raw) || isSkillSourceSCPInput(raw) {
+		return normalizeGitSkillSourceIdentity(raw)
+	}
+
+	parsed, err := url.Parse(raw)
+	if err != nil || parsed.Host == "" {
+		return skillSourceIdentity{}, errors.New("skill source must be a supported remote source")
+	}
+	scheme := strings.ToLower(parsed.Scheme)
+	if scheme == "ssh" {
+		return normalizeGitSkillSourceIdentity(raw)
+	}
+	if scheme != "http" && scheme != "https" {
+		return skillSourceIdentity{}, errors.New("unsupported skill source scheme")
+	}
+	host := strings.ToLower(parsed.Hostname())
+	if host == "raw.githubusercontent.com" {
+		return skillSourceIdentity{}, errors.New("raw GitHub skill sources are unsupported")
+	}
+	if isSkillSourceGitHTTPURL(parsed) {
+		if hasSkillSourceGitTreeRef(parsed) {
+			return skillSourceIdentity{}, errors.New("skill source refs are unsupported; use the repository default branch")
+		}
+		return normalizeGitSkillSourceIdentity(raw)
+	}
+
+	source, canonical, err := normalizeWellKnownSkillSource(raw)
+	if err != nil {
+		return skillSourceIdentity{}, err
+	}
+	identity := skillSourceIdentity{Kind: skillSourceKindWellKnown, Source: source}
+	if canonical {
+		identity.SourceKey = source
+	}
+	return identity, nil
+}
+
+func normalizePersistedSkillSource(raw string) (skillSourceIdentity, error) {
+	identity, err := normalizeSkillSourceInput(raw)
+	if err != nil {
+		return skillSourceIdentity{}, err
+	}
+	if identity.Kind == skillSourceKindWellKnown && identity.SourceKey == "" {
+		return skillSourceIdentity{}, errors.New("well-known skill source must identify a canonical index")
+	}
+	return identity, nil
+}
+
+func normalizeGitSkillSourceIdentity(raw string) (skillSourceIdentity, error) {
+	source, sourceKey, err := normalizeSkillGitSource(raw)
+	if err != nil {
+		return skillSourceIdentity{}, err
+	}
+	return skillSourceIdentity{Kind: skillSourceKindGit, Source: source, SourceKey: sourceKey}, nil
+}
+
+func isSkillSourceSCPInput(raw string) bool {
+	return !strings.Contains(raw, "://") && len(skillSourceSCPPattern.FindStringSubmatch(raw)) == 4
+}
+
+func isSkillSourceGitHTTPURL(parsed *url.URL) bool {
+	if parsed == nil {
+		return false
+	}
+	host := strings.ToLower(parsed.Hostname())
+	if host == "github.com" || host == "www.github.com" || host == "gitlab.com" || host == "www.gitlab.com" {
+		return true
+	}
+	path := strings.TrimSuffix(parsed.EscapedPath(), "/")
+	return strings.HasSuffix(strings.ToLower(path), ".git") || strings.Contains(strings.ToLower(path), "/-/tree/")
+}
+
+func hasSkillSourceGitTreeRef(parsed *url.URL) bool {
+	if parsed == nil {
+		return false
+	}
+	path := strings.ToLower(parsed.EscapedPath())
+	host := strings.ToLower(parsed.Hostname())
+	if (host == "github.com" || host == "www.github.com") && strings.Contains(path, "/tree/") {
+		return true
+	}
+	return strings.Contains(path, "/-/tree/")
+}
+
+func normalizeWellKnownSkillSource(raw string) (string, bool, error) {
+	parsed, err := url.Parse(strings.TrimSpace(raw))
+	if err != nil || parsed.Host == "" || parsed.Opaque != "" {
+		return "", false, errors.New("well-known skill source must be an HTTP(S) URL")
+	}
+	scheme := strings.ToLower(parsed.Scheme)
+	if scheme != "http" && scheme != "https" {
+		return "", false, errors.New("well-known skill source must be an HTTP(S) URL")
+	}
+	if parsed.User != nil {
+		return "", false, errors.New("HTTP skill source must not contain credentials")
+	}
+	if parsed.RawQuery != "" || parsed.Fragment != "" {
+		return "", false, errors.New("skill source must not contain query or fragment data")
+	}
+	decodedPath, err := url.PathUnescape(parsed.EscapedPath())
+	if err != nil || strings.ContainsAny(decodedPath, "\\\x00") {
+		return "", false, errors.New("well-known skill source path is invalid")
+	}
+	for _, segment := range strings.Split(decodedPath, "/") {
+		if segment == "." || segment == ".." {
+			return "", false, errors.New("well-known skill source path is invalid")
+		}
+	}
+
+	host := strings.ToLower(parsed.Hostname())
+	if host == "" {
+		return "", false, errors.New("skill source host is required")
+	}
+	port := parsed.Port()
+	parsed.Scheme = scheme
+	parsed.Host = host
+	if port != "" {
+		parsed.Host = net.JoinHostPort(host, port)
+	} else if strings.Contains(host, ":") {
+		parsed.Host = "[" + host + "]"
+	}
+	if parsed.Path == "" {
+		parsed.Path = "/"
+	}
+	source := parsed.String()
+	return source, isCanonicalWellKnownIndexPath(parsed.Path), nil
+}
+
+func isCanonicalWellKnownIndexPath(value string) bool {
+	return strings.HasSuffix(value, "/.well-known/agent-skills/index.json") ||
+		strings.HasSuffix(value, "/.well-known/skills/index.json")
+}
+
 func normalizeSkillRepositoryPath(raw string) (string, string, error) {
 	decoded, err := url.PathUnescape(strings.TrimSpace(raw))
 	if err != nil {
@@ -723,11 +878,15 @@ func validateSkillSourceLock(lock skillSourceLock) error {
 	for index := range lock.Sources {
 		source := &lock.Sources[index]
 		canonicalizeSkillSourceSnapshot(source)
-		normalizedSource, normalizedKey, err := normalizeSkillGitSource(source.Source)
+		identity, err := normalizePersistedSkillSource(source.Source)
 		if err != nil {
 			return fmt.Errorf("invalid skill source %q: %w", source.SourceKey, err)
 		}
-		if normalizedSource != source.Source || normalizedKey != strings.ToLower(strings.TrimSpace(source.SourceKey)) {
+		normalizedKey := strings.TrimSpace(source.SourceKey)
+		if identity.Kind == skillSourceKindGit {
+			normalizedKey = strings.ToLower(normalizedKey)
+		}
+		if identity.Source != source.Source || identity.SourceKey != normalizedKey {
 			return fmt.Errorf("skill source %q is not normalized", source.SourceKey)
 		}
 		key := strings.ToLower(source.SourceKey)
