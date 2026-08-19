@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -290,6 +291,36 @@ func TestNativeWellKnownPassiveScanReportsMissingSnapshotWithoutNetwork(t *testi
 	if len(snapshot.Sources) != 1 || snapshot.Sources[0].Status != "needs_fetch" {
 		t.Fatalf("snapshot=%#v, want well-known needs_fetch status", snapshot)
 	}
+}
+
+func TestNativeWellKnownErrorsUseGenericSourceTerminology(t *testing.T) {
+	t.Run("fragment input", func(t *testing.T) {
+		_, _, cmdErr := normalizeNativeSkillSource("https://example.com/.well-known/skills/index.json#section")
+		if cmdErr == nil {
+			t.Fatal("normalizeNativeSkillSource() succeeded, want fragment rejection")
+		}
+		message := strings.ToLower(cmdErr.Message)
+		if strings.Contains(message, "repository") || strings.Contains(message, "default branch") || !strings.Contains(message, "skill source") {
+			t.Fatalf("error=%q, want generic skill source terminology", cmdErr.Message)
+		}
+	})
+
+	t.Run("source not added", func(t *testing.T) {
+		command := newSkillsCommandWithRunner(newFakeSkillsRunner(), skillsCommandConfig{HubID: "hub-a", HomeDir: t.TempDir()})
+		err := command.nativeInstall(context.Background(), skillsCommandTarget{scope: "hub"}, "https://example.com/.well-known/skills/index.json", []string{"alpha"}, false)
+		message := strings.ToLower(fmt.Sprint(err))
+		if err == nil || strings.Contains(message, "repository") || !strings.Contains(message, "skill source") {
+			t.Fatalf("nativeInstall() error=%v, want generic skill source terminology", err)
+		}
+	})
+
+	t.Run("skill missing", func(t *testing.T) {
+		_, err := canonicalNativeSkillNames([]string{"missing"}, []string{"alpha"})
+		message := strings.ToLower(fmt.Sprint(err))
+		if err == nil || strings.Contains(message, "repository") || !strings.Contains(message, "source") {
+			t.Fatalf("canonicalNativeSkillNames() error=%v, want generic source terminology", err)
+		}
+	})
 }
 
 type mutableWellKnownCatalogServer struct {

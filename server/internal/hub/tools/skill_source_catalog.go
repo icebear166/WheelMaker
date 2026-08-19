@@ -171,7 +171,7 @@ func appendPendingSkillSourceRemovals(
 ) []skillSourceReconciledItem {
 	current := map[string]struct{}{}
 	for _, source := range lock.Sources {
-		current[strings.ToLower(source.SourceKey)] = struct{}{}
+		current[skillSourceKeyMapKey(source.SourceKey)] = struct{}{}
 	}
 	installedByName := map[string]SkillsInstalledSkillSnapshot{}
 	for _, item := range installed {
@@ -185,13 +185,14 @@ func appendPendingSkillSourceRemovals(
 		}
 		_, sourceKey, err := normalizeSkillGitSource(address)
 		if err == nil {
-			namesBySource[strings.ToLower(sourceKey)] = append(namesBySource[strings.ToLower(sourceKey)], entry.Name)
+			key := skillSourceKeyMapKey(sourceKey)
+			namesBySource[key] = append(namesBySource[key], entry.Name)
 		}
 	}
 	var active []skillSourceReconciledItem
 	pendingNames := map[string]struct{}{}
 	for _, previousSource := range previous.Sources {
-		key := strings.ToLower(previousSource.SourceKey)
+		key := skillSourceKeyMapKey(previousSource.SourceKey)
 		if _, exists := current[key]; exists {
 			continue
 		}
@@ -232,7 +233,7 @@ func appendPendingSkillSourceRemovals(
 		snapshot.UnmanagedSkills = unmanaged
 	}
 	sort.Slice(snapshot.Sources, func(i, j int) bool {
-		return strings.ToLower(snapshot.Sources[i].SourceKey) < strings.ToLower(snapshot.Sources[j].SourceKey)
+		return skillSourceKeyLess(snapshot.Sources[i].SourceKey, snapshot.Sources[j].SourceKey)
 	})
 	applySkillSourceConflicts(snapshot)
 	return active
@@ -290,7 +291,7 @@ func writeSkillSourceReconciliation(path string, state skillSourceReconciliation
 		return nil
 	}
 	sort.Slice(state.Sources, func(i, j int) bool {
-		return strings.ToLower(state.Sources[i].SourceKey) < strings.ToLower(state.Sources[j].SourceKey)
+		return skillSourceKeyLess(state.Sources[i].SourceKey, state.Sources[j].SourceKey)
 	})
 	raw, err := json.MarshalIndent(state, "", "  ")
 	if err != nil {
@@ -364,7 +365,7 @@ func composeSkillSourceCatalog(
 	for _, source := range lock.Sources {
 		for _, name := range source.ManagedSkills {
 			if key := strings.ToLower(strings.TrimSpace(name)); key != "" {
-				ownerByName[key] = strings.ToLower(source.SourceKey)
+				ownerByName[key] = skillSourceKeyMapKey(source.SourceKey)
 			}
 		}
 	}
@@ -390,7 +391,7 @@ func composeSkillSourceCatalog(
 		}
 		view.RemoteCommit = source.RemoteCommit
 		view.UpdateAvailable = source.UpdateAvailable
-		if message := strings.TrimSpace(staleErrors[strings.ToLower(source.SourceKey)]); message != "" {
+		if message := strings.TrimSpace(staleErrors[skillSourceKeyMapKey(source.SourceKey)]); message != "" {
 			view.Status = "stale"
 			view.Error = message
 		}
@@ -403,7 +404,7 @@ func composeSkillSourceCatalog(
 				Status: "uninstalled", CanInstall: true,
 			}
 			local, localExists := installedByName[key]
-			if localExists && ownerByName[key] == strings.ToLower(source.SourceKey) {
+			if localExists && ownerByName[key] == skillSourceKeyMapKey(source.SourceKey) {
 				row.Installed = true
 				row.Managed = true
 				row.CanInstall = false
@@ -428,7 +429,7 @@ func composeSkillSourceCatalog(
 		}
 		if view.Status != "ready" {
 			for nameKey, ownerKey := range ownerByName {
-				if ownerKey != strings.ToLower(source.SourceKey) {
+				if ownerKey != skillSourceKeyMapKey(source.SourceKey) {
 					continue
 				}
 				if _, exists := remoteNames[nameKey]; exists {
@@ -452,7 +453,7 @@ func composeSkillSourceCatalog(
 		}
 		if view.Status == "ready" {
 			for nameKey, ownerKey := range ownerByName {
-				if ownerKey != strings.ToLower(source.SourceKey) {
+				if ownerKey != skillSourceKeyMapKey(source.SourceKey) {
 					continue
 				}
 				if _, exists := remoteNames[nameKey]; exists {

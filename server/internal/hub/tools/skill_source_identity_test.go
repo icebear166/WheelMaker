@@ -131,3 +131,22 @@ func TestSkillSourceLockAcceptsCanonicalWellKnownIdentityOffline(t *testing.T) {
 		t.Fatalf("decoded source=%#v, want canonical well-known source", lock.Sources)
 	}
 }
+
+func TestSkillSourceLockKeepsCaseSensitiveWellKnownIdentitiesDistinct(t *testing.T) {
+	upper := "https://example.com/Docs/.well-known/skills/index.json"
+	lower := "https://example.com/docs/.well-known/skills/index.json"
+	lock := skillSourceLock{
+		Version: skillSourceLockVersion,
+		Sources: []skillSourceSnapshot{
+			{Source: upper, SourceKey: upper, ManagedSkills: []string{}},
+			{Source: lower, SourceKey: lower, ManagedSkills: []string{}},
+		},
+	}
+
+	if err := validateSkillSourceLock(lock); err != nil {
+		t.Fatalf("validateSkillSourceLock() error=%v, want distinct well-known identities", err)
+	}
+	if got := nativeSourceIndex(lock, lower); got != 1 {
+		t.Fatalf("nativeSourceIndex(lower)=%d, want 1", got)
+	}
+}

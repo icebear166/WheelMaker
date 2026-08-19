@@ -625,6 +625,37 @@ func isCanonicalWellKnownIndexPath(value string) bool {
 		strings.HasSuffix(value, "/.well-known/skills/index.json")
 }
 
+func isCanonicalWellKnownSourceKey(value string) bool {
+	value = strings.TrimSpace(value)
+	normalized, canonical, err := normalizeWellKnownSkillSource(value)
+	return err == nil && canonical && normalized == value
+}
+
+func skillSourceKeyMapKey(value string) string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return ""
+	}
+	if isCanonicalWellKnownSourceKey(value) {
+		return value
+	}
+	return strings.ToLower(value)
+}
+
+func skillSourceKeysEqual(left, right string) bool {
+	leftKey := skillSourceKeyMapKey(left)
+	return leftKey != "" && leftKey == skillSourceKeyMapKey(right)
+}
+
+func skillSourceKeyLess(left, right string) bool {
+	leftKey := skillSourceKeyMapKey(left)
+	rightKey := skillSourceKeyMapKey(right)
+	if leftKey == rightKey {
+		return strings.TrimSpace(left) < strings.TrimSpace(right)
+	}
+	return leftKey < rightKey
+}
+
 func normalizeSkillRepositoryPath(raw string) (string, string, error) {
 	decoded, err := url.PathUnescape(strings.TrimSpace(raw))
 	if err != nil {
@@ -889,7 +920,7 @@ func validateSkillSourceLock(lock skillSourceLock) error {
 		if identity.Source != source.Source || identity.SourceKey != normalizedKey {
 			return fmt.Errorf("skill source %q is not normalized", source.SourceKey)
 		}
-		key := strings.ToLower(source.SourceKey)
+		key := skillSourceKeyMapKey(source.SourceKey)
 		if _, exists := seenSources[key]; exists {
 			return fmt.Errorf("duplicate skill source %q", source.SourceKey)
 		}
@@ -1018,7 +1049,7 @@ func sortSkillSourceLock(lock *skillSourceLock) {
 		lock.Sources = []skillSourceSnapshot{}
 	}
 	sort.Slice(lock.Sources, func(i, j int) bool {
-		return strings.ToLower(lock.Sources[i].SourceKey) < strings.ToLower(lock.Sources[j].SourceKey)
+		return skillSourceKeyLess(lock.Sources[i].SourceKey, lock.Sources[j].SourceKey)
 	})
 	for index := range lock.Sources {
 		canonicalizeSkillSourceSnapshot(&lock.Sources[index])

@@ -581,7 +581,7 @@ func (p *wellKnownSkillSourceProvider) materializeDiscoveryEntry(ctx context.Con
 	if digest != entry.digest {
 		return fmt.Errorf("well-known skill %q artifact digest mismatch", entry.name)
 	}
-	if err := extractWellKnownArchive(artifactPath, entry.artifactURL, contentType, skillRoot, p.limits, budget); err != nil {
+	if err := extractWellKnownArchive(ctx, artifactPath, entry.artifactURL, contentType, skillRoot, p.limits, budget); err != nil {
 		return fmt.Errorf("extract well-known skill %q archive: %w", entry.name, err)
 	}
 	raw, err := os.ReadFile(filepath.Join(skillRoot, "SKILL.md"))
@@ -720,7 +720,10 @@ func wellKnownRequestError(ctx context.Context, err error) error {
 	return errors.New("request failed")
 }
 
-func extractWellKnownArchive(artifactPath, artifactURL, contentType, destination string, limits wellKnownLimits, budget *wellKnownCatalogBudget) error {
+func extractWellKnownArchive(ctx context.Context, artifactPath, artifactURL, contentType, destination string, limits wellKnownLimits, budget *wellKnownCatalogBudget) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	format, err := detectWellKnownArchiveFormat(artifactPath, artifactURL, contentType)
 	if err != nil {
 		return err
@@ -729,11 +732,14 @@ func extractWellKnownArchive(artifactPath, artifactURL, contentType, destination
 		return fmt.Errorf("create archive destination: %w", err)
 	}
 	if format == "zip" {
-		err = extractWellKnownZip(artifactPath, destination, limits, budget)
+		err = extractWellKnownZip(ctx, artifactPath, destination, limits, budget)
 	} else {
-		err = extractWellKnownTarGz(artifactPath, destination, limits, budget)
+		err = extractWellKnownTarGz(ctx, artifactPath, destination, limits, budget)
 	}
 	if err != nil {
+		return err
+	}
+	if err := ctx.Err(); err != nil {
 		return err
 	}
 	if info, err := os.Lstat(filepath.Join(destination, "SKILL.md")); err != nil || !info.Mode().IsRegular() {
@@ -771,7 +777,10 @@ func detectWellKnownArchiveFormat(artifactPath, artifactURL, contentType string)
 	return "", errors.New("unsupported archive format")
 }
 
-func extractWellKnownZip(artifactPath, destination string, limits wellKnownLimits, budget *wellKnownCatalogBudget) error {
+func extractWellKnownZip(ctx context.Context, artifactPath, destination string, limits wellKnownLimits, budget *wellKnownCatalogBudget) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	reader, err := zip.OpenReader(artifactPath)
 	if err != nil {
 		return errors.New("invalid ZIP archive")
@@ -781,19 +790,29 @@ func extractWellKnownZip(artifactPath, destination string, limits wellKnownLimit
 	fileCount := 0
 	seen := map[string]struct{}{}
 	for _, entry := range reader.File {
-		if entry.FileInfo().IsDir() {
-			continue
+		if err := ctx.Err(); err != nil {
+			return err
 		}
 		if entry.Flags&0x1 != 0 {
 			return errors.New("encrypted ZIP entries are unsupported")
 		}
 		mode := entry.Mode()
-		if mode&os.ModeSymlink != 0 || !mode.IsRegular() {
-			return errors.New("archive links and special files are unsupported")
+		entryPath := entry.Name
+		if entry.FileInfo().IsDir() {
+			entryPath = strings.TrimSuffix(entryPath, "/")
 		}
-		normalized, err := normalizeWellKnownArchivePath(entry.Name)
+		normalized, err := normalizeWellKnownArchivePath(entryPath)
 		if err != nil {
 			return err
+		}
+		if entry.FileInfo().IsDir() {
+			if entry.UncompressedSize64 != 0 {
+				return errors.New("archive directory contains unexpected data")
+			}
+			continue
+		}
+		if mode&os.ModeSymlink != 0 || !mode.IsRegular() {
+			return errors.New("archive links and special files are unsupported")
 		}
 		key := strings.ToLower(normalized)
 		if _, exists := seen[key]; exists {
@@ -818,7 +837,7 @@ func extractWellKnownZip(artifactPath, destination string, limits wellKnownLimit
 		if err != nil {
 			return errors.New("open ZIP entry")
 		}
-		written, writeErr := writeBoundedWellKnownArchiveFile(target, source, limits.archiveMaxBytes-totalBytes)
+		written, writeErr := writeBoundedWellKnownArchiveFile(ctx, target, source, limits.archiveMaxBytes-totalBytes)
 		closeErr := source.Close()
 		if writeErr != nil {
 			return writeErr
@@ -834,13 +853,16 @@ func extractWellKnownZip(artifactPath, destination string, limits wellKnownLimit
 	return nil
 }
 
-func extractWellKnownTarGz(artifactPath, destination string, limits wellKnownLimits, budget *wellKnownCatalogBudget) error {
+func extractWellKnownTarGz(ctx context.Context, artifactPath, destination string, limits wellKnownLimits, budget *wellKnownCatalogBudget) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	file, err := os.Open(artifactPath)
 	if err != nil {
 		return fmt.Errorf("open TAR.GZ archive: %w", err)
 	}
 	defer file.Close()
-	gzipReader, err := gzip.NewReader(file)
+	gzipReader, err := gzip.NewReader(&wellKnownContextReader{ctx: ctx, reader: file})
 	if err != nil {
 		return errors.New("invalid TAR.GZ archive")
 	}
@@ -850,6 +872,9 @@ func extractWellKnownTarGz(artifactPath, destination string, limits wellKnownLim
 	fileCount := 0
 	seen := map[string]struct{}{}
 	for {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		header, err := tarReader.Next()
 		if errors.Is(err, io.EOF) {
 			break
@@ -857,18 +882,25 @@ func extractWellKnownTarGz(artifactPath, destination string, limits wellKnownLim
 		if err != nil {
 			return errors.New("invalid TAR archive")
 		}
+		entryPath := header.Name
+		if header.Typeflag == tar.TypeDir {
+			entryPath = strings.TrimSuffix(entryPath, "/")
+		}
+		normalized, err := normalizeWellKnownArchivePath(entryPath)
+		if err != nil {
+			return err
+		}
 		switch header.Typeflag {
 		case tar.TypeDir:
+			if header.Size != 0 {
+				return errors.New("archive directory contains unexpected data")
+			}
 			continue
 		case tar.TypeSymlink, tar.TypeLink:
 			return errors.New("archive links are unsupported")
 		case tar.TypeReg, tar.TypeRegA:
 		default:
-			continue
-		}
-		normalized, err := normalizeWellKnownArchivePath(header.Name)
-		if err != nil {
-			return err
+			return errors.New("archive special files are unsupported")
 		}
 		key := strings.ToLower(normalized)
 		if _, exists := seen[key]; exists {
@@ -889,7 +921,7 @@ func extractWellKnownTarGz(artifactPath, destination string, limits wellKnownLim
 		if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
 			return fmt.Errorf("create archive directory: %w", err)
 		}
-		written, err := writeBoundedWellKnownArchiveFile(target, tarReader, limits.archiveMaxBytes-totalBytes)
+		written, err := writeBoundedWellKnownArchiveFile(ctx, target, tarReader, limits.archiveMaxBytes-totalBytes)
 		if err != nil {
 			return err
 		}
@@ -938,12 +970,31 @@ func safeWellKnownArchiveDestination(root, relative string) (string, error) {
 	return destination, nil
 }
 
-func writeBoundedWellKnownArchiveFile(destination string, source io.Reader, maximum int64) (int64, error) {
+type wellKnownContextReader struct {
+	ctx    context.Context
+	reader io.Reader
+}
+
+func (reader *wellKnownContextReader) Read(destination []byte) (int, error) {
+	if err := reader.ctx.Err(); err != nil {
+		return 0, err
+	}
+	count, err := reader.reader.Read(destination)
+	if contextErr := reader.ctx.Err(); contextErr != nil {
+		return count, contextErr
+	}
+	return count, err
+}
+
+func writeBoundedWellKnownArchiveFile(ctx context.Context, destination string, source io.Reader, maximum int64) (int64, error) {
+	if err := ctx.Err(); err != nil {
+		return 0, err
+	}
 	file, err := os.OpenFile(destination, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
 	if err != nil {
 		return 0, fmt.Errorf("create archive file: %w", err)
 	}
-	written, copyErr := io.Copy(file, io.LimitReader(source, maximum+1))
+	written, copyErr := io.Copy(file, io.LimitReader(&wellKnownContextReader{ctx: ctx, reader: source}, maximum+1))
 	closeErr := file.Close()
 	if copyErr != nil {
 		return 0, fmt.Errorf("write archive file: %w", copyErr)

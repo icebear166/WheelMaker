@@ -42,6 +42,33 @@ func TestSkillSourceStorePublishesAndReadsWellKnownSnapshotOffline(t *testing.T)
 	}
 }
 
+func TestSkillSourceStoreUsesDistinctHashedPathsForExactWellKnownKeys(t *testing.T) {
+	store := newSkillSourceStore(t.TempDir())
+	keys := []string{
+		"https://example.com/Docs/.well-known/skills/index.json",
+		"https://example.com/docs/.well-known/skills/index.json",
+		"https://example.com/docs//.well-known/skills/index.json",
+	}
+	paths := map[string]struct{}{}
+	lockPaths := map[string]struct{}{}
+	for _, key := range keys {
+		path := store.repositoryPath(key)
+		if !strings.HasPrefix(filepath.Base(path), "well-known-") {
+			t.Fatalf("repositoryPath(%q)=%q, want hashed well-known path", key, path)
+		}
+		if _, exists := paths[path]; exists {
+			t.Fatalf("repositoryPath(%q)=%q collides with another exact key", key, path)
+		}
+		paths[path] = struct{}{}
+
+		lockPath := store.lockPath(key)
+		if _, exists := lockPaths[lockPath]; exists {
+			t.Fatalf("lockPath(%q)=%q collides with another exact key", key, lockPath)
+		}
+		lockPaths[lockPath] = struct{}{}
+	}
+}
+
 func TestSkillSourceStoreWellKnownFailurePreservesPublishedSnapshot(t *testing.T) {
 	server := newMutableLegacyWellKnownServer(t, "first\n", false)
 	defer server.Close()

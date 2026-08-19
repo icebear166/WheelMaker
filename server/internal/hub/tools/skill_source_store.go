@@ -90,6 +90,10 @@ func (s *skillSourceStore) acquireSourceLock(ctx context.Context, sourceKey stri
 }
 
 func flatSkillSourceName(sourceKey string) string {
+	sourceKey = strings.TrimSpace(sourceKey)
+	if isCanonicalWellKnownSourceKey(sourceKey) {
+		return "well-known-" + skillSourceRevision([]byte(sourceKey))
+	}
 	parts := strings.FieldsFunc(strings.ToLower(strings.TrimSpace(sourceKey)), func(r rune) bool {
 		return r == '/' || r == '\\'
 	})

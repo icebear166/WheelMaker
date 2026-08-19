@@ -7,7 +7,9 @@ import (
 	"compress/gzip"
 	"context"
 	"encoding/binary"
+	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -600,7 +602,7 @@ func TestWellKnownArchiveRejectsEncryptionLinksAndMissingRootSkill(t *testing.T)
 			}
 			limits := defaultWellKnownLimits()
 			budget := &wellKnownCatalogBudget{maxBytes: limits.catalogMaxBytes, maxFiles: limits.catalogMaxFiles}
-			err := extractWellKnownArchive(artifactPath, "https://example.com/artifact"+testCase.extension, "", filepath.Join(t.TempDir(), "skill"), limits, budget)
+			err := extractWellKnownArchive(context.Background(), artifactPath, "https://example.com/artifact"+testCase.extension, "", filepath.Join(t.TempDir(), "skill"), limits, budget)
 			if err == nil || !strings.Contains(strings.ToLower(err.Error()), testCase.wantError) {
 				t.Fatalf("extractWellKnownArchive() error=%v, want %q", err, testCase.wantError)
 			}
@@ -608,9 +610,115 @@ func TestWellKnownArchiveRejectsEncryptionLinksAndMissingRootSkill(t *testing.T)
 	}
 }
 
+func TestWellKnownArchiveRejectsUnsafeDirectoriesAndSpecialEntries(t *testing.T) {
+	validSkill := "---\nname: alpha\ndescription: Alpha\n---\n"
+	tests := []struct {
+		name      string
+		artifact  []byte
+		extension string
+		wantError string
+	}{
+		{
+			name:      "unsafe zip directory",
+			artifact:  makeWellKnownZipWithDirectory(t, "../", validSkill),
+			extension: ".zip",
+			wantError: "unsafe",
+		},
+		{
+			name:      "unsafe tar directory",
+			artifact:  makeWellKnownTarGzWithExtraHeader(t, &tar.Header{Name: "../", Mode: 0o755, Typeflag: tar.TypeDir}, validSkill),
+			extension: ".tgz",
+			wantError: "unsafe",
+		},
+		{
+			name:      "tar special entry",
+			artifact:  makeWellKnownTarGzWithExtraHeader(t, &tar.Header{Name: "device", Mode: 0o600, Typeflag: tar.TypeChar}, validSkill),
+			extension: ".tgz",
+			wantError: "special",
+		},
+	}
+	for _, testCase := range tests {
+		t.Run(testCase.name, func(t *testing.T) {
+			artifactPath := filepath.Join(t.TempDir(), "artifact"+testCase.extension)
+			if err := os.WriteFile(artifactPath, testCase.artifact, 0o600); err != nil {
+				t.Fatal(err)
+			}
+			limits := defaultWellKnownLimits()
+			budget := &wellKnownCatalogBudget{maxBytes: limits.catalogMaxBytes, maxFiles: limits.catalogMaxFiles}
+			err := extractWellKnownArchive(context.Background(), artifactPath, "https://example.com/artifact"+testCase.extension, "", filepath.Join(t.TempDir(), "skill"), limits, budget)
+			if err == nil || !strings.Contains(strings.ToLower(err.Error()), testCase.wantError) {
+				t.Fatalf("extractWellKnownArchive() error=%v, want %q", err, testCase.wantError)
+			}
+		})
+	}
+}
+
+func TestWellKnownProviderStopsBeforeArchiveExtractionWhenContextIsCanceled(t *testing.T) {
+	artifact := makeWellKnownZip(t, map[string]string{
+		"SKILL.md": "---\nname: alpha\ndescription: Alpha\n---\n",
+	})
+	index := []byte(fmt.Sprintf(`{"$schema":%q,"skills":[{"name":"alpha","description":"Alpha","type":"archive","url":"alpha.zip","digest":%q}]}`,
+		wellKnownDiscoverySchemaV2, wellKnownDigest(artifact)))
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	client := &http.Client{Transport: wellKnownRoundTripperFunc(func(request *http.Request) (*http.Response, error) {
+		var body io.ReadCloser
+		switch request.URL.Path {
+		case "/.well-known/agent-skills/index.json":
+			body = io.NopCloser(bytes.NewReader(index))
+		case "/.well-known/agent-skills/alpha.zip":
+			body = &cancelOnCloseReadCloser{Reader: bytes.NewReader(artifact), cancel: cancel}
+		default:
+			return &http.Response{StatusCode: http.StatusNotFound, Header: make(http.Header), Body: http.NoBody, Request: request}, nil
+		}
+		return &http.Response{StatusCode: http.StatusOK, Header: make(http.Header), Body: body, Request: request}, nil
+	})}
+
+	_, err := newWellKnownSkillSourceProvider(client).materialize(ctx, "https://example.com/.well-known/agent-skills/index.json", filepath.Join(t.TempDir(), "snapshot"))
+	if err == nil || !strings.Contains(strings.ToLower(err.Error()), "context canceled") {
+		t.Fatalf("materialize() error=%v, want extraction cancellation", err)
+	}
+}
+
+func TestWellKnownArchiveHonorsCanceledContext(t *testing.T) {
+	artifact := makeWellKnownZip(t, map[string]string{
+		"SKILL.md":          "---\nname: alpha\ndescription: Alpha\n---\n",
+		"references/one.md": "one\n",
+	})
+	artifactPath := filepath.Join(t.TempDir(), "artifact.zip")
+	if err := os.WriteFile(artifactPath, artifact, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	limits := defaultWellKnownLimits()
+	budget := &wellKnownCatalogBudget{maxBytes: limits.catalogMaxBytes, maxFiles: limits.catalogMaxFiles}
+
+	err := extractWellKnownArchive(ctx, artifactPath, "https://example.com/artifact.zip", "", filepath.Join(t.TempDir(), "skill"), limits, budget)
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("extractWellKnownArchive() error=%v, want context canceled", err)
+	}
+}
+
 type credentialInjectingRoundTripper struct {
 	base http.RoundTripper
 	host string
+}
+
+type wellKnownRoundTripperFunc func(*http.Request) (*http.Response, error)
+
+func (fn wellKnownRoundTripperFunc) RoundTrip(request *http.Request) (*http.Response, error) {
+	return fn(request)
+}
+
+type cancelOnCloseReadCloser struct {
+	io.Reader
+	cancel context.CancelFunc
+}
+
+func (body *cancelOnCloseReadCloser) Close() error {
+	body.cancel()
+	return nil
 }
 
 func (transport credentialInjectingRoundTripper) RoundTrip(request *http.Request) (*http.Response, error) {
@@ -700,6 +808,28 @@ func makeWellKnownZipWithSymlink(t *testing.T, skillMarkdown string) []byte {
 	return buffer.Bytes()
 }
 
+func makeWellKnownZipWithDirectory(t *testing.T, directory, skillMarkdown string) []byte {
+	t.Helper()
+	var buffer bytes.Buffer
+	writer := zip.NewWriter(&buffer)
+	header := &zip.FileHeader{Name: directory, Method: zip.Store}
+	header.SetMode(os.ModeDir | 0o755)
+	if _, err := writer.CreateHeader(header); err != nil {
+		t.Fatal(err)
+	}
+	skill, err := writer.Create("SKILL.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := skill.Write([]byte(skillMarkdown)); err != nil {
+		t.Fatal(err)
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatal(err)
+	}
+	return buffer.Bytes()
+}
+
 func makeWellKnownTarGzWithSymlink(t *testing.T, skillMarkdown string) []byte {
 	t.Helper()
 	var buffer bytes.Buffer
@@ -713,6 +843,30 @@ func makeWellKnownTarGzWithSymlink(t *testing.T, skillMarkdown string) []byte {
 		t.Fatal(err)
 	}
 	if err := tarWriter.WriteHeader(&tar.Header{Name: "link", Linkname: "SKILL.md", Typeflag: tar.TypeSymlink}); err != nil {
+		t.Fatal(err)
+	}
+	if err := tarWriter.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := gzipWriter.Close(); err != nil {
+		t.Fatal(err)
+	}
+	return buffer.Bytes()
+}
+
+func makeWellKnownTarGzWithExtraHeader(t *testing.T, header *tar.Header, skillMarkdown string) []byte {
+	t.Helper()
+	var buffer bytes.Buffer
+	gzipWriter := gzip.NewWriter(&buffer)
+	tarWriter := tar.NewWriter(gzipWriter)
+	if err := tarWriter.WriteHeader(header); err != nil {
+		t.Fatal(err)
+	}
+	raw := []byte(skillMarkdown)
+	if err := tarWriter.WriteHeader(&tar.Header{Name: "SKILL.md", Mode: 0o600, Size: int64(len(raw)), Typeflag: tar.TypeReg}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tarWriter.Write(raw); err != nil {
 		t.Fatal(err)
 	}
 	if err := tarWriter.Close(); err != nil {
