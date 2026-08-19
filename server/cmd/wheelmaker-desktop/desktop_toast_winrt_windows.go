@@ -377,6 +377,10 @@ func desktopToastShortcutPath(appData string) string {
 	return filepath.Join(appData, `Microsoft\Windows\Start Menu\Programs`, "WheelMaker.lnk")
 }
 
+func desktopToastShortcutIconPath(exePath string) string {
+	return exePath
+}
+
 func comSetWideString(obj uintptr, index int, value string) error {
 	ptr, err := windows.UTF16PtrFromString(value)
 	if err != nil {
@@ -407,7 +411,7 @@ func installDesktopToastShortcut(appData, exePath string) error {
 	if err := comSetWideString(link, 9 /* IShellLinkW::SetWorkingDirectory */, filepath.Dir(exePath)); err != nil {
 		return err
 	}
-	iconLocation, err := windows.UTF16PtrFromString(exePath + ",0")
+	iconLocation, err := windows.UTF16PtrFromString(desktopToastShortcutIconPath(exePath))
 	if err != nil {
 		return err
 	}

@@ -2602,6 +2602,13 @@ func TestDesktopToastShortcutPath(t *testing.T) {
 	}
 }
 
+func TestDesktopToastShortcutIconPathUsesExecutablePath(t *testing.T) {
+	exePath := `C:\Program Files\WheelMaker\WheelMakerDesktop.exe`
+	if got := desktopToastShortcutIconPath(exePath); got != exePath {
+		t.Fatalf("icon path = %q, want %q", got, exePath)
+	}
+}
+
 type fakeDesktopWindowOps struct {
 	maximized bool
 	shows     []uintptr
