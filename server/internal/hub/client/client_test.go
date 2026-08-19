@@ -3058,6 +3058,300 @@ func newSessionViewTestClient(t *testing.T) *Client {
 	return c
 }
 
+func TestSessionViewListIncludesSubagentProjection(t *testing.T) {
+	c := newSessionViewTestClient(t)
+	ctx := context.Background()
+	spawnedAt := time.Date(2026, 8, 19, 9, 30, 0, 0, time.UTC)
+
+	if err := c.store.SaveSession(ctx, &SessionRecord{
+		ID:          "child-1",
+		ProjectName: "proj1",
+		Status:      SessionPersisted,
+		AgentType:   string(acp.ACPProviderCodex),
+		SessionSyncJSON: sessionSyncProjectionJSON(sessionSyncProjection{
+			SessionKind:      sessionKindSubagent,
+			ParentSessionID:  "root-1",
+			RootSessionID:    "root-1",
+			ProviderThreadID: "provider-child-1",
+			SpawnItemID:      "spawn-item-1",
+			SpawnedAt:        spawnedAt.Format(time.RFC3339),
+			SpawnSequence:    2,
+			SubagentName:     "Dalton",
+			SubagentRole:     "explorer",
+			SubagentStatus:   subagentStatusRunning,
+			ReadOnly:         true,
+		}),
+		CreatedAt:    spawnedAt,
+		LastActiveAt: spawnedAt,
+	}); err != nil {
+		t.Fatalf("SaveSession: %v", err)
+	}
+
+	sessions, err := c.listSessionViews(ctx)
+	if err != nil {
+		t.Fatalf("listSessionViews: %v", err)
+	}
+	if len(sessions) != 1 {
+		t.Fatalf("sessions len = %d, want 1", len(sessions))
+	}
+	got := sessions[0]
+	if got.SessionKind != sessionKindSubagent || got.ParentSessionID != "root-1" || got.RootSessionID != "root-1" || !got.ReadOnly {
+		t.Fatalf("subagent relation = %#v, want child of root-1 and read-only", got)
+	}
+	if got.Subagent == nil {
+		t.Fatal("subagent summary = nil")
+	}
+	if got.Subagent.Name != "Dalton" || got.Subagent.Role != "explorer" || got.Subagent.SpawnedAt != spawnedAt.Format(time.RFC3339) || got.Subagent.SpawnSequence != 2 || got.Subagent.Status != subagentStatusRunning {
+		t.Fatalf("subagent summary = %#v", got.Subagent)
+	}
+}
+
+func TestHandleSessionRequestRejectsReadOnlySubagentMutations(t *testing.T) {
+	c := newSessionViewTestClient(t)
+	ctx := context.Background()
+	now := time.Now().UTC()
+	if err := c.store.SaveSession(ctx, &SessionRecord{
+		ID:              "child-1",
+		ProjectName:     "proj1",
+		Status:          SessionPersisted,
+		AgentType:       string(acp.ACPProviderCodex),
+		SessionSyncJSON: sessionSyncProjectionJSON(sessionSyncProjection{SessionKind: sessionKindSubagent, ParentSessionID: "root-1", RootSessionID: "root-1", ReadOnly: true}),
+		CreatedAt:       now,
+		LastActiveAt:    now,
+	}); err != nil {
+		t.Fatalf("SaveSession: %v", err)
+	}
+
+	for _, method := range []string{
+		acp.RegistryMethodSessionRename,
+		acp.RegistryMethodSessionPin,
+		acp.RegistryMethodSessionConfig,
+		acp.RegistryMethodSessionQueue,
+		acp.RegistryMethodSessionDelete,
+	} {
+		t.Run(method, func(t *testing.T) {
+			_, err := c.HandleSessionRequest(ctx, method, "proj1", json.RawMessage(`{"sessionId":"child-1","title":"blocked"}`))
+			var requestErr *acp.RegistryRequestError
+			if !errors.As(err, &requestErr) || requestErr.Code != acp.CodeForbidden {
+				t.Fatalf("HandleSessionRequest(%s) error = %#v, want FORBIDDEN", method, err)
+			}
+		})
+	}
+
+	if _, err := c.HandleSessionRequest(ctx, acp.RegistryMethodSessionRead, "proj1", json.RawMessage(`{"sessionId":"child-1"}`)); err != nil {
+		t.Fatalf("session.read child: %v", err)
+	}
+	if _, err := c.HandleSessionRequest(ctx, acp.RegistryMethodSessionMarkRead, "proj1", json.RawMessage(`{"sessionId":"child-1","lastReadTurnIndex":0}`)); err != nil {
+		t.Fatalf("session.markRead child: %v", err)
+	}
+}
+
+func TestRootSessionPersistsSubagentLifecycleAndTurns(t *testing.T) {
+	c := newSessionViewTestClient(t)
+	ctx := context.Background()
+	now := time.Date(2026, 8, 19, 10, 0, 0, 0, time.UTC)
+	addRuntimeSession(c, "root-1", "Root task", string(acp.ACPProviderCodex), now.Add(-time.Minute), now)
+	if err := c.store.SaveSession(ctx, &SessionRecord{
+		ID:           "root-1",
+		ProjectName:  "proj1",
+		Status:       SessionActive,
+		AgentType:    string(acp.ACPProviderCodex),
+		Title:        "Root task",
+		CreatedAt:    now.Add(-time.Minute),
+		LastActiveAt: now,
+	}); err != nil {
+		t.Fatalf("SaveSession root: %v", err)
+	}
+	c.mu.Lock()
+	root := c.sessions["root-1"]
+	c.mu.Unlock()
+	if root == nil {
+		t.Fatal("root runtime session missing")
+	}
+
+	discovery := agent.SubagentEvent{
+		Event:                  agent.SubagentEventDiscovered,
+		ChildSessionID:         "child-1",
+		ParentSessionID:        "root-1",
+		RootSessionID:          "root-1",
+		ProviderThreadID:       "provider-child-1",
+		ParentProviderThreadID: "provider-root-1",
+		SpawnItemID:            "spawn-1",
+		Prompt:                 "Inspect the renderer",
+		Name:                   "Dalton",
+		Role:                   "explorer",
+		Status:                 "initializing",
+		OccurredAt:             now.Format(time.RFC3339Nano),
+	}
+	root.AgentSubagentEvent(discovery)
+	root.AgentSubagentEvent(agent.SubagentEvent{
+		Event:            agent.SubagentEventTurnStarted,
+		ChildSessionID:   "child-1",
+		ParentSessionID:  "root-1",
+		RootSessionID:    "root-1",
+		ProviderThreadID: "provider-child-1",
+		ProviderTurnID:   "provider-turn-1",
+		Prompt:           "Inspect the renderer",
+		Name:             "Dalton",
+		Status:           "running",
+		OccurredAt:       now.Add(time.Second).Format(time.RFC3339Nano),
+	})
+	root.AgentEvent(acp.AgentEvent{
+		SessionID: "child-1",
+		Update: acp.AgentMessageEvent{
+			Kind:       acp.SessionUpdateAgentMessageChunk,
+			Content:    acp.ContentBlock{Type: acp.ContentBlockTypeText, Text: "Child result"},
+			MessageID:  "message-1",
+			ReceivedAt: now.Add(2 * time.Second),
+		},
+	})
+	root.AgentSubagentEvent(agent.SubagentEvent{
+		Event:            agent.SubagentEventCompleted,
+		ChildSessionID:   "child-1",
+		ParentSessionID:  "root-1",
+		RootSessionID:    "root-1",
+		ProviderThreadID: "provider-child-1",
+		ProviderTurnID:   "provider-turn-1",
+		Status:           "completed",
+		StopReason:       acp.StopReasonEndTurn,
+		OccurredAt:       now.Add(3 * time.Second).Format(time.RFC3339Nano),
+	})
+
+	child, err := c.store.LoadSession(ctx, "proj1", "child-1")
+	if err != nil || child == nil {
+		t.Fatalf("LoadSession child = %#v, %v", child, err)
+	}
+	projection := sessionSyncProjectionFromJSON(child.SessionSyncJSON)
+	if projection.SessionKind != sessionKindSubagent || projection.ParentSessionID != "root-1" || projection.RootSessionID != "root-1" || projection.SpawnSequence != 1 || projection.SubagentStatus != subagentStatusCompleted || projection.ProviderReplay.LastCompletedTurnID != "provider-turn-1" {
+		t.Fatalf("child projection = %#v", projection)
+	}
+	rootRecord, err := c.store.LoadSession(ctx, "proj1", "root-1")
+	if err != nil || rootRecord == nil {
+		t.Fatalf("LoadSession root = %#v, %v", rootRecord, err)
+	}
+	if got := sessionSyncProjectionFromJSON(rootRecord.SessionSyncJSON).NextSubagentSequence; got != 2 {
+		t.Fatalf("root nextSubagentSequence = %d, want 2", got)
+	}
+
+	_, turns, err := c.sessionRecorder.ReadSessionTurns(ctx, "child-1", 0)
+	if err != nil {
+		t.Fatalf("ReadSessionTurns child: %v", err)
+	}
+	if len(turns) != 3 {
+		t.Fatalf("child turns len = %d, want prompt, message, done", len(turns))
+	}
+	if !strings.Contains(turns[0].Content, "Inspect the renderer") || !strings.Contains(turns[1].Content, "Child result") || !strings.Contains(turns[2].Content, acp.SessionTurnMethodPromptDone) {
+		t.Fatalf("child turns = %#v", turns)
+	}
+}
+
+func TestSubagentPermissionUsesRootRuntimeOwnerAndChildRecorder(t *testing.T) {
+	c := newSessionViewTestClient(t)
+	ctx := context.Background()
+	now := time.Now().UTC()
+	addRuntimeSession(c, "root-permission", "Root", string(acp.ACPProviderCodex), now.Add(-time.Minute), now)
+	if err := c.store.SaveSession(ctx, &SessionRecord{
+		ID:           "root-permission",
+		ProjectName:  "proj1",
+		Status:       SessionActive,
+		AgentType:    string(acp.ACPProviderCodex),
+		CreatedAt:    now.Add(-time.Minute),
+		LastActiveAt: now,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	c.mu.Lock()
+	root := c.sessions["root-permission"]
+	c.mu.Unlock()
+	root.AgentSubagentEvent(agent.SubagentEvent{
+		Event:            agent.SubagentEventDiscovered,
+		ChildSessionID:   "child-permission",
+		ParentSessionID:  "root-permission",
+		RootSessionID:    "root-permission",
+		ProviderThreadID: "provider-child-permission",
+		Prompt:           "Run protected command",
+		Name:             "Zeno",
+		Status:           "initializing",
+	})
+	root.AgentSubagentEvent(agent.SubagentEvent{
+		Event:            agent.SubagentEventTurnStarted,
+		ChildSessionID:   "child-permission",
+		ParentSessionID:  "root-permission",
+		RootSessionID:    "root-permission",
+		ProviderThreadID: "provider-child-permission",
+		ProviderTurnID:   "provider-turn-permission",
+		Prompt:           "Run protected command",
+		Status:           "running",
+	})
+
+	resultCh := make(chan acp.PermissionResult, 1)
+	errCh := make(chan error, 1)
+	go func() {
+		result, err := root.SessionRequestPermission(ctx, 1, acp.PermissionRequestParams{
+			SessionID: "child-permission",
+			ToolCall:  acp.ToolCallRef{ToolCallID: "call-child", Title: "Protected command"},
+			Options: []acp.PermissionOption{
+				{OptionID: "allow_once", Name: "Allow once", Kind: "allow_once"},
+				{OptionID: "reject", Name: "Reject", Kind: "reject_once"},
+			},
+		})
+		resultCh <- result
+		errCh <- err
+	}()
+
+	permissionID := ""
+	deadline := time.Now().Add(time.Second)
+	for permissionID == "" && time.Now().Before(deadline) {
+		root.permissions.mu.Lock()
+		for id := range root.permissions.pending {
+			permissionID = id
+		}
+		root.permissions.mu.Unlock()
+		if permissionID == "" {
+			time.Sleep(time.Millisecond)
+		}
+	}
+	if permissionID == "" {
+		t.Fatal("child permission was not registered on root owner")
+	}
+	summary, err := c.sessionRecorder.ReadSessionSummary(ctx, "child-permission")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if summary.PendingPermissionCount != 1 || summary.Subagent == nil || summary.Subagent.Status != subagentStatusWaitingApproval {
+		t.Fatalf("waiting child summary = %#v", summary)
+	}
+	root.permissions.mu.Lock()
+	pendingBeforeRespond := root.permissions.pending[permissionID]
+	root.permissions.mu.Unlock()
+	if pendingBeforeRespond == nil || pendingBeforeRespond.sessionID != "child-permission" {
+		t.Fatalf("pending permission before response = %#v", pendingBeforeRespond)
+	}
+
+	response, err := c.HandleSessionRequest(ctx, acp.RegistryMethodSessionPermissionRespond, "proj1", mustJSON(map[string]any{
+		"sessionId": "child-permission", "permissionId": permissionID, "optionId": "allow_once",
+	}))
+	if err != nil {
+		t.Fatalf("permission respond: %v", err)
+	}
+	if response.(map[string]any)["accepted"] != true {
+		t.Fatalf("permission response = %#v", response)
+	}
+	if err := <-errCh; err != nil {
+		t.Fatal(err)
+	}
+	if result := <-resultCh; result.OptionID != "allow_once" {
+		t.Fatalf("provider permission result = %#v", result)
+	}
+	summary, err = c.sessionRecorder.ReadSessionSummary(ctx, "child-permission")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if summary.PendingPermissionCount != 0 || summary.Subagent == nil || summary.Subagent.Status != subagentStatusRunning {
+		t.Fatalf("resumed child summary = %#v", summary)
+	}
+}
+
 func TestNewWithRuntimeUsesConfiguredFactoryAndStateDir(t *testing.T) {
 	store, err := NewStore(filepath.Join(t.TempDir(), "client.sqlite3"))
 	if err != nil {
@@ -4348,29 +4642,42 @@ type archiveManifestForTest struct {
 }
 
 type archiveManifestEntryForTest struct {
-	SessionID          string `json:"sessionId"`
-	ProjectName        string `json:"projectName"`
-	Title              string `json:"title"`
-	AgentType          string `json:"agentType"`
-	Storage            string `json:"storage"`
-	File               string `json:"file"`
-	Offset             int64  `json:"offset"`
-	Length             int64  `json:"length"`
-	UncompressedLength int64  `json:"uncompressedLength"`
-	Codec              string `json:"codec"`
-	SHA256             string `json:"sha256"`
-	UncompressedSHA256 string `json:"uncompressedSha256"`
-	TurnCount          int    `json:"turnCount"`
-	GapCount           int    `json:"gapCount"`
-	WMT2Version        int    `json:"wmt2Version"`
-	ChunkSizeCode      int    `json:"chunkSizeCode"`
-	ArchivedAt         string `json:"archivedAt"`
-	CreatedAt          string `json:"createdAt"`
-	UpdatedAt          string `json:"updatedAt"`
-	RestoredAt         string `json:"restoredAt"`
-	NativeArchivedAt   string `json:"nativeArchivedAt"`
-	NativeUnarchivedAt string `json:"nativeUnarchivedAt"`
-	NativeSyncWarning  string `json:"nativeSyncWarning"`
+	SessionID          string                          `json:"sessionId"`
+	ProjectName        string                          `json:"projectName"`
+	Title              string                          `json:"title"`
+	AgentType          string                          `json:"agentType"`
+	Storage            string                          `json:"storage"`
+	File               string                          `json:"file"`
+	Offset             int64                           `json:"offset"`
+	Length             int64                           `json:"length"`
+	UncompressedLength int64                           `json:"uncompressedLength"`
+	Codec              string                          `json:"codec"`
+	SHA256             string                          `json:"sha256"`
+	UncompressedSHA256 string                          `json:"uncompressedSha256"`
+	TurnCount          int                             `json:"turnCount"`
+	GapCount           int                             `json:"gapCount"`
+	WMT2Version        int                             `json:"wmt2Version"`
+	ChunkSizeCode      int                             `json:"chunkSizeCode"`
+	ArchivedAt         string                          `json:"archivedAt"`
+	CreatedAt          string                          `json:"createdAt"`
+	UpdatedAt          string                          `json:"updatedAt"`
+	RestoredAt         string                          `json:"restoredAt"`
+	NativeArchivedAt   string                          `json:"nativeArchivedAt"`
+	NativeUnarchivedAt string                          `json:"nativeUnarchivedAt"`
+	NativeSyncWarning  string                          `json:"nativeSyncWarning"`
+	ArchiveGroupID     string                          `json:"archiveGroupId"`
+	MemberSessionIDs   []string                        `json:"memberSessionIds"`
+	SubagentCount      int                             `json:"subagentCount"`
+	SessionKind        string                          `json:"sessionKind"`
+	ParentSessionID    string                          `json:"parentSessionId"`
+	RootSessionID      string                          `json:"rootSessionId"`
+	ReadOnly           bool                            `json:"readOnly"`
+	SubagentName       string                          `json:"subagentName"`
+	SubagentRole       string                          `json:"subagentRole"`
+	SubagentStatus     string                          `json:"subagentStatus"`
+	SpawnSequence      int64                           `json:"spawnSequence"`
+	ProviderThreadID   string                          `json:"providerThreadId"`
+	ProviderReplay     sessionProviderReplayProjection `json:"providerReplay"`
 }
 
 func readArchiveManifestForTest(t *testing.T, historyRoot, projectName string) archiveManifestForTest {
@@ -4384,8 +4691,8 @@ func readArchiveManifestForTest(t *testing.T, historyRoot, projectName string) a
 	if err := json.Unmarshal(raw, &manifest); err != nil {
 		t.Fatalf("Unmarshal archive manifest: %v", err)
 	}
-	if manifest.Version != 1 {
-		t.Fatalf("manifest version = %d, want 1", manifest.Version)
+	if manifest.Version != sessionArchiveManifestVersion {
+		t.Fatalf("manifest version = %d, want %d", manifest.Version, sessionArchiveManifestVersion)
 	}
 	if manifest.Sessions == nil {
 		t.Fatal("manifest sessions map is nil")
@@ -9201,6 +9508,172 @@ func TestHandleSessionRequestSessionArchiveShortSessionDeletesWithoutArchive(t *
 	}
 	if len(cleanupCalls) != 1 || cleanupCalls[0].projectName != "proj1" || cleanupCalls[0].agentType != "codex" || cleanupCalls[0].sessionID != "sess-short" {
 		t.Fatalf("cleanup calls=%#v, want codex short session cleanup", cleanupCalls)
+	}
+}
+
+func TestArchiveSubagentGroupPersistsMembersAndRestoresRelations(t *testing.T) {
+	c := newSessionViewTestClient(t)
+	historyRoot := filepath.Join(t.TempDir(), "db", "session")
+	c.SetSessionHistoryRoot(historyRoot)
+	ctx := context.Background()
+	now := time.Date(2026, 8, 19, 10, 0, 0, 0, time.UTC)
+
+	rootProjection := sessionSyncProjection{LatestPersistedTurnIndex: 1, NextSubagentSequence: 2}
+	childProjection := sessionSyncProjection{
+		LatestPersistedTurnIndex: 2,
+		SessionKind:              sessionKindSubagent,
+		ParentSessionID:          "root-group",
+		RootSessionID:            "root-group",
+		ProviderThreadID:         "provider-child-group",
+		SpawnedAt:                now.Add(time.Second).Format(time.RFC3339Nano),
+		SpawnSequence:            1,
+		SubagentName:             "Zeno",
+		SubagentRole:             "worker",
+		SubagentStatus:           subagentStatusCompleted,
+		ProviderReplay: sessionProviderReplayProjection{
+			LastCompletedTurnID: "provider-turn-child",
+		},
+		ReadOnly: true,
+	}
+	for _, record := range []*SessionRecord{
+		{
+			ID: "root-group", ProjectName: "proj1", Status: SessionPersisted,
+			AgentType: "codex", Title: "Root group", SessionSyncJSON: sessionSyncProjectionJSON(rootProjection),
+			CreatedAt: now.Add(-time.Hour), LastActiveAt: now,
+		},
+		{
+			ID: "child-group", ProjectName: "proj1", Status: SessionPersisted,
+			AgentType: "codex", Title: "Zeno", SessionSyncJSON: sessionSyncProjectionJSON(childProjection),
+			CreatedAt: now, LastActiveAt: now.Add(2 * time.Second),
+		},
+	} {
+		if err := c.store.SaveSession(ctx, record); err != nil {
+			t.Fatalf("SaveSession(%s): %v", record.ID, err)
+		}
+	}
+	if _, err := c.sessionRecorder.turnStore.WriteTurns(ctx, "proj1", "root-group", 1, []string{"root-turn"}); err != nil {
+		t.Fatalf("WriteTurns root: %v", err)
+	}
+	if _, err := c.sessionRecorder.turnStore.WriteTurns(ctx, "proj1", "child-group", 1, []string{"child-turn-1", "child-turn-2"}); err != nil {
+		t.Fatalf("WriteTurns child: %v", err)
+	}
+
+	if err := c.ArchiveSession(ctx, "root-group"); err != nil {
+		t.Fatalf("ArchiveSession group: %v", err)
+	}
+	manifest := readArchiveManifestForTest(t, historyRoot, "proj1")
+	if manifest.Version != 2 || len(manifest.Sessions) != 2 {
+		t.Fatalf("archive manifest = %#v, want v2 with two members", manifest)
+	}
+	rootEntry := manifest.Sessions["root-group"]
+	childEntry := manifest.Sessions["child-group"]
+	if rootEntry.ArchiveGroupID != "root-group" || !reflect.DeepEqual(rootEntry.MemberSessionIDs, []string{"root-group", "child-group"}) || rootEntry.SubagentCount != 1 {
+		t.Fatalf("root archive group metadata = %#v", rootEntry)
+	}
+	if childEntry.SessionKind != sessionKindSubagent || childEntry.ParentSessionID != "root-group" || childEntry.RootSessionID != "root-group" || !childEntry.ReadOnly || childEntry.SubagentName != "Zeno" || childEntry.SpawnSequence != 1 || childEntry.ProviderThreadID != "provider-child-group" || childEntry.ProviderReplay.LastCompletedTurnID != "provider-turn-child" {
+		t.Fatalf("child archive metadata = %#v", childEntry)
+	}
+	for _, sessionID := range []string{"root-group", "child-group"} {
+		stored, err := c.store.LoadSession(ctx, "proj1", sessionID)
+		if err != nil || stored != nil {
+			t.Fatalf("LoadSession(%s) after archive = %#v, %v", sessionID, stored, err)
+		}
+	}
+
+	list, err := c.ListArchivedSessions(ctx)
+	if err != nil {
+		t.Fatalf("ListArchivedSessions: %v", err)
+	}
+	listRaw, _ := json.Marshal(list["sessions"])
+	var listed []map[string]any
+	if err := json.Unmarshal(listRaw, &listed); err != nil || len(listed) != 1 || listed[0]["sessionId"] != "root-group" || listed[0]["subagentCount"] != float64(1) {
+		t.Fatalf("archived roots = %#v, err=%v", listed, err)
+	}
+
+	rootRead, err := c.HandleSessionRequest(ctx, acp.RegistryMethodSessionArchiveRead, "proj1", json.RawMessage(`{"sessionId":"root-group"}`))
+	if err != nil {
+		t.Fatalf("archive read root: %v", err)
+	}
+	rootReadRaw, _ := json.Marshal(rootRead)
+	var rootReadBody map[string]any
+	_ = json.Unmarshal(rootReadRaw, &rootReadBody)
+	subagents, _ := rootReadBody["subagents"].([]any)
+	if len(subagents) != 1 {
+		t.Fatalf("archive root subagents = %#v", rootReadBody["subagents"])
+	}
+	childRead, err := c.HandleSessionRequest(ctx, acp.RegistryMethodSessionArchiveRead, "proj1", json.RawMessage(`{"rootSessionId":"root-group","sessionId":"child-group"}`))
+	if err != nil {
+		t.Fatalf("archive read child: %v", err)
+	}
+	if childRead.(map[string]any)["sessionId"] != "child-group" {
+		t.Fatalf("archive child read = %#v", childRead)
+	}
+
+	if _, err := c.RestoreArchivedSession(ctx, "root-group"); err != nil {
+		t.Fatalf("RestoreArchivedSession group: %v", err)
+	}
+	for _, sessionID := range []string{"root-group", "child-group"} {
+		stored, err := c.store.LoadSession(ctx, "proj1", sessionID)
+		if err != nil || stored == nil {
+			t.Fatalf("LoadSession(%s) after restore = %#v, %v", sessionID, stored, err)
+		}
+	}
+	restoredChild, _ := c.store.LoadSession(ctx, "proj1", "child-group")
+	gotChildProjection := sessionSyncProjectionFromJSON(restoredChild.SessionSyncJSON)
+	if gotChildProjection.RootSessionID != "root-group" || gotChildProjection.ProviderThreadID != "provider-child-group" || gotChildProjection.ProviderReplay.LastCompletedTurnID != "provider-turn-child" || !gotChildProjection.ReadOnly {
+		t.Fatalf("restored child projection = %#v", gotChildProjection)
+	}
+	_, childTurns, err := c.sessionRecorder.ReadSessionTurns(ctx, "child-group", 0)
+	if err != nil || len(childTurns) != 2 {
+		t.Fatalf("restored child turns = %#v, err=%v", childTurns, err)
+	}
+}
+
+func TestDeleteRootSessionRejectsActiveDescendantAndCascadesWhenCompleted(t *testing.T) {
+	c := newSessionViewTestClient(t)
+	c.SetSessionHistoryRoot(filepath.Join(t.TempDir(), "db", "session"))
+	ctx := context.Background()
+	now := time.Date(2026, 8, 19, 11, 0, 0, 0, time.UTC)
+	root := &SessionRecord{
+		ID: "root-delete-group", ProjectName: "proj1", Status: SessionPersisted,
+		AgentType: "codex", Title: "Root", SessionSyncJSON: sessionSyncProjectionJSON(sessionSyncProjection{}),
+		CreatedAt: now, LastActiveAt: now,
+	}
+	childProjection := sessionSyncProjection{
+		SessionKind: sessionKindSubagent, ParentSessionID: root.ID, RootSessionID: root.ID,
+		SubagentName: "Dalton", SubagentStatus: subagentStatusRunning, SpawnSequence: 1, ReadOnly: true,
+	}
+	child := &SessionRecord{
+		ID: "child-delete-group", ProjectName: "proj1", Status: SessionPersisted,
+		AgentType: "codex", Title: "Dalton", SessionSyncJSON: sessionSyncProjectionJSON(childProjection),
+		CreatedAt: now, LastActiveAt: now,
+	}
+	for _, record := range []*SessionRecord{root, child} {
+		if err := c.store.SaveSession(ctx, record); err != nil {
+			t.Fatalf("SaveSession(%s): %v", record.ID, err)
+		}
+	}
+
+	if err := c.DeleteSession(ctx, root.ID); err == nil || !strings.Contains(err.Error(), child.ID) {
+		t.Fatalf("DeleteSession with active child err = %v, want child running rejection", err)
+	}
+	if stored, _ := c.store.LoadSession(ctx, "proj1", root.ID); stored == nil {
+		t.Fatal("root was deleted despite active descendant")
+	}
+
+	childProjection.SubagentStatus = subagentStatusCompleted
+	child.SessionSyncJSON = sessionSyncProjectionJSON(childProjection)
+	if err := c.store.SaveSession(ctx, child); err != nil {
+		t.Fatalf("SaveSession completed child: %v", err)
+	}
+	if err := c.DeleteSession(ctx, root.ID); err != nil {
+		t.Fatalf("DeleteSession completed group: %v", err)
+	}
+	for _, sessionID := range []string{root.ID, child.ID} {
+		stored, err := c.store.LoadSession(ctx, "proj1", sessionID)
+		if err != nil || stored != nil {
+			t.Fatalf("LoadSession(%s) after group delete = %#v, %v", sessionID, stored, err)
+		}
 	}
 }
 

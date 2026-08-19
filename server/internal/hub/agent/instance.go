@@ -18,6 +18,57 @@ type Callbacks interface {
 	SessionRequestPermission(ctx context.Context, requestID int64, params protocol.PermissionRequestParams) (protocol.PermissionResult, error)
 }
 
+const methodWMSubagentEvent = "_wm/subagent/event"
+
+type SubagentEventType string
+
+const (
+	SubagentEventDiscovered  SubagentEventType = "discovered"
+	SubagentEventTurnStarted SubagentEventType = "turn_started"
+	SubagentEventStatus      SubagentEventType = "status"
+	SubagentEventCompleted   SubagentEventType = "completed"
+)
+
+type SubagentEvent struct {
+	Event                  SubagentEventType `json:"event"`
+	ChildSessionID         string            `json:"childSessionId"`
+	ParentSessionID        string            `json:"parentSessionId"`
+	RootSessionID          string            `json:"rootSessionId"`
+	ProviderThreadID       string            `json:"providerThreadId"`
+	ParentProviderThreadID string            `json:"parentProviderThreadId,omitempty"`
+	SpawnItemID            string            `json:"spawnItemId,omitempty"`
+	Prompt                 string            `json:"prompt,omitempty"`
+	Name                   string            `json:"name,omitempty"`
+	Role                   string            `json:"role,omitempty"`
+	Status                 string            `json:"status,omitempty"`
+	ProviderTurnID         string            `json:"providerTurnId,omitempty"`
+	StopReason             string            `json:"stopReason,omitempty"`
+	Message                string            `json:"message,omitempty"`
+	OccurredAt             string            `json:"occurredAt,omitempty"`
+}
+
+type SubagentCallbacks interface {
+	AgentSubagentEvent(event SubagentEvent)
+}
+
+type SubagentBinding struct {
+	ChildSessionID         string
+	ParentSessionID        string
+	RootSessionID          string
+	ProviderThreadID       string
+	ParentProviderThreadID string
+	SpawnItemID            string
+	Prompt                 string
+	Name                   string
+	Role                   string
+	Status                 string
+	LastCompletedTurnID    string
+}
+
+type SessionSubagentRestorer interface {
+	RestoreSubagents(ctx context.Context, rootSessionID string, bindings []SubagentBinding) error
+}
+
 // Instance is the only ACP-typed runtime interface exposed to Session.
 type Instance interface {
 	Name() string
@@ -155,14 +206,15 @@ type instance struct {
 	callbacks Callbacks
 	tools     *instanceTools
 
-	mu              sync.RWMutex
-	dispatchMu      sync.Mutex
-	acpSessionReady bool
-	acpSessionID    string
-	initResult      protocol.InitializeResult
-	wmExtensions    protocol.WMNegotiatedExtensions
-	pendingEvents   []protocol.AgentEvent
-	closed          bool
+	mu                    sync.RWMutex
+	dispatchMu            sync.Mutex
+	acpSessionReady       bool
+	acpSessionID          string
+	initResult            protocol.InitializeResult
+	wmExtensions          protocol.WMNegotiatedExtensions
+	pendingEvents         []protocol.AgentEvent
+	pendingSubagentEvents []SubagentEvent
+	closed                bool
 }
 
 var _ Instance = (*instance)(nil)
@@ -210,12 +262,19 @@ func (i *instance) SetCallbacks(callbacks Callbacks) {
 	i.callbacks = callbacks
 	pending := append([]protocol.AgentEvent(nil), i.pendingEvents...)
 	i.pendingEvents = nil
+	pendingSubagents := append([]SubagentEvent(nil), i.pendingSubagentEvents...)
+	i.pendingSubagentEvents = nil
 	i.mu.Unlock()
 	if callbacks == nil {
 		return
 	}
 	for _, event := range pending {
 		callbacks.AgentEvent(event)
+	}
+	if subagentCallbacks, ok := callbacks.(SubagentCallbacks); ok {
+		for _, event := range pendingSubagents {
+			subagentCallbacks.AgentSubagentEvent(event)
+		}
 	}
 }
 
@@ -365,6 +424,17 @@ func (i *instance) SessionSetConfigOption(ctx context.Context, p protocol.Sessio
 		return nil, err
 	}
 	return protocol.NormalizeSessionConfigOptions(response.ConfigOptions)
+}
+
+func (i *instance) RestoreSubagents(ctx context.Context, rootSessionID string, bindings []SubagentBinding) error {
+	if err := i.ensureConn(); err != nil {
+		return err
+	}
+	restorer, ok := i.conn.(SessionSubagentRestorer)
+	if !ok {
+		return ErrSessionActionUnsupported
+	}
+	return restorer.RestoreSubagents(ctx, rootSessionID, bindings)
 }
 
 func (i *instance) ArchiveSession(ctx context.Context, sessionID string) error {
@@ -604,6 +674,13 @@ func classifyWMSessionActionError(err error) error {
 }
 
 func (i *instance) HandleACPResponse(_ context.Context, method string, params json.RawMessage) {
+	if method == methodWMSubagentEvent {
+		var event SubagentEvent
+		if json.Unmarshal(params, &event) == nil && strings.TrimSpace(event.ChildSessionID) != "" {
+			i.dispatchSubagentEvent(event)
+		}
+		return
+	}
 	if method == protocol.MethodSessionUpdate {
 		wire, err := protocol.DecodeSessionUpdateParams(params)
 		if err != nil {
@@ -642,6 +719,31 @@ func (i *instance) HandleACPResponse(_ context.Context, method string, params js
 				Meta: protocol.CloneSessionUpdateMeta(notification.Meta), ReceivedAt: time.Now().UTC(),
 			},
 		})
+	}
+}
+
+func (i *instance) dispatchSubagentEvent(event SubagentEvent) {
+	i.dispatchMu.Lock()
+	defer i.dispatchMu.Unlock()
+	i.mu.Lock()
+	if i.closed {
+		i.mu.Unlock()
+		return
+	}
+	callbacks := i.callbacks
+	if callbacks == nil {
+		if len(i.pendingSubagentEvents) == maxPendingAgentEvents {
+			copy(i.pendingSubagentEvents, i.pendingSubagentEvents[1:])
+			i.pendingSubagentEvents[len(i.pendingSubagentEvents)-1] = event
+		} else {
+			i.pendingSubagentEvents = append(i.pendingSubagentEvents, event)
+		}
+		i.mu.Unlock()
+		return
+	}
+	i.mu.Unlock()
+	if subagentCallbacks, ok := callbacks.(SubagentCallbacks); ok {
+		subagentCallbacks.AgentSubagentEvent(event)
 	}
 }
 
@@ -726,6 +828,7 @@ func (i *instance) Close() error {
 	i.mu.Lock()
 	i.closed = true
 	i.pendingEvents = nil
+	i.pendingSubagentEvents = nil
 	i.callbacks = nil
 	i.mu.Unlock()
 	i.dispatchMu.Unlock()

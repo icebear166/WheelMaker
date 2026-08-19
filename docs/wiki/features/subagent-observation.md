@@ -2,7 +2,7 @@
 
 # 子 Agent 观测
 
-> 状态：已确认，待实现。
+> 状态：已实现。
 >
 > 确认日期：2026-08-19。
 >
@@ -398,7 +398,16 @@ Pin 模式沿用同一相对顺序和现有 edge-surface 视觉语言。没有�
 18. 移动端收到相同子 Session 数据，但普通列表、active restore 和搜索均不暴露子 Session，且首期没有 Subagents 入口。
 19. 旧 v1 archive manifest 仍按 standalone Session 读取；v2 根 archive read 返回成员 summaries，child 不能独立恢复，整组恢复后相同 Provider thread 被重新发现时复用原子 Session 和 replay watermark。
 
-## 14. 相关知识
+## 14. 实现结果
+
+- Codex Adapter 已按 provider thread 隔离转换状态，通过 `collabAgentToolCall`、thread metadata 和恢复查询幂等发现子线程，并将每个子线程路由到独立子 Session/Recorder。
+- 子 Session 继续使用现有 SQLite `sessions` 行、`session_sync_json` 关系投影和 WMT2 turn 文件；Registry 继续使用普通 `session.list/read/message/updated`，协议号与 WMT2 版本未变化。
+- Hub 已实现持久父子映射、稳定 `spawnSequence`、replay watermark、子权限 owner、服务端只读门禁，以及根 Session 对整组 archive/restore/delete 的生命周期管理。
+- PC 前端同步全部 summary 后派生根/子集合；普通导航、Recent、Search 和 active restore 只使用根 Session。当前根 Session 在 Plan 上方显示平铺 Subagents 卡片，详情使用只读大模态框复用普通 Chat 展示组件。
+- 子 Agent 审批由当前根 Session 的既有审批弹窗承接并显示来源名称；归档根预览也可通过 Subagents 卡片读取组内任一子成员。移动端继续同步和过滤，但不提供入口。
+- 验证覆盖 Codex 多 thread 路由与恢复、子 Session 投影和门禁、分组归档恢复删除、前端分组与只读详情、Registry 归档成员读取；前端全量 Jest、TypeScript、生产构建及受影响 Go 包测试通过。
+
+## 15. 相关知识
 
 - [`../architecture/session-management-and-sync.md`](../architecture/session-management-and-sync.md)：Session、WMT2、实时同步和归档基础机制。
 - [`../agents/codex.md`](../agents/codex.md)：Codex App Server thread/turn 接入边界。

@@ -74,6 +74,7 @@ type Session struct {
 	initCond *sync.Cond
 
 	// Back-references to Client-owned resources needed by Session methods.
+	client      *Client
 	projectName string
 	cwd         string
 	registry    *agent.ACPFactory
@@ -566,6 +567,16 @@ func (s *Session) ensureReady(ctx context.Context) error {
 		resolved = append([]acp.ConfigOption(nil), persistedConfigOptions...)
 	}
 	resolved = normalizeAgentConfigOptions(agentName, resolved)
+	if restorer, ok := inst.(agent.SessionSubagentRestorer); ok && s.client != nil {
+		bindings, bindingErr := s.client.persistedSubagentBindings(ctx, savedSID)
+		if bindingErr != nil {
+			hubLogger(s.projectName).Warn("load persisted subagent bindings failed root=%s err=%v", savedSID, bindingErr)
+		} else if len(bindings) > 0 {
+			if restoreErr := restorer.RestoreSubagents(ctx, savedSID, bindings); restoreErr != nil && !errors.Is(restoreErr, agent.ErrSessionActionUnsupported) {
+				hubLogger(s.projectName).Warn("restore subagent observers failed root=%s err=%v", savedSID, restoreErr)
+			}
+		}
+	}
 
 	s.mu.Lock()
 	state := &s.agentState
@@ -1461,6 +1472,16 @@ func (s *Session) isRunning() bool {
 
 // SessionUpdate receives session/update notifications from the agent.
 func (s *Session) AgentEvent(event acp.AgentEvent) {
+	s.mu.Lock()
+	sessionID := s.acpSessionID
+	owner := s.client
+	s.mu.Unlock()
+	if strings.TrimSpace(event.SessionID) != "" && event.SessionID != sessionID {
+		if owner != nil {
+			owner.recordSubagentAgentEvent(context.Background(), sessionID, event)
+		}
+		return
+	}
 	if update, ok := event.Update.(acp.AgentMessageEvent); ok &&
 		event.MessageLifecycle &&
 		update.Kind == acp.SessionUpdateUserMessageChunk &&
@@ -1474,6 +1495,13 @@ func (s *Session) AgentEvent(event acp.AgentEvent) {
 		return
 	}
 	s.SessionUpdate(params)
+}
+
+func (s *Session) AgentSubagentEvent(event agent.SubagentEvent) {
+	if s == nil || s.client == nil {
+		return
+	}
+	s.client.handleSubagentEvent(context.Background(), s, event)
 }
 
 // SessionUpdate consumes WheelMaker's normalized WMT2 update shape. Real ACP

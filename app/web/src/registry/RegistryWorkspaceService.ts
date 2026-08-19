@@ -953,11 +953,15 @@ export class RegistryWorkspaceService {
     return this.repository.listArchivedSessions(projectId);
   }
 
-  async readProjectArchivedSession(projectId: string, sessionId: string): Promise<RegistrySessionArchiveReadResponse> {
+  async readProjectArchivedSession(
+    projectId: string,
+    sessionId: string,
+    rootSessionId?: string,
+  ): Promise<RegistrySessionArchiveReadResponse> {
     if (!this.repository) {
       throw new Error('session is not ready');
     }
-    return this.repository.readArchivedSession(projectId, sessionId);
+    return this.repository.readArchivedSession(projectId, sessionId, rootSessionId);
   }
 
   async restoreProjectArchivedSession(projectId: string, sessionId: string): Promise<RegistrySessionArchiveRestoreResponse> {

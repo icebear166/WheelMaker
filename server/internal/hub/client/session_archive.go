@@ -21,7 +21,7 @@ import (
 )
 
 const (
-	sessionArchiveManifestVersion = 1
+	sessionArchiveManifestVersion = 2
 	sessionArchivePackFile        = "archive.pack"
 	sessionArchiveSegmentMagic    = "WMSA"
 	sessionArchiveSegmentVersion  = uint16(1)
@@ -42,31 +42,50 @@ type sessionArchiveManifest struct {
 }
 
 type sessionArchiveManifestEntry struct {
-	SessionID          string                 `json:"sessionId"`
-	ProjectName        string                 `json:"projectName"`
-	Title              string                 `json:"title,omitempty"`
-	AgentType          string                 `json:"agentType,omitempty"`
-	Storage            string                 `json:"storage"`
-	File               string                 `json:"file"`
-	Offset             int64                  `json:"offset"`
-	Length             int64                  `json:"length"`
-	UncompressedLength int64                  `json:"uncompressedLength"`
-	Codec              string                 `json:"codec"`
-	SHA256             string                 `json:"sha256"`
-	UncompressedSHA256 string                 `json:"uncompressedSha256"`
-	TurnCount          int                    `json:"turnCount"`
-	GapCount           int                    `json:"gapCount"`
-	WMT2Version        int                    `json:"wmt2Version"`
-	ChunkSizeCode      int                    `json:"chunkSizeCode"`
-	ArchivedAt         string                 `json:"archivedAt"`
-	CreatedAt          string                 `json:"createdAt,omitempty"`
-	UpdatedAt          string                 `json:"updatedAt,omitempty"`
-	RestoredAt         string                 `json:"restoredAt,omitempty"`
-	NativeArchivedAt   string                 `json:"nativeArchivedAt,omitempty"`
-	NativeUnarchivedAt string                 `json:"nativeUnarchivedAt,omitempty"`
-	NativeSyncWarning  string                 `json:"nativeSyncWarning,omitempty"`
-	ForkedFrom         *acp.SessionForkOrigin `json:"forkedFrom,omitempty"`
-	SessionFeatures    *acp.SessionFeatures   `json:"sessionFeatures,omitempty"`
+	SessionID              string                          `json:"sessionId"`
+	ProjectName            string                          `json:"projectName"`
+	Title                  string                          `json:"title,omitempty"`
+	AgentType              string                          `json:"agentType,omitempty"`
+	Storage                string                          `json:"storage"`
+	File                   string                          `json:"file"`
+	Offset                 int64                           `json:"offset"`
+	Length                 int64                           `json:"length"`
+	UncompressedLength     int64                           `json:"uncompressedLength"`
+	Codec                  string                          `json:"codec"`
+	SHA256                 string                          `json:"sha256"`
+	UncompressedSHA256     string                          `json:"uncompressedSha256"`
+	TurnCount              int                             `json:"turnCount"`
+	GapCount               int                             `json:"gapCount"`
+	WMT2Version            int                             `json:"wmt2Version"`
+	ChunkSizeCode          int                             `json:"chunkSizeCode"`
+	ArchivedAt             string                          `json:"archivedAt"`
+	CreatedAt              string                          `json:"createdAt,omitempty"`
+	UpdatedAt              string                          `json:"updatedAt,omitempty"`
+	RestoredAt             string                          `json:"restoredAt,omitempty"`
+	NativeArchivedAt       string                          `json:"nativeArchivedAt,omitempty"`
+	NativeUnarchivedAt     string                          `json:"nativeUnarchivedAt,omitempty"`
+	NativeSyncWarning      string                          `json:"nativeSyncWarning,omitempty"`
+	ForkedFrom             *acp.SessionForkOrigin          `json:"forkedFrom,omitempty"`
+	SessionFeatures        *acp.SessionFeatures            `json:"sessionFeatures,omitempty"`
+	ArchiveGroupID         string                          `json:"archiveGroupId,omitempty"`
+	MemberSessionIDs       []string                        `json:"memberSessionIds,omitempty"`
+	SubagentCount          int                             `json:"subagentCount,omitempty"`
+	SessionKind            string                          `json:"sessionKind,omitempty"`
+	ParentSessionID        string                          `json:"parentSessionId,omitempty"`
+	RootSessionID          string                          `json:"rootSessionId,omitempty"`
+	ReadOnly               bool                            `json:"readOnly,omitempty"`
+	SubagentName           string                          `json:"subagentName,omitempty"`
+	SubagentRole           string                          `json:"subagentRole,omitempty"`
+	SubagentStatus         subagentStatus                  `json:"subagentStatus,omitempty"`
+	SubagentPrompt         string                          `json:"subagentPrompt,omitempty"`
+	SpawnedAt              string                          `json:"spawnedAt,omitempty"`
+	SpawnSequence          int64                           `json:"spawnSequence,omitempty"`
+	ProviderThreadID       string                          `json:"providerThreadId,omitempty"`
+	ParentProviderThreadID string                          `json:"parentProviderThreadId,omitempty"`
+	SpawnItemID            string                          `json:"spawnItemId,omitempty"`
+	ProviderReplay         sessionProviderReplayProjection `json:"providerReplay,omitempty"`
+	SessionSyncJSON        string                          `json:"sessionSyncJson,omitempty"`
+	AgentJSON              string                          `json:"agentJson,omitempty"`
 }
 
 type sessionArchiveSummary struct {
@@ -85,6 +104,31 @@ type sessionArchiveSummary struct {
 	NativeSyncWarning  string                 `json:"nativeSyncWarning,omitempty"`
 	ForkedFrom         *acp.SessionForkOrigin `json:"forkedFrom,omitempty"`
 	SessionFeatures    *acp.SessionFeatures   `json:"sessionFeatures,omitempty"`
+	ArchiveGroupID     string                 `json:"archiveGroupId,omitempty"`
+	SubagentCount      int                    `json:"subagentCount,omitempty"`
+	SessionKind        string                 `json:"sessionKind,omitempty"`
+	ParentSessionID    string                 `json:"parentSessionId,omitempty"`
+	RootSessionID      string                 `json:"rootSessionId,omitempty"`
+	ReadOnly           bool                   `json:"readOnly,omitempty"`
+	SubagentName       string                 `json:"subagentName,omitempty"`
+	SubagentRole       string                 `json:"subagentRole,omitempty"`
+	SubagentStatus     subagentStatus         `json:"subagentStatus,omitempty"`
+	SpawnedAt          string                 `json:"spawnedAt,omitempty"`
+	SpawnSequence      int64                  `json:"spawnSequence,omitempty"`
+}
+
+type sessionArchiveAppend struct {
+	Record           SessionRecord
+	Contents         []string
+	GapCount         int
+	ArchiveGroupID   string
+	MemberSessionIDs []string
+	SubagentCount    int
+}
+
+type sessionArchiveReadMember struct {
+	Entry    sessionArchiveManifestEntry
+	Contents []string
 }
 
 type sessionArchiveNativeSyncUpdate struct {
@@ -120,86 +164,135 @@ func (s *sessionArchiveStore) HasSession(ctx context.Context, projectName, sessi
 }
 
 func (s *sessionArchiveStore) AppendSession(ctx context.Context, rec SessionRecord, contents []string, gapCount int) (sessionArchiveManifestEntry, bool, error) {
+	entries, written, err := s.AppendSessions(ctx, []sessionArchiveAppend{{
+		Record:           rec,
+		Contents:         contents,
+		GapCount:         gapCount,
+		ArchiveGroupID:   rec.ID,
+		MemberSessionIDs: []string{rec.ID},
+	}})
+	if err != nil || len(entries) == 0 {
+		return sessionArchiveManifestEntry{}, written, err
+	}
+	return entries[0], written, nil
+}
+
+func (s *sessionArchiveStore) AppendSessions(ctx context.Context, members []sessionArchiveAppend) ([]sessionArchiveManifestEntry, bool, error) {
 	if err := ctx.Err(); err != nil {
-		return sessionArchiveManifestEntry{}, false, err
+		return nil, false, err
 	}
 	if s == nil || strings.TrimSpace(s.root) == "" {
-		return sessionArchiveManifestEntry{}, false, fmt.Errorf("session archive store is required")
+		return nil, false, fmt.Errorf("session archive store is required")
 	}
-	sessionID := strings.TrimSpace(rec.ID)
-	projectName := strings.TrimSpace(rec.ProjectName)
-	if sessionID == "" {
-		return sessionArchiveManifestEntry{}, false, fmt.Errorf("session id is required")
-	}
-	if projectName == "" {
-		return sessionArchiveManifestEntry{}, false, fmt.Errorf("project name is required")
+	if len(members) == 0 {
+		return nil, false, fmt.Errorf("archive members are required")
 	}
 
-	wmt2Raw, chunkSizeCode, err := buildArchiveWMT2(contents)
-	if err != nil {
-		return sessionArchiveManifestEntry{}, false, err
+	type preparedMember struct {
+		append        sessionArchiveAppend
+		segment       []byte
+		wmt2Raw       []byte
+		chunkSizeCode byte
 	}
-	compressed, err := gzipBytes(wmt2Raw)
-	if err != nil {
-		return sessionArchiveManifestEntry{}, false, err
-	}
-	segment, err := buildArchiveSegment(sessionID, compressed, int64(len(wmt2Raw)))
-	if err != nil {
-		return sessionArchiveManifestEntry{}, false, err
+	prepared := make([]preparedMember, 0, len(members))
+	projectName := strings.TrimSpace(members[0].Record.ProjectName)
+	seen := make(map[string]bool, len(members))
+	for _, member := range members {
+		rec := member.Record
+		rec.ID = strings.TrimSpace(rec.ID)
+		rec.ProjectName = strings.TrimSpace(rec.ProjectName)
+		if rec.ID == "" {
+			return nil, false, fmt.Errorf("session id is required")
+		}
+		if rec.ProjectName == "" || rec.ProjectName != projectName {
+			return nil, false, fmt.Errorf("archive members must share one project")
+		}
+		if seen[rec.ID] {
+			return nil, false, fmt.Errorf("duplicate archive member: %s", rec.ID)
+		}
+		seen[rec.ID] = true
+		member.Record = rec
+		wmt2Raw, chunkSizeCode, err := buildArchiveWMT2(member.Contents)
+		if err != nil {
+			return nil, false, err
+		}
+		compressed, err := gzipBytes(wmt2Raw)
+		if err != nil {
+			return nil, false, err
+		}
+		segment, err := buildArchiveSegment(rec.ID, compressed, int64(len(wmt2Raw)))
+		if err != nil {
+			return nil, false, err
+		}
+		prepared = append(prepared, preparedMember{append: member, segment: segment, wmt2Raw: wmt2Raw, chunkSizeCode: chunkSizeCode})
 	}
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	manifest, err := s.readManifestLocked(projectName)
 	if err != nil {
-		return sessionArchiveManifestEntry{}, false, err
+		return nil, false, err
 	}
-	if existing, ok := manifest.Sessions[sessionID]; ok {
-		return existing, false, nil
+	existingEntries := make([]sessionArchiveManifestEntry, 0, len(prepared))
+	existingCount := 0
+	for _, member := range prepared {
+		if existing, ok := manifest.Sessions[member.append.Record.ID]; ok {
+			existingEntries = append(existingEntries, existing)
+			existingCount++
+		}
+	}
+	if existingCount == len(prepared) {
+		return existingEntries, false, nil
+	}
+	if existingCount != 0 {
+		return nil, false, fmt.Errorf("archive group is only partially committed")
 	}
 
 	projectDir := s.projectDir(projectName)
 	if err := os.MkdirAll(projectDir, 0o755); err != nil {
-		return sessionArchiveManifestEntry{}, false, fmt.Errorf("mkdir archive dir: %w", err)
+		return nil, false, fmt.Errorf("mkdir archive dir: %w", err)
 	}
 	packPath := filepath.Join(projectDir, sessionArchivePackFile)
-	offset, err := appendArchiveSegment(packPath, segment)
-	if err != nil {
-		return sessionArchiveManifestEntry{}, false, err
-	}
-
 	now := time.Now().UTC()
-	projection := sessionSyncProjectionFromJSON(rec.SessionSyncJSON)
-	entry := sessionArchiveManifestEntry{
-		SessionID:          sessionID,
-		ProjectName:        projectName,
-		Title:              strings.TrimSpace(rec.Title),
-		AgentType:          strings.TrimSpace(rec.AgentType),
-		Storage:            "pack",
-		File:               sessionArchivePackFile,
-		Offset:             offset,
-		Length:             int64(len(segment)),
-		UncompressedLength: int64(len(wmt2Raw)),
-		Codec:              "gzip",
-		SHA256:             sha256Hex(segment),
-		UncompressedSHA256: sha256Hex(wmt2Raw),
-		TurnCount:          len(contents),
-		GapCount:           gapCount,
-		WMT2Version:        int(sessionTurnFileVersion),
-		ChunkSizeCode:      int(chunkSizeCode),
-		ArchivedAt:         now.Format(time.RFC3339),
-		CreatedAt:          formatArchiveTime(rec.CreatedAt),
-		UpdatedAt:          formatArchiveTime(rec.LastActiveAt),
-		ForkedFrom:         cloneSessionForkOrigin(projection.ForkedFrom),
-		SessionFeatures:    sessionFeaturesFromAgentJSON(rec.AgentJSON),
+	archivedAt := now.Format(time.RFC3339)
+	entries := make([]sessionArchiveManifestEntry, 0, len(prepared))
+	for _, member := range prepared {
+		offset, err := appendArchiveSegment(packPath, member.segment)
+		if err != nil {
+			return nil, false, err
+		}
+		rec := member.append.Record
+		projection := sessionSyncProjectionFromJSON(rec.SessionSyncJSON)
+		groupID := firstNonEmpty(strings.TrimSpace(member.append.ArchiveGroupID), rec.ID)
+		memberIDs := append([]string(nil), member.append.MemberSessionIDs...)
+		if len(memberIDs) == 0 {
+			memberIDs = []string{rec.ID}
+		}
+		entry := sessionArchiveManifestEntry{
+			SessionID: rec.ID, ProjectName: projectName, Title: strings.TrimSpace(rec.Title), AgentType: strings.TrimSpace(rec.AgentType),
+			Storage: "pack", File: sessionArchivePackFile, Offset: offset, Length: int64(len(member.segment)),
+			UncompressedLength: int64(len(member.wmt2Raw)), Codec: "gzip", SHA256: sha256Hex(member.segment),
+			UncompressedSHA256: sha256Hex(member.wmt2Raw), TurnCount: len(member.append.Contents), GapCount: member.append.GapCount,
+			WMT2Version: int(sessionTurnFileVersion), ChunkSizeCode: int(member.chunkSizeCode), ArchivedAt: archivedAt,
+			CreatedAt: formatArchiveTime(rec.CreatedAt), UpdatedAt: formatArchiveTime(rec.LastActiveAt),
+			ForkedFrom: cloneSessionForkOrigin(projection.ForkedFrom), SessionFeatures: sessionFeaturesFromAgentJSON(rec.AgentJSON),
+			ArchiveGroupID: groupID, MemberSessionIDs: memberIDs, SubagentCount: member.append.SubagentCount,
+			SessionKind: projection.SessionKind, ParentSessionID: projection.ParentSessionID, RootSessionID: projection.RootSessionID,
+			ReadOnly: projection.ReadOnly, SubagentName: projection.SubagentName, SubagentRole: projection.SubagentRole,
+			SubagentStatus: projection.SubagentStatus, SubagentPrompt: projection.SubagentPrompt, SpawnedAt: projection.SpawnedAt,
+			SpawnSequence: projection.SpawnSequence, ProviderThreadID: projection.ProviderThreadID,
+			ParentProviderThreadID: projection.ParentProviderThreadID, SpawnItemID: projection.SpawnItemID,
+			ProviderReplay: projection.ProviderReplay, SessionSyncJSON: rec.SessionSyncJSON, AgentJSON: rec.AgentJSON,
+		}
+		entries = append(entries, entry)
+		manifest.Sessions[rec.ID] = entry
 	}
 	manifest.Version = sessionArchiveManifestVersion
-	manifest.UpdatedAt = entry.ArchivedAt
-	manifest.Sessions[sessionID] = entry
+	manifest.UpdatedAt = archivedAt
 	if err := s.writeManifestLocked(projectName, manifest); err != nil {
-		return sessionArchiveManifestEntry{}, false, err
+		return nil, false, err
 	}
-	return entry, true, nil
+	return entries, true, nil
 }
 
 func (s *sessionArchiveStore) ListSessions(ctx context.Context, projectName string) ([]sessionArchiveManifestEntry, error) {
@@ -219,6 +312,9 @@ func (s *sessionArchiveStore) ListSessions(ctx context.Context, projectName stri
 	entries := make([]sessionArchiveManifestEntry, 0, len(manifest.Sessions))
 	for _, entry := range manifest.Sessions {
 		if strings.TrimSpace(entry.RestoredAt) != "" {
+			continue
+		}
+		if entry.SessionKind == sessionKindSubagent || (entry.RootSessionID != "" && entry.RootSessionID != entry.SessionID) {
 			continue
 		}
 		entries = append(entries, entry)
@@ -266,6 +362,73 @@ func (s *sessionArchiveStore) ReadSession(ctx context.Context, projectName, sess
 	return entry, contents, nil
 }
 
+func (s *sessionArchiveStore) ReadGroup(ctx context.Context, projectName, rootSessionID string) ([]sessionArchiveReadMember, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if s == nil || strings.TrimSpace(s.root) == "" {
+		return nil, fmt.Errorf("session archive store is required")
+	}
+	rootSessionID = strings.TrimSpace(rootSessionID)
+	if rootSessionID == "" {
+		return nil, fmt.Errorf("root session id is required")
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	manifest, err := s.readManifestLocked(projectName)
+	if err != nil {
+		return nil, err
+	}
+	root, ok := manifest.Sessions[rootSessionID]
+	if !ok {
+		return nil, fmt.Errorf("session archive not found: %s", rootSessionID)
+	}
+	if root.SessionKind == sessionKindSubagent || (root.RootSessionID != "" && root.RootSessionID != rootSessionID) {
+		return nil, fmt.Errorf("archive group root is required: %s", rootSessionID)
+	}
+	if strings.TrimSpace(root.RestoredAt) != "" {
+		return nil, fmt.Errorf("session archive already restored: %s", rootSessionID)
+	}
+	memberIDs := append([]string(nil), root.MemberSessionIDs...)
+	if len(memberIDs) == 0 {
+		memberIDs = []string{rootSessionID}
+	}
+	members := make([]sessionArchiveReadMember, 0, len(memberIDs))
+	for _, memberID := range memberIDs {
+		entry, ok := manifest.Sessions[strings.TrimSpace(memberID)]
+		if !ok {
+			return nil, fmt.Errorf("archive group %s is missing member %s", rootSessionID, memberID)
+		}
+		if entry.ArchiveGroupID != "" && entry.ArchiveGroupID != rootSessionID {
+			return nil, fmt.Errorf("archive member %s belongs to group %s", memberID, entry.ArchiveGroupID)
+		}
+		if strings.TrimSpace(entry.RestoredAt) != "" {
+			return nil, fmt.Errorf("session archive already restored: %s", memberID)
+		}
+		contents, err := s.readSessionContentsLocked(ctx, projectName, entry)
+		if err != nil {
+			return nil, err
+		}
+		members = append(members, sessionArchiveReadMember{Entry: entry, Contents: contents})
+	}
+	return members, nil
+}
+
+func (s *sessionArchiveStore) ReadGroupSession(ctx context.Context, projectName, rootSessionID, sessionID string) (sessionArchiveManifestEntry, []string, error) {
+	members, err := s.ReadGroup(ctx, projectName, rootSessionID)
+	if err != nil {
+		return sessionArchiveManifestEntry{}, nil, err
+	}
+	sessionID = strings.TrimSpace(sessionID)
+	for _, member := range members {
+		if member.Entry.SessionID == sessionID {
+			return member.Entry, member.Contents, nil
+		}
+	}
+	return sessionArchiveManifestEntry{}, nil, fmt.Errorf("session %s is not a member of archive group %s", sessionID, rootSessionID)
+}
+
 func (s *sessionArchiveStore) MarkRestored(ctx context.Context, projectName, sessionID, restoredAt string, nativeUpdate sessionArchiveNativeSyncUpdate) (sessionArchiveManifestEntry, error) {
 	if err := ctx.Err(); err != nil {
 		return sessionArchiveManifestEntry{}, err
@@ -303,6 +466,53 @@ func (s *sessionArchiveStore) MarkRestored(ctx context.Context, projectName, ses
 		return sessionArchiveManifestEntry{}, err
 	}
 	return entry, nil
+}
+
+func (s *sessionArchiveStore) MarkGroupRestored(ctx context.Context, projectName, rootSessionID, restoredAt string, nativeUpdate sessionArchiveNativeSyncUpdate) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	rootSessionID = strings.TrimSpace(rootSessionID)
+	if rootSessionID == "" {
+		return fmt.Errorf("root session id is required")
+	}
+	if restoredAt = strings.TrimSpace(restoredAt); restoredAt == "" {
+		restoredAt = time.Now().UTC().Format(time.RFC3339)
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	manifest, err := s.readManifestLocked(projectName)
+	if err != nil {
+		return err
+	}
+	root, ok := manifest.Sessions[rootSessionID]
+	if !ok {
+		return fmt.Errorf("session archive not found: %s", rootSessionID)
+	}
+	memberIDs := append([]string(nil), root.MemberSessionIDs...)
+	if len(memberIDs) == 0 {
+		memberIDs = []string{rootSessionID}
+	}
+	for _, memberID := range memberIDs {
+		entry, ok := manifest.Sessions[memberID]
+		if !ok {
+			return fmt.Errorf("archive group %s is missing member %s", rootSessionID, memberID)
+		}
+		if strings.TrimSpace(entry.RestoredAt) != "" {
+			return fmt.Errorf("session archive already restored: %s", memberID)
+		}
+	}
+	for _, memberID := range memberIDs {
+		entry := manifest.Sessions[memberID]
+		entry.RestoredAt = restoredAt
+		if memberID == rootSessionID {
+			applySessionArchiveNativeSyncUpdate(&entry, nativeUpdate)
+		}
+		manifest.Sessions[memberID] = entry
+	}
+	manifest.Version = sessionArchiveManifestVersion
+	manifest.UpdatedAt = restoredAt
+	return s.writeManifestLocked(projectName, manifest)
 }
 
 func (s *sessionArchiveStore) DeleteProjectArtifacts(ctx context.Context, projectName string) error {
@@ -503,7 +713,10 @@ func (s *sessionArchiveStore) readManifestLocked(projectName string) (sessionArc
 		return manifest, fmt.Errorf("decode archive manifest: %w", err)
 	}
 	if manifest.Version == 0 {
-		manifest.Version = sessionArchiveManifestVersion
+		manifest.Version = 1
+	}
+	if manifest.Version < 1 || manifest.Version > sessionArchiveManifestVersion {
+		return manifest, fmt.Errorf("unsupported archive manifest version %d", manifest.Version)
 	}
 	if manifest.Sessions == nil {
 		manifest.Sessions = map[string]sessionArchiveManifestEntry{}
@@ -512,6 +725,16 @@ func (s *sessionArchiveStore) readManifestLocked(projectName string) (sessionArc
 }
 
 func (s *sessionArchiveStore) writeManifestLocked(projectName string, manifest sessionArchiveManifest) error {
+	manifest.Version = sessionArchiveManifestVersion
+	for sessionID, entry := range manifest.Sessions {
+		if strings.TrimSpace(entry.ArchiveGroupID) == "" {
+			entry.ArchiveGroupID = sessionID
+		}
+		if len(entry.MemberSessionIDs) == 0 {
+			entry.MemberSessionIDs = []string{sessionID}
+		}
+		manifest.Sessions[sessionID] = entry
+	}
 	projectDir := s.projectDir(projectName)
 	if err := os.MkdirAll(projectDir, 0o755); err != nil {
 		return fmt.Errorf("mkdir archive dir: %w", err)

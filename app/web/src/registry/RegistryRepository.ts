@@ -993,6 +993,35 @@ export class RegistryRepository {
     return {messageLifecycle: {version}};
   }
 
+  private normalizeSubagentSummary(raw: unknown): RegistrySessionSummary['subagent'] {
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+      return undefined;
+    }
+    const input = raw as Record<string, unknown>;
+    const name = typeof input.name === 'string' ? input.name.trim() : '';
+    const allowedStatuses = new Set([
+      'initializing',
+      'running',
+      'waiting_approval',
+      'completed',
+      'failed',
+      'interrupted',
+    ]);
+    const status = typeof input.status === 'string' && allowedStatuses.has(input.status)
+      ? input.status as NonNullable<RegistrySessionSummary['subagent']>['status']
+      : 'initializing';
+    return {
+      name: name || 'Subagent',
+      role: typeof input.role === 'string' && input.role.trim() ? input.role.trim() : undefined,
+      prompt: typeof input.prompt === 'string' && input.prompt.trim() ? input.prompt.trim() : undefined,
+      spawnedAt: typeof input.spawnedAt === 'string' && input.spawnedAt.trim() ? input.spawnedAt.trim() : undefined,
+      spawnSequence: typeof input.spawnSequence === 'number' && Number.isFinite(input.spawnSequence)
+        ? Math.max(0, Math.trunc(input.spawnSequence))
+        : 0,
+      status,
+    };
+  }
+
   private normalizeSessionSummary(raw: unknown): RegistrySessionSummary | null {
     if (!raw || typeof raw !== 'object') {
       return null;
@@ -1045,6 +1074,15 @@ export class RegistryRepository {
       goal: this.normalizeSessionGoal(input.goal),
       forkedFrom: this.normalizeSessionForkOrigin(input.forkedFrom),
       queue: this.normalizeSessionQueue(input.queue),
+      sessionKind: input.sessionKind === 'subagent' ? 'subagent' : undefined,
+      parentSessionId: typeof input.parentSessionId === 'string' && input.parentSessionId.trim()
+        ? input.parentSessionId.trim()
+        : undefined,
+      rootSessionId: typeof input.rootSessionId === 'string' && input.rootSessionId.trim()
+        ? input.rootSessionId.trim()
+        : undefined,
+      readOnly: input.readOnly === true ? true : undefined,
+      subagent: this.normalizeSubagentSummary(input.subagent),
     };
   }
 
@@ -1113,6 +1151,12 @@ export class RegistryRepository {
       nativeArchivedAt: typeof input.nativeArchivedAt === 'string' ? input.nativeArchivedAt : undefined,
       nativeUnarchivedAt: typeof input.nativeUnarchivedAt === 'string' ? input.nativeUnarchivedAt : undefined,
       nativeSyncWarning: typeof input.nativeSyncWarning === 'string' ? input.nativeSyncWarning : undefined,
+      archiveGroupId: typeof input.archiveGroupId === 'string' && input.archiveGroupId.trim()
+        ? input.archiveGroupId.trim()
+        : undefined,
+      subagentCount: typeof input.subagentCount === 'number' && Number.isFinite(input.subagentCount)
+        ? Math.max(0, Math.trunc(input.subagentCount))
+        : undefined,
     };
   }
 
@@ -2365,11 +2409,18 @@ export class RegistryRepository {
       .filter((item): item is RegistryArchivedSessionSummary => !!item);
   }
 
-  async readArchivedSession(projectId: string, sessionId: string): Promise<RegistrySessionArchiveReadResponse> {
+  async readArchivedSession(
+    projectId: string,
+    sessionId: string,
+    rootSessionId?: string,
+  ): Promise<RegistrySessionArchiveReadResponse> {
     const resp = await this.client.request({
       method: RegistryMethods.SessionArchiveRead,
       projectId,
-      payload: {sessionId},
+      payload: {
+        sessionId,
+        ...(rootSessionId ? {rootSessionId} : {}),
+      },
       timeoutMs: 15000,
     });
     const payload = (resp.payload ?? {}) as {
@@ -2378,6 +2429,7 @@ export class RegistryRepository {
       latestTurnIndex?: unknown;
       turns?: unknown[];
       readOnly?: unknown;
+      subagents?: unknown[];
     };
     const normalized = normalizeSessionReadPayload(
       payload,
@@ -2405,6 +2457,9 @@ export class RegistryRepository {
         .filter((item): item is RegistrySessionMessage => !!item),
       latestTurnIndex: normalized?.latestTurnIndex ?? 0,
       readOnly: true,
+      subagents: (payload.subagents ?? [])
+        .map(item => this.normalizeArchivedSessionSummary(item))
+        .filter((item): item is RegistryArchivedSessionSummary => !!item),
     };
   }
 

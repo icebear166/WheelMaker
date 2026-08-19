@@ -150,6 +150,7 @@ type appServerThreadResumeParams struct {
 	ApprovalPolicy string         `json:"approvalPolicy,omitempty"`
 	Sandbox        string         `json:"sandbox,omitempty"`
 	Config         map[string]any `json:"config,omitempty"`
+	ExcludeTurns   bool           `json:"excludeTurns,omitempty"`
 }
 
 type appServerThreadStartResponse struct {
@@ -157,13 +158,23 @@ type appServerThreadStartResponse struct {
 }
 
 type appServerThread struct {
-	ID        string             `json:"id"`
-	SessionID string             `json:"sessionId,omitempty"`
-	CWD       string             `json:"cwd,omitempty"`
-	Name      string             `json:"name,omitempty"`
-	Preview   string             `json:"preview,omitempty"`
-	UpdatedAt appServerTimestamp `json:"updatedAt,omitempty"`
-	Turns     []appServerTurn    `json:"turns,omitempty"`
+	ID             string                `json:"id"`
+	SessionID      string                `json:"sessionId,omitempty"`
+	ParentThreadID string                `json:"parentThreadId,omitempty"`
+	CWD            string                `json:"cwd,omitempty"`
+	Name           string                `json:"name,omitempty"`
+	Preview        string                `json:"preview,omitempty"`
+	AgentNickname  string                `json:"agentNickname,omitempty"`
+	AgentRole      string                `json:"agentRole,omitempty"`
+	Status         appServerThreadStatus `json:"status,omitempty"`
+	Source         json.RawMessage       `json:"source,omitempty"`
+	CreatedAt      appServerTimestamp    `json:"createdAt,omitempty"`
+	UpdatedAt      appServerTimestamp    `json:"updatedAt,omitempty"`
+	Turns          []appServerTurn       `json:"turns,omitempty"`
+}
+
+type appServerThreadStatus struct {
+	Type string `json:"type,omitempty"`
 }
 
 func (t appServerThread) displayTitle() string {
@@ -196,8 +207,11 @@ func (s *appServerTimestamp) UnmarshalJSON(data []byte) error {
 }
 
 type appServerThreadListParams struct {
-	CWD    string `json:"cwd,omitempty"`
-	Cursor string `json:"cursor,omitempty"`
+	CWD              string   `json:"cwd,omitempty"`
+	Cursor           string   `json:"cursor,omitempty"`
+	SourceKinds      []string `json:"sourceKinds,omitempty"`
+	ParentThreadID   string   `json:"parentThreadId,omitempty"`
+	AncestorThreadID string   `json:"ancestorThreadId,omitempty"`
 }
 
 type appServerThreadListResponse struct {
@@ -253,6 +267,19 @@ type appServerThreadGoalUpdatedParams struct {
 }
 
 type appServerThreadGoalClearedParams struct {
+	ThreadID string `json:"threadId"`
+}
+
+type appServerThreadStartedParams struct {
+	Thread appServerThread `json:"thread"`
+}
+
+type appServerThreadStatusChangedParams struct {
+	ThreadID string                `json:"threadId"`
+	Status   appServerThreadStatus `json:"status"`
+}
+
+type appServerThreadClosedParams struct {
 	ThreadID string `json:"threadId"`
 }
 
@@ -364,25 +391,36 @@ type appServerItemEventParams struct {
 }
 
 type appServerThreadItem struct {
-	ID               string                `json:"id"`
-	ClientID         string                `json:"clientId,omitempty"`
-	Type             string                `json:"type"`
-	Text             string                `json:"text,omitempty"`
-	Phase            string                `json:"phase,omitempty"`
-	Command          string                `json:"command,omitempty"`
-	CWD              string                `json:"cwd,omitempty"`
-	Status           string                `json:"status,omitempty"`
-	AggregatedOutput string                `json:"aggregatedOutput,omitempty"`
-	Server           string                `json:"server,omitempty"`
-	Tool             string                `json:"tool,omitempty"`
-	Query            string                `json:"query,omitempty"`
-	Path             string                `json:"path,omitempty"`
-	Summary          json.RawMessage       `json:"summary,omitempty"`
-	Content          json.RawMessage       `json:"content,omitempty"`
-	Arguments        json.RawMessage       `json:"arguments,omitempty"`
-	Result           json.RawMessage       `json:"result,omitempty"`
-	Error            json.RawMessage       `json:"error,omitempty"`
-	Changes          []appServerFileChange `json:"changes,omitempty"`
+	ID                string                               `json:"id"`
+	ClientID          string                               `json:"clientId,omitempty"`
+	Type              string                               `json:"type"`
+	Text              string                               `json:"text,omitempty"`
+	Phase             string                               `json:"phase,omitempty"`
+	Command           string                               `json:"command,omitempty"`
+	CWD               string                               `json:"cwd,omitempty"`
+	Status            string                               `json:"status,omitempty"`
+	AggregatedOutput  string                               `json:"aggregatedOutput,omitempty"`
+	Server            string                               `json:"server,omitempty"`
+	Tool              string                               `json:"tool,omitempty"`
+	Query             string                               `json:"query,omitempty"`
+	Path              string                               `json:"path,omitempty"`
+	Summary           json.RawMessage                      `json:"summary,omitempty"`
+	Content           json.RawMessage                      `json:"content,omitempty"`
+	Arguments         json.RawMessage                      `json:"arguments,omitempty"`
+	Result            json.RawMessage                      `json:"result,omitempty"`
+	Error             json.RawMessage                      `json:"error,omitempty"`
+	Changes           []appServerFileChange                `json:"changes,omitempty"`
+	SenderThreadID    string                               `json:"senderThreadId,omitempty"`
+	ReceiverThreadIDs []string                             `json:"receiverThreadIds,omitempty"`
+	Prompt            *string                              `json:"prompt,omitempty"`
+	Model             *string                              `json:"model,omitempty"`
+	ReasoningEffort   *string                              `json:"reasoningEffort,omitempty"`
+	AgentsStates      map[string]appServerCollabAgentState `json:"agentsStates,omitempty"`
+}
+
+type appServerCollabAgentState struct {
+	Status  string  `json:"status"`
+	Message *string `json:"message,omitempty"`
 }
 
 func cloneCodexappContentBlocks(blocks []protocol.ContentBlock) []protocol.ContentBlock {

@@ -204,6 +204,13 @@ import {
 import {ChatToolCallGroup} from '../chat/ChatToolCallGroup';
 import {ChatWorkGroup} from '../chat/ChatWorkGroup';
 import {ChatPlanSurface} from '../chat/ChatPlanSurface';
+import {
+  ChatSubagentDialog,
+  ChatSubagentsSurface,
+  partitionSubagentSessions,
+  resolveActivatableSessionId,
+  sortSubagentSessions,
+} from '../chat/ChatSubagentsSurface';
 import {ChatGoalSurface} from '../chat/ChatGoalSurface';
 import {ChatRecentSessionsSurface} from '../chat/ChatRecentSessionsSurface';
 import {ChatFileLinkContextMenu, type ChatFileLinkMenuAction} from '../chat/ChatFileLinkContextMenu';
@@ -3375,6 +3382,20 @@ export function App() {
   const [chatSessions, setChatSessions] = useState<RegistryChatSession[]>([]);
   const chatSessionsRef = useRef<RegistryChatSession[]>([]);
   const [projectSessionsByProjectId, setProjectSessionsByProjectId] = useState<Record<string, RegistryChatSession[]>>({});
+  const [subagentSessionsByProjectId, setSubagentSessionsByProjectId] = useState<Record<string, RegistryChatSession[]>>({});
+  const subagentSessionsByProjectIdRef = useRef<Record<string, RegistryChatSession[]>>({});
+  const subagentPermissionReadsRef = useRef<Set<string>>(new Set());
+  const [subagentDialogTarget, setSubagentDialogTarget] = useState<{
+    projectId: string;
+    session: RegistryChatSession;
+  } | null>(null);
+  const subagentDialogTargetRef = useRef<{
+    projectId: string;
+    session: RegistryChatSession;
+  } | null>(null);
+  const [subagentDialogMessages, setSubagentDialogMessages] = useState<RegistryChatMessage[]>([]);
+  const [subagentDialogLoading, setSubagentDialogLoading] = useState(false);
+  const [subagentDialogError, setSubagentDialogError] = useState('');
   const [recentSessionSections, setRecentSessionSections] = useState<RecentChatSessionProjectSection[]>([]);
   const [recentSessionsTick, setRecentSessionsTick] = useState(0);
   const projectSessionsByProjectIdRef = useRef<Record<string, RegistryChatSession[]>>({});
@@ -3421,6 +3442,7 @@ export function App() {
   const [archivedByProjectId, setArchivedByProjectId] = useState<Record<string, RegistryArchivedSessionSummary[]>>({});
   const [selectedArchivedKey, setSelectedArchivedKey] = useState<ChatSessionKey | null>(null);
   const [archivedPreview, setArchivedPreview] = useState<RegistrySessionArchiveReadResponse | null>(null);
+  const [archivedSubagentSessions, setArchivedSubagentSessions] = useState<RegistryArchivedSessionSummary[]>([]);
   const [archivedRestoringSessionId, setArchivedRestoringSessionId] = useState('');
   const scrollToChatSearchMatch = useCallback((match: {turnIndex: number}) => {
     chatVirtuosoListRef.current?.scrollToTurnIndex(match.turnIndex, 'smooth');
@@ -3781,7 +3803,7 @@ export function App() {
     handleInputKeyDown: handleChatSearchInputKeyDown,
   } = useChatSearchController({
     sourceKey: archivedMode
-      ? `archive:${encodeChatSessionKey(selectedArchivedKey)}`
+      ? `archive:${encodeChatSessionKey(selectedArchivedKey)}:${archivedPreview?.sessionId ?? ''}`
       : `live:${selectedChatEncodedKey}`,
     liveMessages: chatMessages,
     archivedMessages: archivedPreview?.messages ?? [],
@@ -3890,6 +3912,14 @@ export function App() {
   const selectedGoal = selectedChatSession?.sessionActions?.goal?.supported === true
     ? selectedChatSession.goal ?? null
     : null;
+  const selectedSubagents = useMemo(() => {
+    if (!selectedChatKey) return [];
+    return sortSubagentSessions(
+      (subagentSessionsByProjectId[selectedChatKey.projectId] ?? []).filter(
+        session => session.rootSessionId === selectedChatKey.sessionId,
+      ),
+    );
+  }, [selectedChatKey, subagentSessionsByProjectId]);
 
   const selectedDraftChatSession = useMemo(
     () => {
@@ -3941,23 +3971,59 @@ export function App() {
     () => deriveChatPermissionState(archivedPreview?.messages ?? []),
     [archivedPreview?.messages],
   );
-  const selectedActivePermission = useMemo(() => {
+  const selectedActivePermissionTarget = useMemo(() => {
     void permissionReadRevision;
     if (
       !connected ||
       archivedMode ||
       !selectedChatEncodedKey ||
-      !permissionReadGateRef.current.isReady(selectedChatEncodedKey)
+      !selectedChatKey
     ) {
       return null;
     }
-    return selectedPermissionState.active;
-  }, [archivedMode, connected, permissionReadRevision, selectedChatEncodedKey, selectedPermissionState]);
+    if (
+      permissionReadGateRef.current.isReady(selectedChatEncodedKey) &&
+      selectedPermissionState.active
+    ) {
+      return {
+        permission: selectedPermissionState.active,
+        key: selectedChatKey,
+        sourceName: '',
+      };
+    }
+    for (const session of selectedSubagents) {
+      if ((session.pendingPermissionCount ?? 0) <= 0) continue;
+      const key = chatSessionKeyFromParts(selectedChatKey.projectId, session.sessionId);
+      const runtimeKey = encodeChatSessionKey(key);
+      if (!permissionReadGateRef.current.isReady(runtimeKey)) continue;
+      const permission = deriveChatPermissionState(chatMessageStoreRef.current[runtimeKey] ?? []).active;
+      if (permission) {
+        return {
+          permission,
+          key,
+          sourceName: session.subagent?.name || session.title || 'Subagent',
+        };
+      }
+    }
+    return null;
+  }, [
+    archivedMode,
+    connected,
+    permissionReadRevision,
+    selectedChatEncodedKey,
+    selectedChatKey,
+    selectedPermissionState,
+    selectedSubagents,
+  ]);
+  const selectedActivePermission = selectedActivePermissionTarget?.permission ?? null;
   const {dialogRef: chatPermissionDialogRef, height: chatPermissionDialogHeight} = useChatPermissionDialogHeight();
-  const selectedActivePermissionView = useMemo(
-    () => selectedActivePermission ? permissionRequestView(selectedActivePermission.request) : null,
-    [selectedActivePermission],
-  );
+  const selectedActivePermissionView = useMemo(() => {
+    if (!selectedActivePermission) return null;
+    const view = permissionRequestView(selectedActivePermission.request);
+    return selectedActivePermissionTarget?.sourceName
+      ? {...view, title: `${selectedActivePermissionTarget.sourceName} · ${view.title}`}
+      : view;
+  }, [selectedActivePermission, selectedActivePermissionTarget?.sourceName]);
   const selectedPromptTurnStatusIndex = useMemo(
     () => buildPromptTurnStatusIndex(selectedFullChatMessages),
     [selectedFullChatMessages],
@@ -5768,7 +5834,11 @@ export function App() {
     }
   }, [allVisibleProjectsLoaded, projectSessionsByProjectId]);
   const showFloatingSessionPanel = isWide && chatSidebarCollapsed && !archivedMode && !sessionSearchActive;
-  const showChatEdgeSurfaces = isWide && !archivedMode && (showFloatingSessionPanel || !!selectedChatPlan || desktopGitSnapshot.available || showMonitor);
+  const showChatEdgeSurfaces = isWide && (
+    archivedMode
+      ? archivedSubagentSessions.length > 0
+      : showFloatingSessionPanel || selectedSubagents.length > 0 || !!selectedChatPlan || desktopGitSnapshot.available || showMonitor
+  );
   const chatMainClassName = isWide
     ? `chat-main chat-view-width-fixed-800${showChatEdgeSurfaces ? ' chat-view-width-fixed-800-edge-surfaces' : ''}`
     : 'chat-main';
@@ -5858,6 +5928,12 @@ export function App() {
   useEffect(() => {
     projectSessionsByProjectIdRef.current = projectSessionsByProjectId;
   }, [projectSessionsByProjectId]);
+  useEffect(() => {
+    subagentSessionsByProjectIdRef.current = subagentSessionsByProjectId;
+  }, [subagentSessionsByProjectId]);
+  useEffect(() => {
+    subagentDialogTargetRef.current = subagentDialogTarget;
+  }, [subagentDialogTarget]);
   useEffect(() => {
     draftSessionsByProjectIdRef.current = draftSessionsByProjectId;
   }, [draftSessionsByProjectId]);
@@ -6129,9 +6205,10 @@ export function App() {
     setProjectSessionsByProjectId(prev => {
       const next = {...prev};
       for (const projectItem of projects) {
-        const cachedSessions = workspaceStore
+        const allCachedSessions = workspaceStore
           .hydrateChatSessions(projectItem.projectId)
           .map(entry => entry.session);
+        const {roots: cachedSessions} = partitionSubagentSessions(allCachedSessions);
         const sortedCachedSessions = sortProjectChatSessions(cachedSessions);
         if (sortedCachedSessions.length > 0) {
           next[projectItem.projectId] = mergeChatSessionList(
@@ -6142,6 +6219,21 @@ export function App() {
           next[projectItem.projectId] = [];
         }
       }
+      return next;
+    });
+    setSubagentSessionsByProjectId(prev => {
+      const next = {...prev};
+      for (const projectItem of projects) {
+        const {subagents} = partitionSubagentSessions(
+          workspaceStore.hydrateChatSessions(projectItem.projectId).map(entry => entry.session),
+        );
+        if (subagents.length > 0) {
+          next[projectItem.projectId] = sortSubagentSessions(subagents);
+        } else if (!next[projectItem.projectId]) {
+          next[projectItem.projectId] = [];
+        }
+      }
+      subagentSessionsByProjectIdRef.current = next;
       return next;
     });
   }, [isWide, drawerOpen, projectIdListKey]);
@@ -9608,7 +9700,18 @@ export function App() {
       return;
     }
 
-    const sessionRows = cachedSessions.map(item => item.session);
+    const cachedSessionRows = cachedSessions.map(item => item.session);
+    const {roots: sessionRows, subagents: cachedSubagents} = partitionSubagentSessions(cachedSessionRows);
+    if (cachedSubagents.length > 0) {
+      setSubagentSessionsByProjectId(prev => {
+        const next = {
+          ...prev,
+          [activeProjectId]: sortSubagentSessions(cachedSubagents),
+        };
+        subagentSessionsByProjectIdRef.current = next;
+        return next;
+      });
+    }
     const sortedSessionRows = mergeChatSessionList(
       knownChatSessionsForProject(activeProjectId),
       sortProjectChatSessions(sessionRows),
@@ -9636,15 +9739,23 @@ export function App() {
       chatFinishedCursorRef.current[runtimeKey] = cursor.turnIndex;
     }
 
-    const persistedSelection = workspaceStore.migrateSelectedChatSessionKey(activeProjectId);
+    const redirectCachedKey = (key: ChatSessionKey | null): ChatSessionKey | null => {
+      if (!key || key.projectId !== activeProjectId) return key;
+      const sessionId = resolveActivatableSessionId(key.sessionId, cachedSessionRows);
+      return sessionId ? chatSessionKeyFromParts(activeProjectId, sessionId) : null;
+    };
+    const persistedSelection = redirectCachedKey(workspaceStore.migrateSelectedChatSessionKey(activeProjectId));
     const selectionResolution = resolveChatListSelection({
       activeProjectId,
       allowMissingSelection: true,
       availableSessionIds: sessionRows.map(session => session.sessionId),
-      currentKey: selectedChatKeyRef.current,
-      legacySelectionId: workspaceStore.getSelectedChatSessionId(activeProjectId),
+      currentKey: redirectCachedKey(selectedChatKeyRef.current),
+      legacySelectionId: resolveActivatableSessionId(
+        workspaceStore.getSelectedChatSessionId(activeProjectId),
+        cachedSessionRows,
+      ),
       persistedKey: persistedSelection,
-      preferredSelection,
+      preferredSelection: resolveActivatableSessionId(preferredSelection, cachedSessionRows),
     });
     if (!selectionResolution.canMutateSelection) {
       return;
@@ -9708,6 +9819,43 @@ export function App() {
       setChatSessions(prev => mergeChatSession(prev, session));
     }
   };
+
+  const rememberSubagentSessionSummary = (
+    activeProjectId: string,
+    session: Partial<RegistryChatSession> & { sessionId: string },
+  ) => {
+    if (!activeProjectId || !session.sessionId) return;
+    const currentMap = subagentSessionsByProjectIdRef.current;
+    const nextProjectSessions = mergeChatSession(
+      currentMap[activeProjectId] ?? [],
+      session,
+    );
+    const next = { ...currentMap, [activeProjectId]: nextProjectSessions };
+    subagentSessionsByProjectIdRef.current = next;
+    setSubagentSessionsByProjectId(next);
+    const mergedSession = nextProjectSessions.find(
+      item => item.sessionId === session.sessionId,
+    );
+    if (mergedSession) {
+      const runtimeKey = buildChatRuntimeKey(
+        activeProjectId,
+        session.sessionId,
+      );
+      workspaceStore.rememberChatSession(activeProjectId, mergedSession, {
+        turnIndex: chatFinishedCursorRef.current[runtimeKey] ?? 0,
+      });
+    }
+    setSubagentDialogTarget(current =>
+      current?.projectId === activeProjectId &&
+      current.session.sessionId === session.sessionId
+        ? {
+            ...current,
+            session: mergeChatSession([current.session], session)[0],
+          }
+        : current,
+    );
+  };
+
 
   const markChatSessionRead = async (
     activeProjectId: string,
@@ -10141,6 +10289,148 @@ export function App() {
     }));
   };
 
+  const openSubagentDialog = async (session: RegistryChatSession) => {
+    const targetProjectId = selectedChatKeyRef.current?.projectId ?? '';
+    if (!isWide || !targetProjectId || session.sessionKind !== 'subagent')
+      return;
+    const target = { projectId: targetProjectId, session };
+    subagentDialogTargetRef.current = target;
+    setSubagentDialogTarget(target);
+    setSubagentDialogError('');
+    setSubagentDialogLoading(true);
+    const runtimeKey = buildChatRuntimeKey(targetProjectId, session.sessionId);
+    setSubagentDialogMessages(
+      messagesFromTurnStore(runtimeKey, session.sessionId).length > 0
+        ? messagesFromTurnStore(runtimeKey, session.sessionId)
+        : chatMessageStoreRef.current[runtimeKey] ?? [],
+    );
+    try {
+      const result = await service.readProjectSession(
+        targetProjectId,
+        session.sessionId,
+        0,
+      );
+      if (
+        subagentDialogTargetRef.current?.session.sessionId !== session.sessionId
+      )
+        return;
+      const turnState = ensureChatTurnStore(runtimeKey);
+      const throughTurnIndex = result.turns.reduce(
+        (latest, turn) => Math.max(latest, turn.turnIndex),
+        0,
+      );
+      applySessionReadResult(turnState, 0, result.turns, throughTurnIndex, []);
+      const decodedMessages = messagesFromTurnStore(
+        runtimeKey,
+        session.sessionId,
+      );
+      const nextMessages =
+        decodedMessages.length > 0 ? decodedMessages : result.messages;
+      chatMessageStoreRef.current[runtimeKey] = nextMessages;
+      chatFinishedCursorRef.current[runtimeKey] = turnState.cursor.turnIndex;
+      setSubagentDialogMessages(nextMessages);
+      if (result.session?.sessionKind === 'subagent') {
+        rememberSubagentSessionSummary(targetProjectId, result.session);
+      }
+    } catch (err) {
+      if (
+        subagentDialogTargetRef.current?.session.sessionId === session.sessionId
+      ) {
+        setSubagentDialogError(
+          err instanceof Error ? err.message : String(err),
+        );
+      }
+    } finally {
+      if (
+        subagentDialogTargetRef.current?.session.sessionId === session.sessionId
+      ) {
+        setSubagentDialogLoading(false);
+      }
+    }
+  };
+
+  const closeSubagentDialog = () => {
+    subagentDialogTargetRef.current = null;
+    setSubagentDialogTarget(null);
+    setSubagentDialogMessages([]);
+    setSubagentDialogLoading(false);
+    setSubagentDialogError('');
+  };
+
+  const reconcileSubagentPermission = async (
+    targetProjectId: string,
+    session: RegistryChatSession,
+  ) => {
+    const runtimeKey = buildChatRuntimeKey(targetProjectId, session.sessionId);
+    if (subagentPermissionReadsRef.current.has(runtimeKey)) return;
+    subagentPermissionReadsRef.current.add(runtimeKey);
+    const permissionReadToken = markPermissionReadPending(runtimeKey);
+    try {
+      const result = await service.readProjectSession(
+        targetProjectId,
+        session.sessionId,
+        0,
+      );
+      const turnState = ensureChatTurnStore(runtimeKey);
+      const throughTurnIndex = result.turns.reduce(
+        (latest, turn) => Math.max(latest, turn.turnIndex),
+        0,
+      );
+      applySessionReadResult(turnState, 0, result.turns, throughTurnIndex, []);
+      const decodedMessages = messagesFromTurnStore(
+        runtimeKey,
+        session.sessionId,
+      );
+      const nextMessages =
+        decodedMessages.length > 0 ? decodedMessages : result.messages;
+      chatMessageStoreRef.current[runtimeKey] = nextMessages;
+      chatFinishedCursorRef.current[runtimeKey] = turnState.cursor.turnIndex;
+      if (
+        subagentDialogTargetRef.current?.session.sessionId === session.sessionId
+      ) {
+        setSubagentDialogMessages(nextMessages);
+      }
+      if (result.session?.sessionKind === 'subagent') {
+        rememberSubagentSessionSummary(targetProjectId, result.session);
+      }
+      markPermissionReadReady(runtimeKey, permissionReadToken);
+    } catch {
+      // A later session.updated or reconnect retries reconciliation. The UI
+      // must not expose a permission until this read reaches the ready gate.
+    } finally {
+      subagentPermissionReadsRef.current.delete(runtimeKey);
+    }
+  };
+
+  useEffect(() => {
+    const target = subagentDialogTargetRef.current;
+    if (!target) return;
+    const selectedRootMatches =
+      selectedChatKey?.projectId === target.projectId &&
+      selectedChatKey.sessionId === target.session.rootSessionId;
+    if (!isWide || !selectedRootMatches) closeSubagentDialog();
+  }, [isWide, selectedChatKey]);
+
+  useEffect(() => {
+    if (!connected || archivedMode || !selectedChatKey) return;
+    for (const session of selectedSubagents) {
+      if ((session.pendingPermissionCount ?? 0) <= 0) continue;
+      const runtimeKey = buildChatRuntimeKey(
+        selectedChatKey.projectId,
+        session.sessionId,
+      );
+      if (permissionReadGateRef.current.isReady(runtimeKey)) continue;
+      void reconcileSubagentPermission(selectedChatKey.projectId, session);
+    }
+  }, [
+    archivedMode,
+    connected,
+    permissionReadRevision,
+    selectedChatKey,
+    selectedSubagents,
+  ]);
+
+
   const loadChatSessions = async (
     activeProjectId = projectIdRef.current,
     preferredSelection = '',
@@ -10153,10 +10443,20 @@ export function App() {
     let sessionCount = 0;
     let loadListError = '';
     try {
-      const listedSessions = sortProjectChatSessions(await service.listProjectSessions(activeProjectId));
-      sessionCount = listedSessions.length;
+      const allListedSessions = sortProjectChatSessions(await service.listProjectSessions(activeProjectId));
+      const {roots: listedSessions, subagents: listedSubagents} = partitionSubagentSessions(allListedSessions);
+      sessionCount = allListedSessions.length;
+      setSubagentSessionsByProjectId(prev => {
+        const next = {
+          ...prev,
+          [activeProjectId]: sortSubagentSessions(listedSubagents),
+        };
+        subagentSessionsByProjectIdRef.current = next;
+        return next;
+      });
       const knownSessions = knownChatSessionsForProject(activeProjectId);
       const nextSessions = mergeChatSessionList(knownSessions, listedSessions);
+      const cachedSessionRows = [...nextSessions, ...listedSubagents];
       setProjectSessionsByProjectId(prev => ({
         ...prev,
         [activeProjectId]: mergeChatSessionList(
@@ -10169,7 +10469,7 @@ export function App() {
       }
 
       const cursorBySessionId: Record<string, {turnIndex: number}> = {};
-      for (const session of nextSessions) {
+      for (const session of cachedSessionRows) {
         const sessionId = session.sessionId;
         if (!sessionId) continue;
         const runtimeKey = buildChatRuntimeKey(activeProjectId, sessionId);
@@ -10177,16 +10477,32 @@ export function App() {
           turnIndex: chatFinishedCursorRef.current[runtimeKey] ?? 0,
         };
       }
-      workspaceStore.replaceChatSessions(activeProjectId, nextSessions, cursorBySessionId);
+      workspaceStore.replaceChatSessions(activeProjectId, cachedSessionRows, cursorBySessionId);
 
-      const persistedSelection = workspaceStore.migrateSelectedChatSessionKey(activeProjectId);
+      const redirectSelectionKey = (key: ChatSessionKey | null): ChatSessionKey | null => {
+        if (!key || key.projectId !== activeProjectId) return key;
+        const sessionId = resolveActivatableSessionId(key.sessionId, allListedSessions);
+        return sessionId ? chatSessionKeyFromParts(activeProjectId, sessionId) : null;
+      };
+      const persistedSelection = redirectSelectionKey(
+        workspaceStore.migrateSelectedChatSessionKey(activeProjectId),
+      );
+      const currentSelectionKey = redirectSelectionKey(selectedChatKeyRef.current);
+      const legacySelectionId = resolveActivatableSessionId(
+        workspaceStore.getSelectedChatSessionId(activeProjectId),
+        allListedSessions,
+      );
+      const redirectedPreferredSelection = resolveActivatableSessionId(
+        preferredSelection,
+        allListedSessions,
+      );
       const selectionResolution = resolveChatListSelection({
         activeProjectId,
         availableSessionIds: nextSessions.map(session => session.sessionId),
-        currentKey: selectedChatKeyRef.current,
-        legacySelectionId: workspaceStore.getSelectedChatSessionId(activeProjectId),
+        currentKey: currentSelectionKey,
+        legacySelectionId,
         persistedKey: persistedSelection,
-        preferredSelection,
+        preferredSelection: redirectedPreferredSelection,
       });
       if (!selectionResolution.canMutateSelection) {
         return;
@@ -10869,6 +11185,7 @@ export function App() {
     setArchivedByProjectId({});
     setSelectedArchivedKey(null);
     setArchivedPreview(null);
+    setArchivedSubagentSessions([]);
     setArchivedError('');
     setArchivedLoading(false);
   };
@@ -10882,6 +11199,7 @@ export function App() {
     setArchivedByProjectId({});
     setSelectedArchivedKey(null);
     setArchivedPreview(null);
+    setArchivedSubagentSessions([]);
     if (sessionSearchOpen || sessionSearchActive) {
       await exitSessionSearch();
     }
@@ -10900,16 +11218,31 @@ export function App() {
     setArchivedLoading(false);
   };
 
-  const loadArchivedSessionPreview = async (targetProjectId: string, sessionId: string) => {
+  const loadArchivedSessionPreview = async (
+    targetProjectId: string,
+    sessionId: string,
+    rootSessionId = '',
+  ) => {
     const normalizedSessionId = sessionId.trim();
+    const normalizedRootSessionId = rootSessionId.trim();
     if (!targetProjectId || !normalizedSessionId) {
       return;
     }
     setArchivedError('');
-    setSelectedArchivedKey({projectId: targetProjectId, sessionId: normalizedSessionId});
+    setSelectedArchivedKey({
+      projectId: targetProjectId,
+      sessionId: normalizedRootSessionId || normalizedSessionId,
+    });
     try {
-      const preview = await service.readProjectArchivedSession(targetProjectId, normalizedSessionId);
+      const preview = await service.readProjectArchivedSession(
+        targetProjectId,
+        normalizedSessionId,
+        normalizedRootSessionId || undefined,
+      );
       setArchivedPreview(preview);
+      if (!normalizedRootSessionId) {
+        setArchivedSubagentSessions(sortSubagentSessions(preview.subagents ?? []));
+      }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       setArchivedError(message);
@@ -14706,6 +15039,12 @@ export function App() {
     options?: {closeMobileDrawer?: boolean; targetTurnIndex?: number},
   ): Promise<boolean> => {
     if (!targetProjectId || !sessionId) return false;
+    const knownSessions = [
+      ...(projectSessionsByProjectIdRef.current[targetProjectId] ?? []),
+      ...(subagentSessionsByProjectIdRef.current[targetProjectId] ?? []),
+    ];
+    sessionId = resolveActivatableSessionId(sessionId, knownSessions);
+    if (!sessionId) return false;
     const nextSelectedKey = chatSessionKeyFromParts(targetProjectId, sessionId);
     if (!nextSelectedKey) return false;
     const finishSelectDiagnostic = startWorkspaceDiagnosticSpan('select_session', {
@@ -15800,10 +16139,20 @@ export function App() {
     targetProjectId: string,
     sessions: RegistryChatSession[],
   ) => {
-    const listedSessions = sortProjectChatSessions(sessions);
+    const {roots, subagents} = partitionSubagentSessions(sortProjectChatSessions(sessions));
+    const listedSessions = roots;
+    setSubagentSessionsByProjectId(prev => {
+      const next = {
+        ...prev,
+        [targetProjectId]: sortSubagentSessions(subagents),
+      };
+      subagentSessionsByProjectIdRef.current = next;
+      return next;
+    });
     reconcileCreatedDraftSessions(targetProjectId, listedSessions);
     const knownSessions = knownChatSessionsForProject(targetProjectId);
     const nextSessions = mergeChatSessionList(knownSessions, listedSessions);
+    const cachedSessionRows = [...nextSessions, ...subagents];
     setProjectSessionsByProjectId(prev => ({
       ...prev,
       [targetProjectId]: mergeChatSessionList(
@@ -15824,7 +16173,7 @@ export function App() {
         turnIndex: chatFinishedCursorRef.current[runtimeKey] ?? entry.cursor.turnIndex,
       };
     }
-    for (const session of nextSessions) {
+    for (const session of cachedSessionRows) {
       const sessionId = session.sessionId;
       if (!sessionId || cursorBySessionId[sessionId]) continue;
       const runtimeKey = buildChatRuntimeKey(targetProjectId, sessionId);
@@ -15832,7 +16181,7 @@ export function App() {
         turnIndex: chatFinishedCursorRef.current[runtimeKey] ?? 0,
       };
     }
-    workspaceStore.replaceChatSessions(targetProjectId, nextSessions, cursorBySessionId);
+    workspaceStore.replaceChatSessions(targetProjectId, cachedSessionRows, cursorBySessionId);
   };
 
   const refreshChatProjectSessions = async (targetProjectId: string, options?: {force?: boolean}) => {
@@ -16097,6 +16446,10 @@ export function App() {
           session?: RegistryChatSession;
         };
         if (payload.session?.sessionId) {
+          if (payload.session.sessionKind === 'subagent') {
+            rememberSubagentSessionSummary(eventProjectId, payload.session);
+            return;
+          }
           applySessionQueueProjection(eventProjectId, payload.session);
           reconcileCreatedDraftSessions(eventProjectId, [payload.session]);
           const runtimeKey = buildChatRuntimeKey(eventProjectId, payload.session.sessionId);
@@ -16144,12 +16497,23 @@ export function App() {
         }
         const isSelectedSession = encodeChatSessionKey(selectedChatKeyRef.current) === runtimeKey;
         const knownProjectSessions = projectSessionsByProjectIdRef.current[eventProjectId] ?? [];
-        const knownSession = knownProjectSessions.some(session => session.sessionId === sessionId);
+        const knownSubagentSessions = subagentSessionsByProjectIdRef.current[eventProjectId] ?? [];
+        const knownSession = knownProjectSessions.some(session => session.sessionId === sessionId) ||
+          knownSubagentSessions.some(session => session.sessionId === sessionId);
         if (!knownSession && !isSelectedSession) {
           refreshChatProjectSessions(eventProjectId).catch(() => undefined);
         }
-        const existingSession = knownProjectSessions.find(item => item.sessionId === sessionId);
-        maybeNotifyPromptCompletion(message, existingSession, eventProjectId);
+        const existingSession = knownProjectSessions.find(item => item.sessionId === sessionId) ??
+          knownSubagentSessions.find(item => item.sessionId === sessionId);
+        if (existingSession?.sessionKind !== 'subagent') {
+          maybeNotifyPromptCompletion(message, existingSession, eventProjectId);
+        }
+        const isOpenSubagent = subagentDialogTargetRef.current?.projectId === eventProjectId &&
+          subagentDialogTargetRef.current.session.sessionId === sessionId;
+        const selectedRootKey = selectedChatKeyRef.current;
+        const isSelectedRootSubagent = existingSession?.sessionKind === 'subagent' &&
+          selectedRootKey?.projectId === eventProjectId &&
+          existingSession.rootSessionId === selectedRootKey.sessionId;
 
         const turnState = ensureChatTurnStore(runtimeKey);
         const incomingTurn = normalizedPayload?.turn ?? {
@@ -16166,14 +16530,21 @@ export function App() {
         }
 
         let merged: RegistryChatMessage[] | null = null;
-        if (shouldMaterializeRealtimeSessionMessages(isSelectedSession)) {
+        if (shouldMaterializeRealtimeSessionMessages(isSelectedSession || isOpenSubagent || isSelectedRootSubagent)) {
           merged = upsertDecodedSessionTurn(
             chatMessageStoreRef.current[runtimeKey] ?? [],
             sessionId,
             incomingTurn,
           );
           chatMessageStoreRef.current[runtimeKey] = merged;
-          scheduleVisibleChatMessagesForRuntimeKey(runtimeKey);
+          if (isOpenSubagent) {
+            setSubagentDialogMessages(merged);
+          } else if (isSelectedSession) {
+            scheduleVisibleChatMessagesForRuntimeKey(runtimeKey);
+          }
+          if (isSelectedRootSubagent) {
+            setPermissionReadRevision(revision => revision + 1);
+          }
           if (message.method === 'prompt_done') {
             chatRealtimeFlushSchedulerRef.current?.flushNow();
           }
@@ -17368,12 +17739,15 @@ export function App() {
   ): ChatShareSnapshot | null => {
     const sessionKey = archivedMode ? selectedArchivedKey : selectedChatKey;
     if (!sessionKey) return null;
+    const snapshotSessionId = archivedMode
+      ? archivedPreview?.sessionId || sessionKey.sessionId
+      : sessionKey.sessionId;
     const title = archivedMode
       ? resolveSessionDisplayTitle(archivedPreview?.session) || archivedPreview?.sessionId || sessionKey.sessionId
       : selectedChatDisplayTitle || sessionKey.sessionId;
     const context = {
       projectId: sessionKey.projectId,
-      sessionId: sessionKey.sessionId,
+      sessionId: snapshotSessionId,
       title,
       capturedAt: new Date().toISOString(),
       presentation: {
@@ -18085,16 +18459,31 @@ export function App() {
   const chatSendDisabled = selectedChatSubmitPending || chatAttachmentUploadPending || !!selectedActivePermission;
   const submitChatPermission = useCallback(async (optionId: string) => {
     const activePermission = selectedActivePermission;
-    const selectedKey = selectedChatKey;
+    const permissionTargetKey = selectedActivePermissionTarget?.key ?? null;
     if (
       !connected ||
       !activePermission ||
-      !selectedKey ||
+      !permissionTargetKey ||
       permissionSubmission.optionId
     ) {
       return;
     }
-    const runtimeKey = encodeChatSessionKey(selectedKey);
+    const runtimeKey = encodeChatSessionKey(permissionTargetKey);
+    const refreshPermissionTarget = async () => {
+      if (selectedActivePermissionTarget?.sourceName) {
+        const child = subagentSessionsByProjectIdRef.current[permissionTargetKey.projectId]
+          ?.find(session => session.sessionId === permissionTargetKey.sessionId);
+        if (child) {
+          await reconcileSubagentPermission(permissionTargetKey.projectId, child);
+        }
+        return;
+      }
+      await refreshSessionTurns(
+        permissionTargetKey.sessionId,
+        permissionTargetKey.projectId,
+        runtimeKey,
+      );
+    };
     setPermissionSubmission({
       runtimeKey,
       permissionId: activePermission.permissionId,
@@ -18103,15 +18492,15 @@ export function App() {
     });
     try {
       await service.respondProjectSessionPermission(
-        selectedKey.projectId,
-        selectedKey.sessionId,
+        permissionTargetKey.projectId,
+        permissionTargetKey.sessionId,
         activePermission.permissionId,
         optionId,
       );
-      await refreshSessionTurns(selectedKey.sessionId, selectedKey.projectId, runtimeKey);
+      await refreshPermissionTarget();
     } catch (err) {
       const responseError = err instanceof Error ? err.message : String(err);
-      await refreshSessionTurns(selectedKey.sessionId, selectedKey.projectId, runtimeKey);
+      await refreshPermissionTarget();
       setPermissionSubmission(current => (
         current.runtimeKey === runtimeKey && current.permissionId === activePermission.permissionId
           ? {...current, optionId: '', error: responseError}
@@ -18122,11 +18511,13 @@ export function App() {
     connected,
     permissionSubmission.optionId,
     selectedActivePermission,
-    selectedChatKey,
+    selectedActivePermissionTarget,
   ]);
 
   useEffect(() => {
-    const runtimeKey = selectedChatKey ? encodeChatSessionKey(selectedChatKey) : '';
+    const runtimeKey = selectedActivePermissionTarget?.key
+      ? encodeChatSessionKey(selectedActivePermissionTarget.key)
+      : '';
     if (
       !selectedActivePermission ||
       permissionSubmission.runtimeKey !== runtimeKey ||
@@ -18136,7 +18527,7 @@ export function App() {
         setPermissionSubmission({runtimeKey: '', permissionId: '', optionId: '', error: ''});
       }
     }
-  }, [permissionSubmission, selectedActivePermission, selectedChatKey]);
+  }, [permissionSubmission, selectedActivePermission, selectedActivePermissionTarget]);
   const selectedChatPromptCancelling =
     selectedQueueActivePrompt?.status === 'cancelling' ||
     (!!selectedChatEncodedKey && chatCancellingRuntimeKey === selectedChatEncodedKey);
@@ -18490,7 +18881,10 @@ export function App() {
       return null;
     }
     const runtimeKey = selectedArchivedKey
-      ? buildChatRuntimeKey(selectedArchivedKey.projectId, selectedArchivedKey.sessionId)
+      ? buildChatRuntimeKey(
+          selectedArchivedKey.projectId,
+          archivedPreview?.sessionId ?? selectedArchivedKey.sessionId,
+        )
       : 'archived-session';
     const searchMatchIds = searchSourceIndexes.flatMap(sourceIndex => {
       const sourceMessage = searchSourceMessages[sourceIndex];
@@ -18951,7 +19345,7 @@ export function App() {
   const activeChatMessages = chatReadOnlyPreview ? archivedPreview.messages : chatMessages;
   const activeChatDisplayIndex = chatReadOnlyPreview ? archivedChatDisplayIndex : chatDisplayIndex;
   const activeChatRuntimeKey = chatReadOnlyPreview && selectedArchivedKey
-    ? buildChatRuntimeKey(selectedArchivedKey.projectId, selectedArchivedKey.sessionId)
+    ? buildChatRuntimeKey(selectedArchivedKey.projectId, archivedPreview.sessionId)
     : selectedChatEncodedKey;
   const activeChatDisplayTitle = chatReadOnlyPreview
     ? resolveSessionDisplayTitle(archivedPreview.session) || archivedPreview.sessionId
@@ -19518,9 +19912,22 @@ export function App() {
                 />
               ) : null}
             </div>
-          {isWide && !archivedMode ? (
+          {isWide && (!archivedMode || archivedSubagentSessions.length > 0) ? (
             <div className={`chat-edge-surface-stack${!chatSidebarCollapsed ? ' beside-pinned-session-panel' : ''}${sessionNavSlideOut.open ? ' covered-by-session-panel' : ''}`}>
-              {showFloatingSessionPanel ? (
+              {archivedMode ? (
+                <ChatSubagentsSurface
+                  sessions={archivedSubagentSessions}
+                  onOpen={session => {
+                    if (!selectedArchivedKey) return;
+                    void loadArchivedSessionPreview(
+                      selectedArchivedKey.projectId,
+                      session.sessionId,
+                      selectedArchivedKey.sessionId,
+                    );
+                  }}
+                />
+              ) : null}
+              {!archivedMode && showFloatingSessionPanel ? (
                 <ChatRecentSessionsSurface
                   collapsed={collapsedProjectIds.includes(RECENT_SESSIONS_VIRTUAL_PROJECT_ID)}
                   onToggleCollapsed={() => toggleWideProjectCollapsed(RECENT_SESSIONS_VIRTUAL_PROJECT_ID)}
@@ -19552,7 +19959,7 @@ export function App() {
                   })()}
                 </ChatRecentSessionsSurface>
               ) : null}
-              {selectedGoal ? (
+              {!archivedMode && selectedGoal ? (
                 <ChatGoalSurface
                   mode="desktop"
                   goal={selectedGoal}
@@ -19562,11 +19969,19 @@ export function App() {
                   onClear={requestClearGoal}
                 />
               ) : null}
-              <ChatPlanSurface
-                mode="desktop"
-                plan={selectedChatPlan}
-              />
-              {desktopGitSnapshot.available ? (
+              {!archivedMode ? (
+                <ChatSubagentsSurface
+                  sessions={selectedSubagents}
+                  onOpen={session => { void openSubagentDialog(session); }}
+                />
+              ) : null}
+              {!archivedMode ? (
+                <ChatPlanSurface
+                  mode="desktop"
+                  plan={selectedChatPlan}
+                />
+              ) : null}
+              {!archivedMode && desktopGitSnapshot.available ? (
                 <GitStatusSurface
                   snapshot={desktopGitSnapshot}
                   onRefresh={() => { void gitBrowserStore.refresh(desktopGitSnapshot.projectId); }}
@@ -19574,7 +19989,7 @@ export function App() {
                   onFileOpen={(source, file) => openGitDiffPreview(desktopGitSnapshot.projectId, source, file)}
                 />
               ) : null}
-              {showMonitor ? (
+              {!archivedMode && showMonitor ? (
                 <MonitorSurface
                   usageSnapshot={visibleUsageSnapshot}
                   efficiencySnapshot={modelEfficiencySnapshot}
@@ -22866,6 +23281,15 @@ export function App() {
       }}
     />
   );
+  const subagentDialogOverlay = subagentDialogTarget ? (
+    <ChatSubagentDialog
+      session={subagentDialogTarget.session}
+      messages={subagentDialogMessages}
+      loading={subagentDialogLoading}
+      error={subagentDialogError}
+      onClose={closeSubagentDialog}
+    />
+  ) : null;
   const desktopWindowControlsVisible = isWide && Boolean(getDesktopWindowBridge());
   const desktopWindowControls = desktopWindowControlsVisible ? (
     <DesktopWindowControls />
@@ -22971,6 +23395,7 @@ export function App() {
       {appGoalEditDialog}
       {appConfirmDialog}
       {appSessionStatusDialog}
+      {subagentDialogOverlay}
       {launchJustExited && !launchExitDone ? <AppLaunchScreen status="" exiting /> : null}
     </>
   );

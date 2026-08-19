@@ -98,6 +98,11 @@ type Store interface {
 	Close() error
 }
 
+type sessionGroupStore interface {
+	SaveSessionGroup(ctx context.Context, records []*SessionRecord) error
+	DeleteSessionGroup(ctx context.Context, projectName string, sessionIDs []string) error
+}
+
 type sqliteStore struct {
 	db      *sql.DB
 	writeMu sync.Mutex
@@ -554,6 +559,77 @@ func (s *sqliteStore) DeleteSession(ctx context.Context, projectName, sessionID 
 		return fmt.Errorf("commit delete session: %w", err)
 	}
 	tx = nil
+	return nil
+}
+
+func (s *sqliteStore) SaveSessionGroup(ctx context.Context, records []*SessionRecord) error {
+	if len(records) == 0 {
+		return fmt.Errorf("session records are required")
+	}
+	s.writeMu.Lock()
+	defer s.writeMu.Unlock()
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin save session group tx: %w", err)
+	}
+	defer tx.Rollback()
+	for _, rec := range records {
+		if rec == nil {
+			return fmt.Errorf("session record is required")
+		}
+		rec.ID = strings.TrimSpace(rec.ID)
+		rec.ProjectName = strings.TrimSpace(rec.ProjectName)
+		rec.AgentType = normalizeAgentType(rec.AgentType)
+		if rec.ID == "" || rec.ProjectName == "" || rec.AgentType == "" {
+			return fmt.Errorf("session id, project name, and agent type are required")
+		}
+		if strings.TrimSpace(rec.AgentJSON) == "" {
+			rec.AgentJSON = "{}"
+		}
+		if strings.TrimSpace(rec.SessionSyncJSON) == "" {
+			rec.SessionSyncJSON = "{}"
+		}
+		if rec.CreatedAt.IsZero() {
+			rec.CreatedAt = time.Now().UTC()
+		}
+		if rec.LastActiveAt.IsZero() {
+			rec.LastActiveAt = rec.CreatedAt
+		}
+		if _, err := tx.ExecContext(ctx, `
+			INSERT INTO sessions (
+				id, project_name, status, agent_type, agent_json, session_sync_json, title, created_at, updated_at
+			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+		`, rec.ID, rec.ProjectName, int(rec.Status), rec.AgentType, rec.AgentJSON, rec.SessionSyncJSON, rec.Title,
+			formatStoreTime(rec.CreatedAt), formatStoreTime(rec.LastActiveAt)); err != nil {
+			return fmt.Errorf("save session group member %s: %w", rec.ID, err)
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit save session group: %w", err)
+	}
+	return nil
+}
+
+func (s *sqliteStore) DeleteSessionGroup(ctx context.Context, projectName string, sessionIDs []string) error {
+	projectName = strings.TrimSpace(projectName)
+	if projectName == "" || len(sessionIDs) == 0 {
+		return fmt.Errorf("project name and session ids are required")
+	}
+	s.writeMu.Lock()
+	defer s.writeMu.Unlock()
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin delete session group tx: %w", err)
+	}
+	defer tx.Rollback()
+	for _, sessionID := range sessionIDs {
+		if _, err := tx.ExecContext(ctx, `DELETE FROM sessions WHERE project_name = ? AND id = ?`, projectName, strings.TrimSpace(sessionID)); err != nil {
+			return fmt.Errorf("delete session group member %s: %w", sessionID, err)
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit delete session group: %w", err)
+	}
 	return nil
 }
 

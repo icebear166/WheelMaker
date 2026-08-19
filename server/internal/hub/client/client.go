@@ -61,7 +61,8 @@ type Client struct {
 
 	store Store
 
-	mu sync.Mutex
+	mu         sync.Mutex
+	subagentMu sync.Mutex
 
 	forkPointMu    sync.Mutex
 	forkPointCache map[string]sessionForkPointCacheEntry
@@ -858,14 +859,20 @@ func (c *Client) handleSessionQueueRequest(ctx context.Context, req acp.SessionQ
 }
 
 func (c *Client) HandleSessionRequest(ctx context.Context, method string, projectID string, payload json.RawMessage) (any, error) {
-	switch strings.TrimSpace(method) {
+	method = strings.TrimSpace(method)
+	if err := c.rejectReadOnlySubagentRequest(ctx, method, payload); err != nil {
+		return nil, err
+	}
+	switch method {
 	case acp.RegistryMethodSessionList:
 		sessions, err := c.sessionRecorder.ListSessionViews(ctx)
 		if err != nil {
 			return nil, err
 		}
 		for i := range sessions {
-			sessions[i].ConfigOptions = c.sessionConfigOptions(ctx, sessions[i].SessionID)
+			if sessions[i].SessionKind != sessionKindSubagent {
+				sessions[i].ConfigOptions = c.sessionConfigOptions(ctx, sessions[i].SessionID)
+			}
 		}
 		return map[string]any{"sessions": sessions}, nil
 	case acp.RegistryMethodSessionRead:
@@ -1092,12 +1099,14 @@ func (c *Client) HandleSessionRequest(ctx context.Context, method string, projec
 		return c.ListArchivedSessions(ctx)
 	case acp.RegistryMethodSessionArchiveRead:
 		var req struct {
-			SessionID string `json:"sessionId"`
+			SessionID     string `json:"sessionId"`
+			RootSessionID string `json:"rootSessionId"`
 		}
 		if err := decodeSessionRequestPayload(payload, &req); err != nil {
 			return nil, fmt.Errorf("invalid session.archive.read payload: %w", err)
 		}
-		return c.ReadArchivedSession(ctx, req.SessionID)
+		rootSessionID := firstNonEmpty(strings.TrimSpace(req.RootSessionID), strings.TrimSpace(req.SessionID))
+		return c.readArchivedGroupSession(ctx, rootSessionID, req.SessionID)
 	case acp.RegistryMethodSessionArchiveRestore:
 		var req struct {
 			SessionID string `json:"sessionId"`
@@ -1350,13 +1359,24 @@ func (c *Client) HandleSessionRequest(ctx context.Context, method string, projec
 		if sessionID == "" || req.PermissionID == "" || req.OptionID == "" {
 			return nil, &acp.RegistryRequestError{Code: acp.CodeInvalidArgument, Message: "sessionId, permissionId and optionId are required"}
 		}
-		c.mu.Lock()
-		sess := c.sessions[sessionID]
-		c.mu.Unlock()
+		var sess *Session
+		if rec, loadErr := c.store.LoadSession(ctx, c.projectName, sessionID); loadErr == nil && rec != nil {
+			projection := sessionSyncProjectionFromJSON(rec.SessionSyncJSON)
+			if projection.SessionKind == sessionKindSubagent {
+				c.mu.Lock()
+				sess = c.sessions[projection.RootSessionID]
+				c.mu.Unlock()
+			}
+		}
+		if sess == nil {
+			c.mu.Lock()
+			sess = c.sessions[sessionID]
+			c.mu.Unlock()
+		}
 		if sess == nil {
 			return nil, &acp.RegistryRequestError{Code: acp.CodeNotFound, Message: "live permission session not found"}
 		}
-		result, err := sess.RespondPermission(ctx, req.PermissionID, req.OptionID)
+		result, err := sess.respondPermission(ctx, sessionID, req.PermissionID, req.OptionID)
 		if err != nil {
 			return nil, err
 		}
@@ -1368,6 +1388,41 @@ func (c *Client) HandleSessionRequest(ctx context.Context, method string, projec
 		}, nil
 	default:
 		return nil, fmt.Errorf("unsupported session method: %s", method)
+	}
+}
+
+func (c *Client) rejectReadOnlySubagentRequest(ctx context.Context, method string, payload json.RawMessage) error {
+	switch method {
+	case acp.RegistryMethodSessionList,
+		acp.RegistryMethodSessionRead,
+		acp.RegistryMethodSessionMarkRead,
+		acp.RegistryMethodSessionPermissionRespond:
+		return nil
+	}
+	if c == nil || c.store == nil || len(bytes.TrimSpace(payload)) == 0 {
+		return nil
+	}
+	var target struct {
+		SessionID string `json:"sessionId"`
+	}
+	if json.Unmarshal(payload, &target) != nil {
+		return nil
+	}
+	sessionID := strings.TrimSpace(target.SessionID)
+	if sessionID == "" {
+		return nil
+	}
+	rec, err := c.store.LoadSession(ctx, c.projectName, sessionID)
+	if err != nil || rec == nil {
+		return err
+	}
+	projection := sessionSyncProjectionFromJSON(rec.SessionSyncJSON)
+	if projection.SessionKind != sessionKindSubagent {
+		return nil
+	}
+	return &acp.RegistryRequestError{
+		Code:    acp.CodeForbidden,
+		Message: fmt.Sprintf("session %s is a read-only subagent session", sessionID),
 	}
 }
 
@@ -2270,6 +2325,7 @@ func (c *Client) newWiredSession(id, agentType string) (*Session, error) {
 }
 
 func (c *Client) wireSession(sess *Session) {
+	sess.client = c
 	sess.projectName = c.projectName
 	sess.registry = c.registry
 	sess.viewSink = c.viewSink
@@ -2360,7 +2416,19 @@ func (c *Client) ListSessions(ctx context.Context) ([]SessionRecord, error) {
 }
 
 func (c *Client) DeleteSession(ctx context.Context, sessionID string) error {
-	return c.deleteActiveSession(ctx, sessionID, true)
+	group, err := c.loadRootSessionGroup(ctx, sessionID)
+	if err != nil {
+		return err
+	}
+	if activeSessionID := c.activeSessionGroupMember(group); activeSessionID != "" {
+		return fmt.Errorf("session %s is running", activeSessionID)
+	}
+	for index := len(group) - 1; index >= 0; index-- {
+		if err := c.deleteActiveSession(ctx, group[index].ID, false); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (c *Client) deleteActiveSession(ctx context.Context, sessionID string, rejectRunning bool) error {
@@ -2436,19 +2504,16 @@ func (c *Client) archiveSession(ctx context.Context, sessionID string) (string, 
 	if sessionID == "" {
 		return "", fmt.Errorf("session id is required")
 	}
-	if c.sessionIsRunning(sessionID) {
-		return "", fmt.Errorf("session %s is running", sessionID)
-	}
-
-	rec, err := c.store.LoadSession(ctx, c.projectName, sessionID)
+	group, err := c.loadRootSessionGroup(ctx, sessionID)
 	if err != nil {
-		return "", fmt.Errorf("load session: %w", err)
+		return "", fmt.Errorf("load session group: %w", err)
 	}
-	if rec == nil {
-		return "", fmt.Errorf("session not found: %s", sessionID)
+	if activeSessionID := c.activeSessionGroupMember(group); activeSessionID != "" {
+		return "", fmt.Errorf("session %s is running", activeSessionID)
 	}
+	rec := &group[0]
 	latestTurnIndex := sessionSyncLatestPersistedTurnIndex(rec.SessionSyncJSON)
-	if latestTurnIndex < 3 {
+	if len(group) == 1 && latestTurnIndex < 3 {
 		return "", c.deleteActiveSession(ctx, sessionID, false)
 	}
 	if c.archiveStore == nil {
@@ -2462,14 +2527,30 @@ func (c *Client) archiveSession(ctx context.Context, sessionID string) (string, 
 		if err := c.archiveStore.DeleteProjectArtifacts(ctx, c.projectName); err != nil {
 			return "", err
 		}
-		return "", c.deleteActiveSession(ctx, sessionID, false)
+		for index := len(group) - 1; index >= 0; index-- {
+			if err := c.deleteActiveSession(ctx, group[index].ID, false); err != nil {
+				return "", err
+			}
+		}
+		return "", nil
 	}
-	contents, gapCount, err := c.sessionRecorder.ReadPersistedTurnContentsForArchive(ctx, sessionID, latestTurnIndex)
-	if err != nil {
-		return "", err
+	memberIDs := make([]string, 0, len(group))
+	for _, member := range group {
+		memberIDs = append(memberIDs, member.ID)
 	}
-	contents = sanitizeArchiveTurnContents(contents)
-	if _, _, err := c.archiveStore.AppendSession(ctx, *rec, contents, gapCount); err != nil {
+	archiveMembers := make([]sessionArchiveAppend, 0, len(group))
+	for _, member := range group {
+		memberLatestTurnIndex := sessionSyncLatestPersistedTurnIndex(member.SessionSyncJSON)
+		contents, gapCount, err := c.sessionRecorder.ReadPersistedTurnContentsForArchive(ctx, member.ID, memberLatestTurnIndex)
+		if err != nil {
+			return "", err
+		}
+		archiveMembers = append(archiveMembers, sessionArchiveAppend{
+			Record: member, Contents: sanitizeArchiveTurnContents(contents), GapCount: gapCount,
+			ArchiveGroupID: sessionID, MemberSessionIDs: memberIDs, SubagentCount: len(group) - 1,
+		})
+	}
+	if _, _, err := c.archiveStore.AppendSessions(ctx, archiveMembers); err != nil {
 		return "", err
 	}
 	if err := c.archiveStore.DeleteProjectArtifacts(ctx, c.projectName); err != nil {
@@ -2481,7 +2562,12 @@ func (c *Client) archiveSession(ctx context.Context, sessionID string) (string, 
 			hubLogger(c.projectName).Warn("update native archive sync failed session=%s err=%v", sessionID, err)
 		}
 	}
-	return nativeUpdate.NativeSyncWarning, c.deleteActiveSession(ctx, sessionID, false)
+	for index := len(group) - 1; index >= 0; index-- {
+		if err := c.deleteActiveSession(ctx, group[index].ID, false); err != nil {
+			return nativeUpdate.NativeSyncWarning, err
+		}
+	}
+	return nativeUpdate.NativeSyncWarning, nil
 }
 
 func (c *Client) ListArchivedSessions(ctx context.Context) (map[string]any, error) {
@@ -2503,8 +2589,13 @@ func (c *Client) ListArchivedSessions(ctx context.Context) (map[string]any, erro
 }
 
 func (c *Client) ReadArchivedSession(ctx context.Context, sessionID string) (map[string]any, error) {
+	return c.readArchivedGroupSession(ctx, sessionID, sessionID)
+}
+
+func (c *Client) readArchivedGroupSession(ctx context.Context, rootSessionID, sessionID string) (map[string]any, error) {
+	rootSessionID = strings.TrimSpace(rootSessionID)
 	sessionID = strings.TrimSpace(sessionID)
-	if sessionID == "" {
+	if rootSessionID == "" || sessionID == "" {
 		return nil, fmt.Errorf("session id is required")
 	}
 	if c.archiveStore == nil {
@@ -2513,19 +2604,33 @@ func (c *Client) ReadArchivedSession(ctx context.Context, sessionID string) (map
 	if err := c.archiveStore.DeleteProjectArtifacts(ctx, c.projectName); err != nil {
 		return nil, err
 	}
-	entry, contents, err := c.archiveStore.ReadSession(ctx, c.projectName, sessionID)
+	entry, contents, err := c.archiveStore.ReadGroupSession(ctx, c.projectName, rootSessionID, sessionID)
 	if err != nil {
 		return nil, err
 	}
 	turns := archiveTurnsFromContents(contents)
-	return map[string]any{
+	response := map[string]any{
 		"sessionId":       sessionID,
 		"session":         archiveSummaryFromEntry(entry),
 		"turns":           turns,
 		"messages":        []any{},
 		"latestTurnIndex": int64(len(turns)),
 		"readOnly":        true,
-	}, nil
+	}
+	if sessionID == rootSessionID {
+		members, err := c.archiveStore.ReadGroup(ctx, c.projectName, rootSessionID)
+		if err != nil {
+			return nil, err
+		}
+		subagents := make([]sessionArchiveSummary, 0, len(members)-1)
+		for _, member := range members {
+			if member.Entry.SessionID != rootSessionID {
+				subagents = append(subagents, archiveSummaryFromEntry(member.Entry))
+			}
+		}
+		response["subagents"] = subagents
+	}
+	return response, nil
 }
 
 func (c *Client) RestoreArchivedSession(ctx context.Context, sessionID string) (map[string]any, error) {
@@ -2545,52 +2650,77 @@ func (c *Client) RestoreArchivedSession(ctx context.Context, sessionID string) (
 	if err := c.archiveStore.DeleteProjectArtifacts(ctx, c.projectName); err != nil {
 		return nil, err
 	}
-
-	entry, contents, err := c.archiveStore.ReadSession(ctx, c.projectName, sessionID)
+	members, err := c.archiveStore.ReadGroup(ctx, c.projectName, sessionID)
 	if err != nil {
 		return nil, err
 	}
-	existing, err := c.store.LoadSession(ctx, c.projectName, sessionID)
-	if err != nil {
-		return nil, fmt.Errorf("load session: %w", err)
-	}
-	if existing != nil {
-		return nil, fmt.Errorf("session already exists: %s", sessionID)
-	}
-	if err := c.sessionRecorder.DeleteSessionData(ctx, sessionID); err != nil {
-		return nil, fmt.Errorf("reset restored session data: %w", err)
-	}
-	contents = discardSessionTurnArtifactsForArchiveContents(contents)
-	if _, err := WriteSessionTurnFiles(ctx, c.sessionRecorder.turnStore.root, c.projectName, sessionID, 1, contents); err != nil {
-		return nil, fmt.Errorf("restore session turns: %w", err)
+	for _, member := range members {
+		existing, err := c.store.LoadSession(ctx, c.projectName, member.Entry.SessionID)
+		if err != nil {
+			return nil, fmt.Errorf("load session: %w", err)
+		}
+		if existing != nil {
+			return nil, fmt.Errorf("session already exists: %s", member.Entry.SessionID)
+		}
 	}
 
-	createdAt := parseArchiveEntryTime(entry.CreatedAt, entry.ArchivedAt)
-	updatedAt := parseArchiveEntryTime(entry.UpdatedAt, entry.ArchivedAt)
-	rec := &SessionRecord{
-		ID:          sessionID,
-		ProjectName: c.projectName,
-		Status:      SessionPersisted,
-		AgentType:   normalizeAgentType(entry.AgentType),
-		Title:       strings.TrimSpace(entry.Title),
-		SessionSyncJSON: sessionSyncProjectionJSON(sessionSyncProjection{
-			LatestPersistedTurnIndex: int64(len(contents)),
-			ForkedFrom:               cloneSessionForkOrigin(entry.ForkedFrom),
-			SessionFeatures:          cloneSessionFeatures(entry.SessionFeatures),
-		}),
-		CreatedAt:    createdAt,
-		LastActiveAt: updatedAt,
+	records := make([]*SessionRecord, 0, len(members))
+	restoredSessionIDs := make([]string, 0, len(members))
+	for _, member := range members {
+		entry := member.Entry
+		contents := discardSessionTurnArtifactsForArchiveContents(member.Contents)
+		if err := c.sessionRecorder.DeleteSessionData(ctx, entry.SessionID); err != nil {
+			c.cleanupRestoredSessionData(restoredSessionIDs)
+			return nil, fmt.Errorf("reset restored session data: %w", err)
+		}
+		if _, err := WriteSessionTurnFiles(ctx, c.sessionRecorder.turnStore.root, c.projectName, entry.SessionID, 1, contents); err != nil {
+			c.cleanupRestoredSessionData(append(restoredSessionIDs, entry.SessionID))
+			return nil, fmt.Errorf("restore session turns: %w", err)
+		}
+		restoredSessionIDs = append(restoredSessionIDs, entry.SessionID)
+		projection := sessionSyncProjectionFromJSON(entry.SessionSyncJSON)
+		projection.LatestPersistedTurnIndex = int64(len(contents))
+		if projection.ForkedFrom == nil {
+			projection.ForkedFrom = cloneSessionForkOrigin(entry.ForkedFrom)
+		}
+		if projection.SessionFeatures == nil {
+			projection.SessionFeatures = cloneSessionFeatures(entry.SessionFeatures)
+		}
+		if entry.SessionKind == sessionKindSubagent {
+			projection.SessionKind = sessionKindSubagent
+			projection.ParentSessionID = entry.ParentSessionID
+			projection.RootSessionID = entry.RootSessionID
+			projection.ReadOnly = true
+			projection.SubagentName = entry.SubagentName
+			projection.SubagentRole = entry.SubagentRole
+			projection.SubagentStatus = entry.SubagentStatus
+			projection.SubagentPrompt = entry.SubagentPrompt
+			projection.SpawnedAt = entry.SpawnedAt
+			projection.SpawnSequence = entry.SpawnSequence
+			projection.ProviderThreadID = entry.ProviderThreadID
+			projection.ParentProviderThreadID = entry.ParentProviderThreadID
+			projection.SpawnItemID = entry.SpawnItemID
+			projection.ProviderReplay = entry.ProviderReplay
+		}
+		records = append(records, &SessionRecord{
+			ID: entry.SessionID, ProjectName: c.projectName, Status: SessionPersisted,
+			AgentType: normalizeAgentType(entry.AgentType), AgentJSON: firstNonEmpty(strings.TrimSpace(entry.AgentJSON), "{}"),
+			Title: strings.TrimSpace(entry.Title), SessionSyncJSON: sessionSyncProjectionJSON(projection),
+			CreatedAt:    parseArchiveEntryTime(entry.CreatedAt, entry.ArchivedAt),
+			LastActiveAt: parseArchiveEntryTime(entry.UpdatedAt, entry.ArchivedAt),
+		})
 	}
-	if err := c.store.SaveSession(ctx, rec); err != nil {
-		_ = c.sessionRecorder.DeleteSessionData(context.Background(), sessionID)
-		return nil, fmt.Errorf("save restored session: %w", err)
+	if err := c.saveRestoredSessionGroup(ctx, records); err != nil {
+		c.cleanupRestoredSessionData(restoredSessionIDs)
+		return nil, fmt.Errorf("save restored session group: %w", err)
 	}
 
-	nativeUpdate := c.syncNativeArchiveState(ctx, entry.AgentType, sessionID, false)
+	rootEntry := members[0].Entry
+	nativeUpdate := c.syncNativeArchiveState(ctx, rootEntry.AgentType, sessionID, false)
 	restoredAt := time.Now().UTC().Format(time.RFC3339)
-	if _, err := c.archiveStore.MarkRestored(ctx, c.projectName, sessionID, restoredAt, nativeUpdate); err != nil {
-		_ = c.store.DeleteSession(context.Background(), c.projectName, sessionID)
-		_ = c.sessionRecorder.DeleteSessionData(context.Background(), sessionID)
+	if err := c.archiveStore.MarkGroupRestored(ctx, c.projectName, sessionID, restoredAt, nativeUpdate); err != nil {
+		_ = c.deleteRestoredSessionGroup(context.Background(), restoredSessionIDs)
+		c.cleanupRestoredSessionData(restoredSessionIDs)
 		return nil, fmt.Errorf("mark archive restored: %w", err)
 	}
 	summary, err := c.sessionRecorder.ReadSessionSummary(ctx, sessionID)
@@ -2602,6 +2732,42 @@ func (c *Client) RestoreArchivedSession(ctx context.Context, sessionID string) (
 		resp["warning"] = nativeUpdate.NativeSyncWarning
 	}
 	return resp, nil
+}
+
+func (c *Client) saveRestoredSessionGroup(ctx context.Context, records []*SessionRecord) error {
+	if store, ok := c.store.(sessionGroupStore); ok {
+		return store.SaveSessionGroup(ctx, records)
+	}
+	saved := make([]string, 0, len(records))
+	for _, record := range records {
+		if err := c.store.SaveSession(ctx, record); err != nil {
+			_ = c.deleteRestoredSessionGroup(context.Background(), saved)
+			return err
+		}
+		saved = append(saved, record.ID)
+	}
+	return nil
+}
+
+func (c *Client) deleteRestoredSessionGroup(ctx context.Context, sessionIDs []string) error {
+	if len(sessionIDs) == 0 {
+		return nil
+	}
+	if store, ok := c.store.(sessionGroupStore); ok {
+		return store.DeleteSessionGroup(ctx, c.projectName, sessionIDs)
+	}
+	for _, memberID := range sessionIDs {
+		if err := c.store.DeleteSession(ctx, c.projectName, memberID); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (c *Client) cleanupRestoredSessionData(sessionIDs []string) {
+	for _, memberID := range sessionIDs {
+		_ = c.sessionRecorder.DeleteSessionData(context.Background(), memberID)
+	}
 }
 
 func archiveSummaryFromEntry(entry sessionArchiveManifestEntry) sessionArchiveSummary {
@@ -2621,6 +2787,17 @@ func archiveSummaryFromEntry(entry sessionArchiveManifestEntry) sessionArchiveSu
 		NativeSyncWarning:  strings.TrimSpace(entry.NativeSyncWarning),
 		ForkedFrom:         cloneSessionForkOrigin(entry.ForkedFrom),
 		SessionFeatures:    cloneSessionFeatures(entry.SessionFeatures),
+		ArchiveGroupID:     strings.TrimSpace(entry.ArchiveGroupID),
+		SubagentCount:      entry.SubagentCount,
+		SessionKind:        strings.TrimSpace(entry.SessionKind),
+		ParentSessionID:    strings.TrimSpace(entry.ParentSessionID),
+		RootSessionID:      strings.TrimSpace(entry.RootSessionID),
+		ReadOnly:           entry.ReadOnly,
+		SubagentName:       strings.TrimSpace(entry.SubagentName),
+		SubagentRole:       strings.TrimSpace(entry.SubagentRole),
+		SubagentStatus:     entry.SubagentStatus,
+		SpawnedAt:          strings.TrimSpace(entry.SpawnedAt),
+		SpawnSequence:      entry.SpawnSequence,
 	}
 }
 

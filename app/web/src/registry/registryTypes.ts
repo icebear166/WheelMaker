@@ -831,6 +831,23 @@ export type RegistrySessionMarkColor = 'red' | 'yellow' | 'green' | 'blue';
 
 export type RegistrySessionOperationStatus = 'queued' | 'started' | 'completed' | 'failed';
 
+export type RegistrySubagentStatus =
+  | 'initializing'
+  | 'running'
+  | 'waiting_approval'
+  | 'completed'
+  | 'failed'
+  | 'interrupted';
+
+export interface RegistrySubagentSummary {
+  name: string;
+  role?: string;
+  prompt?: string;
+  spawnedAt?: string;
+  spawnSequence: number;
+  status: RegistrySubagentStatus;
+}
+
 export interface RegistrySessionOperationPayload {
   operationId: string;
   type: 'compact' | 'fork';
@@ -866,6 +883,11 @@ export interface RegistrySessionSummary {
   goal?: RegistrySessionGoal;
   forkedFrom?: RegistrySessionForkOrigin;
   queue?: RegistrySessionQueueSnapshot;
+  sessionKind?: 'subagent';
+  parentSessionId?: string;
+  rootSessionId?: string;
+  readOnly?: boolean;
+  subagent?: RegistrySubagentSummary;
 }
 
 export interface RegistryPermissionRespondResponse {
@@ -885,6 +907,8 @@ export interface RegistryArchivedSessionSummary extends RegistrySessionSummary {
   nativeArchivedAt?: string;
   nativeUnarchivedAt?: string;
   nativeSyncWarning?: string;
+  archiveGroupId?: string;
+  subagentCount?: number;
 }
 
 export interface RegistrySessionArchiveReadResponse {
@@ -894,6 +918,7 @@ export interface RegistrySessionArchiveReadResponse {
   messages: RegistrySessionMessage[];
   latestTurnIndex: number;
   readOnly: true;
+  subagents?: RegistryArchivedSessionSummary[];
 }
 
 export interface RegistrySessionArchiveRestoreResponse {

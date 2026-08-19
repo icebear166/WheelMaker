@@ -190,3 +190,137 @@ test('submits current scope install all without a source', async () => {
     timeoutMs: 60000,
   });
 });
+
+test('keeps subagent relationship and lifecycle fields in session summaries', async () => {
+  const request = jest.fn().mockResolvedValue({
+    payload: {
+      sessions: [
+        {
+          sessionId: 'child-1',
+          title: 'Zeno',
+          preview: 'Inspect renderer',
+          updatedAt: '2026-08-19T10:00:00Z',
+          messageCount: 3,
+          sessionKind: 'subagent',
+          parentSessionId: 'root-1',
+          rootSessionId: 'root-1',
+          readOnly: true,
+          subagent: {
+            name: 'Zeno',
+            role: 'worker',
+            prompt: 'Inspect renderer',
+            spawnedAt: '2026-08-19T09:59:00Z',
+            spawnSequence: 2,
+            status: 'waiting_approval',
+          },
+        },
+      ],
+    },
+  });
+  const repository = new RegistryRepository({
+    request,
+  } as unknown as RegistryClient);
+
+  const sessions = await repository.listSessions('hub:project');
+
+  expect(sessions).toHaveLength(1);
+  expect(sessions[0]).toMatchObject({
+    sessionKind: 'subagent',
+    parentSessionId: 'root-1',
+    rootSessionId: 'root-1',
+    readOnly: true,
+    subagent: {
+      name: 'Zeno',
+      role: 'worker',
+      prompt: 'Inspect renderer',
+      spawnedAt: '2026-08-19T09:59:00Z',
+      spawnSequence: 2,
+      status: 'waiting_approval',
+    },
+  });
+});
+
+test('keeps archived subagent summaries on a root preview', async () => {
+  const request = jest.fn().mockResolvedValue({
+    payload: {
+      sessionId: 'root-1',
+      session: {
+        sessionId: 'root-1',
+        title: 'Root',
+        preview: '',
+        updatedAt: '',
+        messageCount: 1,
+        archivedAt: '2026-08-19T10:00:00Z',
+        turnCount: 1,
+        gapCount: 0,
+        subagentCount: 1,
+      },
+      latestTurnIndex: 1,
+      turns: [],
+      readOnly: true,
+      subagents: [
+        {
+          sessionId: 'child-1',
+          title: 'Zeno',
+          preview: '',
+          updatedAt: '',
+          messageCount: 2,
+          archivedAt: '2026-08-19T10:00:00Z',
+          turnCount: 2,
+          gapCount: 0,
+          sessionKind: 'subagent',
+          parentSessionId: 'root-1',
+          rootSessionId: 'root-1',
+          readOnly: true,
+          subagent: {name: 'Zeno', spawnSequence: 1, status: 'completed'},
+        },
+      ],
+    },
+  });
+  const repository = new RegistryRepository({
+    request,
+  } as unknown as RegistryClient);
+
+  const preview = await repository.readArchivedSession('hub:project', 'root-1');
+
+  expect(preview.session.subagentCount).toBe(1);
+  expect(preview.subagents).toEqual([
+    expect.objectContaining({
+      sessionId: 'child-1',
+      sessionKind: 'subagent',
+      rootSessionId: 'root-1',
+      subagent: expect.objectContaining({name: 'Zeno', status: 'completed'}),
+    }),
+  ]);
+});
+
+test('reads an archived child through its root archive group', async () => {
+  const request = jest.fn().mockResolvedValue({
+    payload: {
+      sessionId: 'child-1',
+      session: {
+        sessionId: 'child-1',
+        title: 'Zeno',
+        preview: '',
+        updatedAt: '',
+        messageCount: 1,
+        archivedAt: '2026-08-19T10:00:00Z',
+        turnCount: 1,
+        gapCount: 0,
+        sessionKind: 'subagent',
+        rootSessionId: 'root-1',
+      },
+      latestTurnIndex: 1,
+      turns: [],
+      readOnly: true,
+    },
+  });
+  const repository = new RegistryRepository({request} as unknown as RegistryClient);
+
+  await repository.readArchivedSession('hub:project', 'child-1', 'root-1');
+
+  expect(request).toHaveBeenCalledWith(expect.objectContaining({
+    projectId: 'hub:project',
+    payload: {sessionId: 'child-1', rootSessionId: 'root-1'},
+  }));
+});

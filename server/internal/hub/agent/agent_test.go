@@ -2110,6 +2110,297 @@ func TestCodexAppRuntimeRoutesNotificationsByThread(t *testing.T) {
 	}
 }
 
+func TestCodexAppCollabSpawnRegistersAndIsolatesSubagentThread(t *testing.T) {
+	tr := newFakeCodexappTransport()
+	rt := newCodexappRuntimeWithTransport(tr)
+	t.Cleanup(func() { _ = rt.close() })
+
+	root := newCodexappConnWithRuntimeAndProject(rt, t.TempDir(), "proj1")
+	root.bindSessionIDs("root-session", "root-thread")
+	root.mu.Lock()
+	root.promptDone = make(chan codexappPromptResult, 1)
+	root.mu.Unlock()
+	root.setActiveTurnID("root-turn")
+	type inbound struct {
+		method string
+		params json.RawMessage
+	}
+	inboundCh := make(chan inbound, 16)
+	root.OnACPResponse(func(_ context.Context, method string, params json.RawMessage) {
+		inboundCh <- inbound{method: method, params: append(json.RawMessage(nil), params...)}
+	})
+
+	if err := tr.emit(map[string]any{
+		"method": "item/completed",
+		"params": map[string]any{
+			"threadId": "root-thread",
+			"turnId":   "root-turn",
+			"item": map[string]any{
+				"type":              "collabAgentToolCall",
+				"id":                "spawn-item",
+				"tool":              "spawnAgent",
+				"status":            "completed",
+				"senderThreadId":    "root-thread",
+				"receiverThreadIds": []string{"child-thread"},
+				"prompt":            "Inspect the renderer",
+				"agentsStates": map[string]any{
+					"child-thread": map[string]any{"status": "running"},
+				},
+			},
+		},
+	}); err != nil {
+		t.Fatalf("emit collab spawn: %v", err)
+	}
+
+	var discovered SubagentEvent
+	deadline := time.After(time.Second)
+	for discovered.Event != SubagentEventDiscovered {
+		select {
+		case got := <-inboundCh:
+			if got.method == methodWMSubagentEvent {
+				if err := json.Unmarshal(got.params, &discovered); err != nil {
+					t.Fatalf("decode subagent event: %v", err)
+				}
+			}
+		case <-deadline:
+			t.Fatal("timed out waiting for subagent discovery")
+		}
+	}
+	if discovered.RootSessionID != "root-session" || discovered.ParentSessionID != "root-session" || discovered.ProviderThreadID != "child-thread" || discovered.ChildSessionID == "" || discovered.ChildSessionID == "child-thread" || discovered.Prompt != "Inspect the renderer" {
+		t.Fatalf("discovered = %#v", discovered)
+	}
+	child := rt.connForThread("child-thread")
+	if child == nil {
+		t.Fatal("child thread was not registered")
+	}
+	if got := child.outboundSessionID("child-thread"); got != discovered.ChildSessionID {
+		t.Fatalf("child outbound session id = %q, want %q", got, discovered.ChildSessionID)
+	}
+	child.mu.Lock()
+	child.promptDone = make(chan codexappPromptResult, 1)
+	child.mu.Unlock()
+
+	if err := tr.emit(map[string]any{
+		"method": "turn/started",
+		"params": map[string]any{"threadId": "child-thread", "turn": map[string]any{"id": "child-turn", "status": "inProgress"}},
+	}); err != nil {
+		t.Fatalf("emit child turn start: %v", err)
+	}
+	if err := tr.emit(map[string]any{
+		"method": "item/agentMessage/delta",
+		"params": map[string]any{"threadId": "child-thread", "turnId": "child-turn", "itemId": "child-message", "delta": "child output"},
+	}); err != nil {
+		t.Fatalf("emit child delta: %v", err)
+	}
+
+	var childUpdate protocol.SessionUpdateParams
+	deadline = time.After(time.Second)
+	for childUpdate.SessionID == "" {
+		select {
+		case got := <-inboundCh:
+			if got.method == protocol.MethodSessionUpdate {
+				wire, err := protocol.DecodeSessionUpdateParams(got.params)
+				if err != nil {
+					t.Fatalf("decode child update: %v", err)
+				}
+				event, err := protocol.ProjectSessionUpdate(wire, time.Now().UTC())
+				if err != nil {
+					t.Fatalf("project child update: %v", err)
+				}
+				decoded, err := event.LegacySessionUpdate()
+				if err != nil {
+					t.Fatalf("normalize child update: %v", err)
+				}
+				if decoded.Update.SessionUpdate == protocol.SessionUpdateAgentMessageChunk {
+					childUpdate = decoded
+				}
+			}
+		case <-deadline:
+			t.Fatal("timed out waiting for child update")
+		}
+	}
+	if childUpdate.SessionID != discovered.ChildSessionID {
+		t.Fatalf("child update session id = %q, want %q", childUpdate.SessionID, discovered.ChildSessionID)
+	}
+	root.mu.Lock()
+	rootActiveTurn := root.activeTurnID
+	root.mu.Unlock()
+	if rootActiveTurn != "root-turn" {
+		t.Fatalf("root active turn = %q, want root-turn", rootActiveTurn)
+	}
+	child.mu.Lock()
+	childActiveTurn := child.activeTurnID
+	child.mu.Unlock()
+	if childActiveTurn != "child-turn" {
+		t.Fatalf("child active turn = %q, want child-turn", childActiveTurn)
+	}
+}
+
+func TestCodexAppRestoreSubagentsRegistersBeforeReplayAndSkipsWatermark(t *testing.T) {
+	tr := newFakeCodexappTransport()
+	rt := newCodexappRuntimeWithTransport(tr)
+	t.Cleanup(func() { _ = rt.close() })
+	root := newCodexappConnWithRuntimeAndProject(rt, t.TempDir(), "proj1")
+	root.bindSessionIDs("root-session", "root-thread")
+
+	type inbound struct {
+		method string
+		params json.RawMessage
+	}
+	inboundCh := make(chan inbound, 32)
+	root.OnACPResponse(func(_ context.Context, method string, params json.RawMessage) {
+		inboundCh <- inbound{method: method, params: append(json.RawMessage(nil), params...)}
+	})
+	var listParams map[string]any
+	resumeCalled := false
+	tr.onSend = func(msg map[string]any) {
+		method, _ := msg["method"].(string)
+		switch method {
+		case "thread/list":
+			listParams, _ = msg["params"].(map[string]any)
+			_ = tr.emit(map[string]any{
+				"id": msg["id"],
+				"result": map[string]any{"data": []map[string]any{{
+					"id": "provider-child", "parentThreadId": "root-thread", "agentNickname": "Zeno",
+					"status": map[string]any{"type": "idle"},
+				}}},
+			})
+		case "thread/read":
+			if rt.connForThread("provider-child") == nil {
+				t.Errorf("child observer was not registered before thread/read")
+			}
+			_ = tr.emit(map[string]any{
+				"id": msg["id"],
+				"result": map[string]any{"thread": map[string]any{
+					"id": "provider-child", "parentThreadId": "root-thread", "agentNickname": "Zeno",
+					"status": map[string]any{"type": "idle"},
+					"turns": []map[string]any{
+						{"id": "turn-old", "status": "completed", "itemsView": "full", "items": []map[string]any{{"type": "agentMessage", "id": "old-message", "text": "old output"}}},
+						{"id": "turn-new", "status": "completed", "itemsView": "full", "items": []map[string]any{{"type": "agentMessage", "id": "new-message", "text": "new output"}}},
+					},
+				}},
+			})
+		case "thread/resume":
+			resumeCalled = true
+			_ = tr.emit(map[string]any{
+				"id": msg["id"],
+				"result": map[string]any{"thread": map[string]any{
+					"id": "provider-child", "parentThreadId": "root-thread", "agentNickname": "Zeno",
+					"status": map[string]any{"type": "active"}, "turns": []any{},
+				}},
+			})
+		}
+	}
+
+	if err := root.RestoreSubagents(context.Background(), "root-session", []SubagentBinding{{
+		ChildSessionID:         "persisted-child-session",
+		ParentSessionID:        "root-session",
+		RootSessionID:          "root-session",
+		ProviderThreadID:       "provider-child",
+		ParentProviderThreadID: "root-thread",
+		Name:                   "Zeno",
+		Status:                 "running",
+		LastCompletedTurnID:    "turn-old",
+	}}); err != nil {
+		t.Fatalf("RestoreSubagents: %v", err)
+	}
+	if got := rt.connForThread("provider-child"); got == nil || got.outboundSessionID("provider-child") != "persisted-child-session" {
+		t.Fatalf("restored child route = %#v", got)
+	}
+	if listParams == nil || listParams["ancestorThreadId"] != "root-thread" {
+		t.Fatalf("thread/list params = %#v", listParams)
+	}
+	sourceKinds, _ := listParams["sourceKinds"].([]any)
+	if len(sourceKinds) != 5 {
+		t.Fatalf("thread/list sourceKinds = %#v, want all subagent source kinds", listParams["sourceKinds"])
+	}
+	if !resumeCalled {
+		t.Fatal("active persisted subagent was not resumed after replay calibration")
+	}
+
+	seenOld := false
+	seenNew := false
+	for len(inboundCh) > 0 {
+		got := <-inboundCh
+		if strings.Contains(string(got.params), "old output") {
+			seenOld = true
+		}
+		if strings.Contains(string(got.params), "new output") {
+			seenNew = true
+		}
+	}
+	if seenOld || !seenNew {
+		t.Fatalf("replay seenOld=%t seenNew=%t", seenOld, seenNew)
+	}
+}
+
+func TestCodexAppBuffersChildNotificationUntilCollabDiscovery(t *testing.T) {
+	tr := newFakeCodexappTransport()
+	rt := newCodexappRuntimeWithTransport(tr)
+	t.Cleanup(func() { _ = rt.close() })
+	root := newCodexappConnWithRuntime(rt, t.TempDir())
+	root.bindSessionIDs("root-session", "root-thread")
+	updates := make(chan protocol.SessionUpdateParams, 4)
+	root.OnACPResponse(func(_ context.Context, method string, params json.RawMessage) {
+		if method != protocol.MethodSessionUpdate {
+			return
+		}
+		wire, err := protocol.DecodeSessionUpdateParams(params)
+		if err != nil {
+			t.Errorf("decode update: %v", err)
+			return
+		}
+		event, err := protocol.ProjectSessionUpdate(wire, time.Now().UTC())
+		if err != nil {
+			t.Errorf("project update: %v", err)
+			return
+		}
+		update, err := event.LegacySessionUpdate()
+		if err != nil {
+			t.Errorf("normalize update: %v", err)
+			return
+		}
+		updates <- update
+	})
+
+	if err := tr.emit(map[string]any{
+		"method": "item/agentMessage/delta",
+		"params": map[string]any{"threadId": "child-thread", "turnId": "child-turn", "itemId": "message-1", "delta": "early child output"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := tr.emit(map[string]any{
+		"method": "item/completed",
+		"params": map[string]any{
+			"threadId": "root-thread", "turnId": "root-turn",
+			"item": map[string]any{
+				"type": "collabAgentToolCall", "id": "spawn-1", "tool": "spawnAgent", "status": "completed",
+				"senderThreadId": "root-thread", "receiverThreadIds": []string{"child-thread"}, "prompt": "early",
+			},
+		},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	deadline := time.After(time.Second)
+	for {
+		select {
+		case update := <-updates:
+			if update.SessionID == "root-session" {
+				continue
+			}
+			var content protocol.ContentBlock
+			_ = json.Unmarshal(update.Update.Content, &content)
+			if content.Text != "early child output" {
+				t.Fatalf("buffered update = %#v", update)
+			}
+			return
+		case <-deadline:
+			t.Fatal("early child notification was dropped")
+		}
+	}
+}
+
 func TestCodexAppRuntimePoolSharesMatchingProjectRuntime(t *testing.T) {
 	var starts int
 	var startedCWD string

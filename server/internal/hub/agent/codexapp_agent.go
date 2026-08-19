@@ -15,6 +15,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/swm8023/wheelmaker/internal/hubconfig"
 	"github.com/swm8023/wheelmaker/internal/protocol"
 )
@@ -305,6 +306,7 @@ type codexappRuntime struct {
 	conns                map[string]*codexappConn
 	queues               map[string]*codexappThreadQueue
 	notificationHandlers map[string]func(string, json.RawMessage)
+	orphanNotifications  map[string][]codexappRPCEnvelope
 	closed               bool
 	closeErr             error
 	done                 chan struct{}
@@ -327,6 +329,7 @@ func newCodexappRuntimeWithTransport(transport codexappTransport) *codexappRunti
 		conns:                map[string]*codexappConn{},
 		queues:               map[string]*codexappThreadQueue{},
 		notificationHandlers: map[string]func(string, json.RawMessage){},
+		orphanNotifications:  map[string][]codexappRPCEnvelope{},
 		done:                 make(chan struct{}),
 	}
 	if transport != nil {
@@ -439,7 +442,12 @@ func (r *codexappRuntime) register(threadID string, conn *codexappConn) {
 	}
 	r.mu.Lock()
 	r.conns[threadID] = conn
+	pending := append([]codexappRPCEnvelope(nil), r.orphanNotifications[threadID]...)
+	delete(r.orphanNotifications, threadID)
 	r.mu.Unlock()
+	for _, message := range pending {
+		conn.handleAppServerNotification(message.Method, message.Params)
+	}
 }
 
 func (r *codexappRuntime) unregister(threadID string, conn *codexappConn) {
@@ -637,7 +645,25 @@ func (r *codexappRuntime) handleNotification(msg codexappRPCEnvelope) {
 		return
 	}
 	conn := r.connForThread(threadID)
+	if conn == nil && msg.Method == "thread/started" {
+		var p appServerThreadStartedParams
+		if json.Unmarshal(msg.Params, &p) == nil && strings.TrimSpace(p.Thread.ParentThreadID) != "" {
+			if parent := r.connForThread(p.Thread.ParentThreadID); parent != nil {
+				parent.observeSubagentThread(p.Thread)
+				conn = r.connForThread(threadID)
+			}
+		}
+	}
 	if conn == nil {
+		r.mu.Lock()
+		pending := r.orphanNotifications[threadID]
+		if len(pending) >= 64 {
+			copy(pending, pending[len(pending)-63:])
+			pending = pending[:63]
+		}
+		msg.Params = append(json.RawMessage(nil), msg.Params...)
+		r.orphanNotifications[threadID] = append(pending, msg)
+		r.mu.Unlock()
 		return
 	}
 	conn.handleAppServerNotification(msg.Method, msg.Params)
@@ -714,6 +740,21 @@ type codexappConn struct {
 	pendingPromptUpdates map[string][]protocol.SessionUpdateParams
 	pendingTurnDiffs     map[string]string
 	pendingSteers        map[string]*codexappSteerTracker
+	observerRoot         *codexappConn
+	subagentObservers    map[string]*codexappSubagentObserver
+}
+
+type codexappSubagentObserver struct {
+	conn                   *codexappConn
+	childSessionID         string
+	parentSessionID        string
+	rootSessionID          string
+	providerThreadID       string
+	parentProviderThreadID string
+	spawnItemID            string
+	prompt                 string
+	name                   string
+	role                   string
 }
 
 type codexappSteerTracker struct {
@@ -1052,11 +1093,25 @@ func (c *codexappConn) Close() error {
 		c.cancelAutoTitleGeneration()
 		c.mu.Lock()
 		threadID := c.threadID
+		observers := make([]*codexappConn, 0, len(c.subagentObservers))
+		for _, observer := range c.subagentObservers {
+			if observer != nil && observer.conn != nil {
+				observers = append(observers, observer.conn)
+			}
+		}
+		c.subagentObservers = nil
 		c.mu.Unlock()
 		if c.runtime == nil {
 			return
 		}
 		c.runtime.unregister(threadID, c)
+		for _, observer := range observers {
+			observer.mu.Lock()
+			observerThreadID := observer.threadID
+			observer.mu.Unlock()
+			c.runtime.unregister(observerThreadID, observer)
+			observer.failActivePrompt(errors.New("codexapp parent connection closed"))
+		}
 		c.failActivePrompt(errors.New("codexapp connection closed"))
 		c.failActiveCompact(errors.New("codexapp connection closed"))
 		if c.lease != nil {
@@ -1126,6 +1181,418 @@ func (c *codexappConn) outboundSessionID(runtimeThreadID string) string {
 		return c.acpSessionID
 	}
 	return runtimeThreadID
+}
+
+func (c *codexappConn) subagentObserverOwner() *codexappConn {
+	if c == nil {
+		return nil
+	}
+	c.mu.Lock()
+	root := c.observerRoot
+	c.mu.Unlock()
+	if root != nil {
+		return root
+	}
+	return c
+}
+
+func codexappSubagentSessionID(rootSessionID, providerThreadID string) string {
+	key := "wheelmaker:subagent:" + strings.TrimSpace(rootSessionID) + ":" + strings.TrimSpace(providerThreadID)
+	return uuid.NewSHA1(uuid.NameSpaceURL, []byte(key)).String()
+}
+
+func codexappSubagentFallbackName(providerThreadID string) string {
+	providerThreadID = strings.TrimSpace(providerThreadID)
+	if len(providerThreadID) > 8 {
+		providerThreadID = providerThreadID[:8]
+	}
+	if providerThreadID == "" {
+		return "Subagent"
+	}
+	return "Subagent " + providerThreadID
+}
+
+func (c *codexappConn) ensureSubagentObserver(
+	providerThreadID string,
+	spawnItemID string,
+	prompt string,
+	name string,
+	role string,
+) (*codexappSubagentObserver, bool) {
+	providerThreadID = strings.TrimSpace(providerThreadID)
+	if c == nil || providerThreadID == "" {
+		return nil, false
+	}
+	root := c.subagentObserverOwner()
+	if root == nil || root.runtime == nil {
+		return nil, false
+	}
+	c.mu.Lock()
+	parentSessionID := c.acpSessionID
+	parentProviderThreadID := c.threadID
+	c.mu.Unlock()
+	root.mu.Lock()
+	rootSessionID := root.acpSessionID
+	if rootSessionID == "" {
+		rootSessionID = root.threadID
+	}
+	if root.subagentObservers == nil {
+		root.subagentObservers = map[string]*codexappSubagentObserver{}
+	}
+	observer := root.subagentObservers[providerThreadID]
+	created := observer == nil
+	if observer == nil {
+		childSessionID := codexappSubagentSessionID(rootSessionID, providerThreadID)
+		child := newCodexappConnWithRuntimeAndProfile(root.runtime, root.cwd, root.projectName, root.profile)
+		child.observerRoot = root
+		child.reqHandler = root.reqHandler
+		child.respHandler = root.respHandler
+		observer = &codexappSubagentObserver{
+			conn:                   child,
+			childSessionID:         childSessionID,
+			parentSessionID:        firstNonEmptyString(parentSessionID, rootSessionID),
+			rootSessionID:          rootSessionID,
+			providerThreadID:       providerThreadID,
+			parentProviderThreadID: parentProviderThreadID,
+		}
+		root.subagentObservers[providerThreadID] = observer
+	}
+	if value := strings.TrimSpace(spawnItemID); value != "" {
+		observer.spawnItemID = value
+	}
+	if value := strings.TrimSpace(prompt); value != "" {
+		observer.prompt = value
+	}
+	if value := strings.TrimSpace(name); value != "" {
+		observer.name = value
+	}
+	if value := strings.TrimSpace(role); value != "" {
+		observer.role = value
+	}
+	if observer.name == "" {
+		observer.name = firstNonEmptyString(observer.role, codexappSubagentFallbackName(providerThreadID))
+	}
+	child := observer.conn
+	childSessionID := observer.childSessionID
+	root.mu.Unlock()
+	if created && child != nil {
+		child.bindSessionIDs(childSessionID, providerThreadID)
+	}
+	return observer, created
+}
+
+func (c *codexappConn) emitSubagentEvent(event SubagentEvent) {
+	root := c.subagentObserverOwner()
+	if root == nil {
+		return
+	}
+	root.mu.Lock()
+	handler := root.respHandler
+	root.mu.Unlock()
+	if handler == nil {
+		return
+	}
+	if event.OccurredAt == "" {
+		event.OccurredAt = time.Now().UTC().Format(time.RFC3339Nano)
+	}
+	handler(context.Background(), methodWMSubagentEvent, mustRaw(event))
+}
+
+func (c *codexappConn) emitSubagentDiscovery(observer *codexappSubagentObserver, status string) {
+	if observer == nil {
+		return
+	}
+	c.emitSubagentEvent(SubagentEvent{
+		Event:                  SubagentEventDiscovered,
+		ChildSessionID:         observer.childSessionID,
+		ParentSessionID:        observer.parentSessionID,
+		RootSessionID:          observer.rootSessionID,
+		ProviderThreadID:       observer.providerThreadID,
+		ParentProviderThreadID: observer.parentProviderThreadID,
+		SpawnItemID:            observer.spawnItemID,
+		Prompt:                 observer.prompt,
+		Name:                   observer.name,
+		Role:                   observer.role,
+		Status:                 firstNonEmptyString(status, "initializing"),
+	})
+}
+
+func (c *codexappConn) emitObserverLifecycle(eventType SubagentEventType, status string, providerTurnID string, stopReason string, message string) {
+	if c == nil {
+		return
+	}
+	root := c.subagentObserverOwner()
+	if root == nil || root == c {
+		return
+	}
+	c.mu.Lock()
+	providerThreadID := c.threadID
+	c.mu.Unlock()
+	root.mu.Lock()
+	observer := root.subagentObservers[providerThreadID]
+	if observer == nil {
+		root.mu.Unlock()
+		return
+	}
+	event := SubagentEvent{
+		Event:                  eventType,
+		ChildSessionID:         observer.childSessionID,
+		ParentSessionID:        observer.parentSessionID,
+		RootSessionID:          observer.rootSessionID,
+		ProviderThreadID:       observer.providerThreadID,
+		ParentProviderThreadID: observer.parentProviderThreadID,
+		SpawnItemID:            observer.spawnItemID,
+		Prompt:                 observer.prompt,
+		Name:                   observer.name,
+		Role:                   observer.role,
+		Status:                 status,
+		ProviderTurnID:         providerTurnID,
+		StopReason:             stopReason,
+		Message:                message,
+	}
+	root.mu.Unlock()
+	c.emitSubagentEvent(event)
+}
+
+func (c *codexappConn) handleCollabAgentToolCall(p appServerItemEventParams, completed bool) {
+	item := p.Item
+	prompt := ""
+	if item.Prompt != nil {
+		prompt = *item.Prompt
+	}
+	for _, providerThreadID := range item.ReceiverThreadIDs {
+		state := item.AgentsStates[providerThreadID]
+		status := codexappSubagentStatus(state.Status)
+		if status == "" && item.Tool == "spawnAgent" {
+			status = "initializing"
+		}
+		if status == "" && (item.Tool == "sendInput" || item.Tool == "resumeAgent") {
+			status = "running"
+		}
+		if completed && item.Status == "failed" {
+			status = "failed"
+		}
+		observer, _ := c.ensureSubagentObserver(providerThreadID, item.ID, prompt, "", "")
+		c.emitSubagentDiscovery(observer, status)
+	}
+}
+
+func codexappSubagentStatus(status string) string {
+	switch strings.TrimSpace(status) {
+	case "pendingInit":
+		return "initializing"
+	case "running":
+		return "running"
+	case "completed":
+		return "completed"
+	case "errored":
+		return "failed"
+	case "interrupted", "shutdown", "notFound":
+		return "interrupted"
+	default:
+		return ""
+	}
+}
+
+func codexappThreadSubagentStatus(status appServerThreadStatus) string {
+	switch strings.TrimSpace(status.Type) {
+	case "active":
+		return "running"
+	case "systemError":
+		return "failed"
+	default:
+		return ""
+	}
+}
+
+func (c *codexappConn) observeSubagentThread(thread appServerThread) {
+	if strings.TrimSpace(thread.ID) == "" || strings.TrimSpace(thread.ParentThreadID) == "" {
+		return
+	}
+	parent := c
+	if c.threadID != thread.ParentThreadID && c.runtime != nil {
+		if candidate := c.runtime.connForThread(thread.ParentThreadID); candidate != nil {
+			parent = candidate
+		}
+	}
+	observer, _ := parent.ensureSubagentObserver(
+		thread.ID,
+		"",
+		thread.Preview,
+		thread.AgentNickname,
+		thread.AgentRole,
+	)
+	parent.emitSubagentDiscovery(observer, codexappThreadSubagentStatus(thread.Status))
+}
+
+var codexappSubagentSourceKinds = []string{
+	"subAgent",
+	"subAgentReview",
+	"subAgentCompact",
+	"subAgentThreadSpawn",
+	"subAgentOther",
+}
+
+func (c *codexappConn) RestoreSubagents(ctx context.Context, rootSessionID string, bindings []SubagentBinding) error {
+	if c == nil || c.runtime == nil {
+		return errors.New("codexapp subagent recovery requires a live runtime")
+	}
+	c.mu.Lock()
+	rootThreadID := c.threadID
+	c.mu.Unlock()
+	if rootThreadID == "" {
+		return errors.New("codexapp subagent recovery requires a bound root thread")
+	}
+
+	watermarks := make(map[string]string, len(bindings))
+	activeBindings := make(map[string]bool, len(bindings))
+	for _, binding := range bindings {
+		providerThreadID := strings.TrimSpace(binding.ProviderThreadID)
+		childSessionID := strings.TrimSpace(binding.ChildSessionID)
+		if providerThreadID == "" || childSessionID == "" {
+			continue
+		}
+		observer, _ := c.ensureSubagentObserver(
+			providerThreadID,
+			binding.SpawnItemID,
+			binding.Prompt,
+			binding.Name,
+			binding.Role,
+		)
+		if observer == nil || observer.conn == nil {
+			continue
+		}
+		c.mu.Lock()
+		observer.childSessionID = childSessionID
+		observer.parentSessionID = firstNonEmptyString(strings.TrimSpace(binding.ParentSessionID), observer.parentSessionID, strings.TrimSpace(rootSessionID))
+		observer.rootSessionID = firstNonEmptyString(strings.TrimSpace(binding.RootSessionID), strings.TrimSpace(rootSessionID), observer.rootSessionID)
+		observer.parentProviderThreadID = firstNonEmptyString(strings.TrimSpace(binding.ParentProviderThreadID), observer.parentProviderThreadID, rootThreadID)
+		c.mu.Unlock()
+		observer.conn.bindSessionIDs(childSessionID, providerThreadID)
+		watermarks[providerThreadID] = strings.TrimSpace(binding.LastCompletedTurnID)
+		switch strings.TrimSpace(binding.Status) {
+		case "initializing", "running", "waiting_approval":
+			activeBindings[providerThreadID] = true
+		}
+		c.emitSubagentDiscovery(observer, binding.Status)
+	}
+
+	threads := map[string]appServerThread{}
+	cursor := ""
+	for {
+		var response appServerThreadListResponse
+		if err := c.runtime.request(ctx, "thread/list", appServerThreadListParams{
+			Cursor:           cursor,
+			SourceKinds:      append([]string(nil), codexappSubagentSourceKinds...),
+			AncestorThreadID: rootThreadID,
+		}, &response); err != nil {
+			return fmt.Errorf("list subagent threads: %w", err)
+		}
+		for _, thread := range response.Data {
+			if strings.TrimSpace(thread.ID) == "" {
+				continue
+			}
+			threads[thread.ID] = thread
+			c.observeSubagentThread(thread)
+		}
+		cursor = strings.TrimSpace(response.NextCursor)
+		if cursor == "" {
+			break
+		}
+	}
+	for providerThreadID := range watermarks {
+		if _, ok := threads[providerThreadID]; !ok {
+			threads[providerThreadID] = appServerThread{ID: providerThreadID}
+		}
+	}
+
+	for providerThreadID, listed := range threads {
+		var response appServerThreadStartResponse
+		if err := c.runtime.request(ctx, "thread/read", appServerThreadReadParams{
+			ThreadID: providerThreadID, IncludeTurns: true,
+		}, &response); err != nil {
+			if _, persisted := watermarks[providerThreadID]; persisted {
+				continue
+			}
+			return fmt.Errorf("read subagent thread %s: %w", providerThreadID, err)
+		}
+		thread := response.Thread
+		if thread.ID == "" {
+			thread = listed
+		}
+		c.observeSubagentThread(thread)
+		c.replaySubagentThread(providerThreadID, thread.Turns, watermarks[providerThreadID])
+		if activeBindings[providerThreadID] {
+			var resumed appServerThreadStartResponse
+			if err := c.runtime.request(ctx, "thread/resume", appServerThreadResumeParams{
+				ThreadID: providerThreadID, ExcludeTurns: true,
+			}, &resumed); err != nil {
+				if codexappNoRolloutError(err) {
+					c.mu.Lock()
+					observer := c.subagentObservers[providerThreadID]
+					c.mu.Unlock()
+					if observer != nil && observer.conn != nil {
+						observer.conn.emitObserverLifecycle(SubagentEventStatus, "interrupted", "", "", err.Error())
+					}
+					continue
+				}
+				return fmt.Errorf("resume subagent thread %s: %w", providerThreadID, err)
+			}
+			if resumed.Thread.ID != "" {
+				c.observeSubagentThread(resumed.Thread)
+			}
+		}
+	}
+	return nil
+}
+
+func (c *codexappConn) replaySubagentThread(providerThreadID string, turns []appServerTurn, lastCompletedTurnID string) {
+	root := c.subagentObserverOwner()
+	if root == nil {
+		return
+	}
+	root.mu.Lock()
+	observer := root.subagentObservers[strings.TrimSpace(providerThreadID)]
+	root.mu.Unlock()
+	if observer == nil || observer.conn == nil {
+		return
+	}
+	start := 0
+	if lastCompletedTurnID != "" {
+		found := false
+		for index, turn := range turns {
+			if turn.ID == lastCompletedTurnID {
+				start = index + 1
+				found = true
+				break
+			}
+		}
+		if !found {
+			return
+		}
+	}
+	for _, turn := range turns[start:] {
+		turnID := strings.TrimSpace(turn.ID)
+		if turnID == "" {
+			continue
+		}
+		observer.conn.emitObserverLifecycle(SubagentEventTurnStarted, "running", turnID, "", "")
+		for _, item := range turn.Items {
+			observer.conn.replayThreadItem(observer.childSessionID, item, false)
+		}
+		status := strings.TrimSpace(turn.Status)
+		if status == "inProgress" || status == "in_progress" || status == "running" {
+			continue
+		}
+		stopReason := codexappStopReason(status)
+		subagentStatus := "completed"
+		if stopReason == protocol.SessionTurnStopReasonFailed {
+			subagentStatus = "failed"
+		} else if stopReason == protocol.StopReasonCancelled {
+			subagentStatus = "interrupted"
+		}
+		observer.conn.emitObserverLifecycle(SubagentEventCompleted, subagentStatus, turnID, stopReason, "")
+	}
 }
 
 func (c *codexappConn) sendInitialize(ctx context.Context, params protocol.InitializeParams, result any) error {
@@ -1773,6 +2240,22 @@ func (e codexappMethodNotFoundError) Error() string {
 
 func (c *codexappConn) handleAppServerNotification(method string, params json.RawMessage) {
 	switch method {
+	case "thread/started":
+		var p appServerThreadStartedParams
+		if json.Unmarshal(params, &p) == nil && p.Thread.ID != "" && p.Thread.ParentThreadID != "" {
+			c.observeSubagentThread(p.Thread)
+		}
+	case "thread/status/changed":
+		var p appServerThreadStatusChangedParams
+		if json.Unmarshal(params, &p) == nil && p.ThreadID != "" {
+			if status := codexappThreadSubagentStatus(p.Status); status != "" {
+				c.emitObserverLifecycle(SubagentEventStatus, status, "", "", "")
+			}
+		}
+	case "thread/closed":
+		// Closing or unloading a provider thread is a transport fact. A completed
+		// subagent stays completed, and recovery decides whether an active child
+		// is permanently interrupted.
 	case "thread/goal/updated":
 		var p appServerThreadGoalUpdatedParams
 		if json.Unmarshal(params, &p) == nil && p.ThreadID != "" {
@@ -1823,6 +2306,9 @@ func (c *codexappConn) handleAppServerNotification(method string, params json.Ra
 		var p appServerItemEventParams
 		if json.Unmarshal(params, &p) == nil && p.ThreadID != "" {
 			completed := method == "item/completed"
+			if p.Item.Type == "collabAgentToolCall" {
+				c.handleCollabAgentToolCall(p, completed)
+			}
 			if !completed && p.Item.Type == "agentMessage" {
 				c.rememberMessagePhase(p.TurnID, p.Item.ID, p.Item.Phase)
 			}
@@ -1892,6 +2378,7 @@ func (c *codexappConn) handleAppServerNotification(method string, params json.Ra
 				return
 			}
 			c.setActiveTurnID(p.turnID())
+			c.emitObserverLifecycle(SubagentEventTurnStarted, "running", p.turnID(), "", "")
 		}
 	case "turn/completed":
 		var p appServerTurnCompletedParams
@@ -1899,7 +2386,15 @@ func (c *codexappConn) handleAppServerNotification(method string, params json.Ra
 			if c.completeCompactTurn(p.turnID(), p.status()) {
 				return
 			}
-			c.completePrompt(p.turnID(), codexappStopReason(p.status()))
+			stopReason := codexappStopReason(p.status())
+			c.completePrompt(p.turnID(), stopReason)
+			status := "completed"
+			if stopReason == protocol.SessionTurnStopReasonFailed {
+				status = "failed"
+			} else if stopReason == protocol.StopReasonCancelled {
+				status = "interrupted"
+			}
+			c.emitObserverLifecycle(SubagentEventCompleted, status, p.turnID(), stopReason, "")
 		}
 	case "thread/compacted":
 		var p appServerTurnEventParams
@@ -2096,7 +2591,7 @@ func (c *codexappConn) emitItemUpdate(p appServerItemEventParams, completed bool
 				Status:   protocol.ToolCallStatusCompleted,
 			}},
 		})
-	case "commandExecution", "fileChange", "mcpToolCall", "dynamicToolCall", "webSearch", "imageView":
+	case "commandExecution", "fileChange", "mcpToolCall", "dynamicToolCall", "webSearch", "imageView", "collabAgentToolCall":
 		if !completed {
 			c.emitToolCallStart(p.ThreadID, p.TurnID, item.ID, codexappItemTitle(item), codexappItemToolKind(item.Type))
 		}
@@ -2230,6 +2725,8 @@ func codexappItemTitle(item appServerThreadItem) string {
 		return firstNonEmptyString(codexappDisplayText(item.Query), codexappToolFallbackTitle(protocol.ToolKindRead))
 	case "imageView":
 		return firstNonEmptyString(codexappDisplayText(item.Path), codexappToolFallbackTitle(protocol.ToolKindRead))
+	case "collabAgentToolCall":
+		return firstNonEmptyString(codexappDisplayText(item.Tool), "Subagent")
 	default:
 		return firstNonEmptyString(codexappNonOpaqueID(item.ID), codexappDisplayText(item.Type), codexappToolFallbackTitle(protocol.ToolKindOther))
 	}

@@ -23,6 +23,7 @@ const (
 
 type pendingPermission struct {
 	permissionID     string
+	sessionID        string
 	requestTurnIndex int64
 	options          map[string]acp.SessionTurnPermissionOption
 	requestContext   context.Context
@@ -47,6 +48,7 @@ func (s *Session) SessionRequestPermission(ctx context.Context, _ int64, params 
 	s.mu.Unlock()
 	pending := &pendingPermission{
 		permissionID:   request.PermissionID,
+		sessionID:      strings.TrimSpace(params.SessionID),
 		options:        options,
 		requestContext: ctx,
 		promptContext:  promptCtx,
@@ -56,7 +58,7 @@ func (s *Session) SessionRequestPermission(ctx context.Context, _ int64, params 
 	s.permissions.mu.Lock()
 	s.permissions.ensureMaps()
 	s.permissions.pending[pending.permissionID] = pending
-	requestTurnIndex, err := s.viewSink.RecordPermissionRequest(ctx, s.acpSessionID, request)
+	requestTurnIndex, err := s.viewSink.RecordPermissionRequest(ctx, pending.sessionID, request)
 	if err != nil {
 		delete(s.permissions.pending, pending.permissionID)
 		s.permissions.mu.Unlock()
@@ -64,6 +66,9 @@ func (s *Session) SessionRequestPermission(ctx context.Context, _ int64, params 
 	}
 	pending.requestTurnIndex = requestTurnIndex
 	s.permissions.mu.Unlock()
+	if pending.sessionID != s.acpSessionID && s.client != nil {
+		s.client.setSubagentPermissionStatus(context.Background(), pending.sessionID, true)
+	}
 
 	if promptCtx == nil {
 		select {
@@ -85,6 +90,10 @@ func (s *Session) SessionRequestPermission(ctx context.Context, _ int64, params 
 }
 
 func (s *Session) RespondPermission(ctx context.Context, permissionID, optionID string) (acp.PermissionResult, error) {
+	return s.respondPermission(ctx, s.acpSessionID, permissionID, optionID)
+}
+
+func (s *Session) respondPermission(ctx context.Context, sessionID, permissionID, optionID string) (acp.PermissionResult, error) {
 	if permissionID == "" || optionID == "" {
 		return acp.PermissionResult{}, permissionRequestError(acp.CodeInvalidArgument, "permissionId and optionId are required")
 	}
@@ -101,6 +110,9 @@ func (s *Session) RespondPermission(ctx context.Context, permissionID, optionID 
 	if pending == nil {
 		return acp.PermissionResult{}, permissionRequestError(acp.CodeNotFound, "permission request is no longer pending")
 	}
+	if strings.TrimSpace(sessionID) != pending.sessionID {
+		return acp.PermissionResult{}, permissionRequestError(acp.CodeNotFound, "permission request does not belong to this session")
+	}
 	if pending.requestContext != nil && pending.requestContext.Err() != nil {
 		return acp.PermissionResult{}, permissionRequestError(acp.CodeConflict, "permission request is no longer active")
 	}
@@ -115,7 +127,7 @@ func (s *Session) RespondPermission(ctx context.Context, permissionID, optionID 
 		return acp.PermissionResult{}, permissionRequestError(acp.CodeInternal, "permission recorder is unavailable")
 	}
 	result := acp.PermissionResult{Outcome: "selected", OptionID: optionID}
-	_, err := s.viewSink.RecordPermissionResponse(ctx, s.acpSessionID, acp.SessionTurnPermissionResponse{
+	_, err := s.viewSink.RecordPermissionResponse(ctx, pending.sessionID, acp.SessionTurnPermissionResponse{
 		PermissionID:     permissionID,
 		RequestTurnIndex: pending.requestTurnIndex,
 		Outcome:          result.Outcome,
@@ -129,11 +141,19 @@ func (s *Session) RespondPermission(ctx context.Context, permissionID, optionID 
 	s.permissions.resolved[permissionID] = result
 	delete(s.permissions.pending, permissionID)
 	pending.result <- result
+	if pending.sessionID != s.acpSessionID && s.client != nil {
+		s.client.setSubagentPermissionStatus(context.Background(), pending.sessionID, false)
+	}
 	return result, nil
 }
 
 func (s *Session) normalizePermissionRequest(params acp.PermissionRequestParams) (acp.SessionTurnPermissionRequest, map[string]acp.SessionTurnPermissionOption, bool) {
-	if params.SessionID != s.acpSessionID || strings.TrimSpace(params.ToolCall.ToolCallID) == "" {
+	targetSessionID := strings.TrimSpace(params.SessionID)
+	owned := targetSessionID == s.acpSessionID
+	if !owned && s.client != nil {
+		owned = s.client.isSubagentOfRoot(context.Background(), targetSessionID, s.acpSessionID)
+	}
+	if !owned || strings.TrimSpace(params.ToolCall.ToolCallID) == "" {
 		return acp.SessionTurnPermissionRequest{}, nil, false
 	}
 	if len(params.Options) == 0 || len(params.Options) > permissionOptionMaxCount {

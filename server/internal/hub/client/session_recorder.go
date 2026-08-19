@@ -60,6 +60,37 @@ type sessionViewSummary struct {
 	ForkedFrom             *acp.SessionForkOrigin        `json:"forkedFrom,omitempty"`
 	Goal                   *acp.SessionGoal              `json:"goal,omitempty"`
 	Queue                  *acp.SessionQueueSnapshot     `json:"queue,omitempty"`
+	SessionKind            string                        `json:"sessionKind,omitempty"`
+	ParentSessionID        string                        `json:"parentSessionId,omitempty"`
+	RootSessionID          string                        `json:"rootSessionId,omitempty"`
+	ReadOnly               bool                          `json:"readOnly,omitempty"`
+	Subagent               *sessionViewSubagent          `json:"subagent,omitempty"`
+}
+
+const sessionKindSubagent = "subagent"
+
+type subagentStatus string
+
+const (
+	subagentStatusInitializing    subagentStatus = "initializing"
+	subagentStatusRunning         subagentStatus = "running"
+	subagentStatusWaitingApproval subagentStatus = "waiting_approval"
+	subagentStatusCompleted       subagentStatus = "completed"
+	subagentStatusFailed          subagentStatus = "failed"
+	subagentStatusInterrupted     subagentStatus = "interrupted"
+)
+
+type sessionViewSubagent struct {
+	Name          string         `json:"name"`
+	Role          string         `json:"role,omitempty"`
+	SpawnedAt     string         `json:"spawnedAt"`
+	SpawnSequence int64          `json:"spawnSequence"`
+	Status        subagentStatus `json:"status"`
+}
+
+type sessionProviderReplayProjection struct {
+	LastCompletedTurnID string `json:"lastCompletedTurnId,omitempty"`
+	ActiveTurnID        string `json:"activeTurnId,omitempty"`
 }
 
 type sessionTitleFacts struct {
@@ -69,14 +100,29 @@ type sessionTitleFacts struct {
 }
 
 type sessionSyncProjection struct {
-	LatestPersistedTurnIndex int64                  `json:"latestPersistedTurnIndex"`
-	LastDoneTurnIndex        int64                  `json:"lastDoneTurnIndex,omitempty"`
-	LastDoneSuccess          *bool                  `json:"lastDoneSuccess,omitempty"`
-	LastReadTurnIndex        int64                  `json:"lastReadTurnIndex,omitempty"`
-	Pinned                   bool                   `json:"pinned,omitempty"`
-	MarkColor                string                 `json:"markColor,omitempty"`
-	ForkedFrom               *acp.SessionForkOrigin `json:"forkedFrom,omitempty"`
-	SessionFeatures          *acp.SessionFeatures   `json:"sessionFeatures,omitempty"`
+	LatestPersistedTurnIndex int64                           `json:"latestPersistedTurnIndex"`
+	LastDoneTurnIndex        int64                           `json:"lastDoneTurnIndex,omitempty"`
+	LastDoneSuccess          *bool                           `json:"lastDoneSuccess,omitempty"`
+	LastReadTurnIndex        int64                           `json:"lastReadTurnIndex,omitempty"`
+	Pinned                   bool                            `json:"pinned,omitempty"`
+	MarkColor                string                          `json:"markColor,omitempty"`
+	ForkedFrom               *acp.SessionForkOrigin          `json:"forkedFrom,omitempty"`
+	SessionFeatures          *acp.SessionFeatures            `json:"sessionFeatures,omitempty"`
+	SessionKind              string                          `json:"sessionKind,omitempty"`
+	ParentSessionID          string                          `json:"parentSessionId,omitempty"`
+	RootSessionID            string                          `json:"rootSessionId,omitempty"`
+	ProviderThreadID         string                          `json:"providerThreadId,omitempty"`
+	ParentProviderThreadID   string                          `json:"parentProviderThreadId,omitempty"`
+	SpawnItemID              string                          `json:"spawnItemId,omitempty"`
+	SubagentPrompt           string                          `json:"subagentPrompt,omitempty"`
+	SpawnedAt                string                          `json:"spawnedAt,omitempty"`
+	SpawnSequence            int64                           `json:"spawnSequence,omitempty"`
+	SubagentName             string                          `json:"subagentName,omitempty"`
+	SubagentRole             string                          `json:"subagentRole,omitempty"`
+	SubagentStatus           subagentStatus                  `json:"subagentStatus,omitempty"`
+	ProviderReplay           sessionProviderReplayProjection `json:"providerReplay,omitempty"`
+	ReadOnly                 bool                            `json:"readOnly,omitempty"`
+	NextSubagentSequence     int64                           `json:"nextSubagentSequence,omitempty"`
 }
 
 type sessionTurnMessage struct {
@@ -1356,6 +1402,19 @@ func (r *SessionRecorder) sessionViewSummaryFromRecordLocked(rec SessionRecord) 
 		summary.Queue = r.queueLookup(rec.ID, true)
 	}
 	summary.PendingPermissionCount = pendingPermissionCountFromPromptState(r.promptState[rec.ID])
+	if projection.SessionKind == sessionKindSubagent {
+		summary.SessionKind = sessionKindSubagent
+		summary.ParentSessionID = projection.ParentSessionID
+		summary.RootSessionID = projection.RootSessionID
+		summary.ReadOnly = true
+		summary.Subagent = &sessionViewSubagent{
+			Name:          projection.SubagentName,
+			Role:          projection.SubagentRole,
+			SpawnedAt:     projection.SpawnedAt,
+			SpawnSequence: projection.SpawnSequence,
+			Status:        projection.SubagentStatus,
+		}
+	}
 	return summary
 }
 
@@ -1613,6 +1672,28 @@ func normalizeSessionSyncProjection(sync sessionSyncProjection) sessionSyncProje
 	}
 	if sync.LastReadTurnIndex < 0 {
 		sync.LastReadTurnIndex = 0
+	}
+	sync.SessionKind = strings.TrimSpace(sync.SessionKind)
+	sync.ParentSessionID = strings.TrimSpace(sync.ParentSessionID)
+	sync.RootSessionID = strings.TrimSpace(sync.RootSessionID)
+	sync.ProviderThreadID = strings.TrimSpace(sync.ProviderThreadID)
+	sync.ParentProviderThreadID = strings.TrimSpace(sync.ParentProviderThreadID)
+	sync.SpawnItemID = strings.TrimSpace(sync.SpawnItemID)
+	sync.SubagentPrompt = strings.TrimSpace(sync.SubagentPrompt)
+	sync.SpawnedAt = strings.TrimSpace(sync.SpawnedAt)
+	sync.SubagentName = strings.TrimSpace(sync.SubagentName)
+	sync.SubagentRole = strings.TrimSpace(sync.SubagentRole)
+	if sync.SpawnSequence < 0 {
+		sync.SpawnSequence = 0
+	}
+	if sync.NextSubagentSequence < 0 {
+		sync.NextSubagentSequence = 0
+	}
+	if sync.SessionKind == sessionKindSubagent {
+		sync.ReadOnly = true
+		if sync.SubagentStatus == "" {
+			sync.SubagentStatus = subagentStatusInitializing
+		}
 	}
 	return sync
 }
