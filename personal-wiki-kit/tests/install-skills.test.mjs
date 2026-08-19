@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import {
+  cp,
   mkdir,
   mkdtemp,
   readFile,
@@ -41,6 +42,28 @@ test('Skill installer atomically replaces both Skill trees and retains backups',
   for (const backup of result.backups) {
     assert.ok((await readdir(backup)).includes('old.txt'));
   }
+});
+
+test('Skill installer accepts Windows CRLF Skill files', async (t) => {
+  const root = await mkdtemp(join(tmpdir(), 'personal-wiki-skills-crlf-'));
+  t.after(() => rm(root, { force: true, recursive: true, maxRetries: 5, retryDelay: 100 }));
+  const windowsSourceRoot = join(root, 'source');
+  const destinationRoot = join(root, 'destination');
+  await cp(sourceRoot, windowsSourceRoot, { recursive: true });
+  for (const skillName of ['lookup-knowledge', 'publish-knowledge']) {
+    const filename = join(windowsSourceRoot, skillName, 'SKILL.md');
+    const source = await readFile(filename, 'utf8');
+    await writeFile(filename, source.replace(/\r?\n/gu, '\r\n'));
+  }
+
+  const result = await installSkills({
+    sourceRoot: windowsSourceRoot,
+    destinationRoot,
+    timestamp: '20260818T000000Z-crlf',
+  });
+
+  assert.equal(result.installed.length, 2);
+  assert.match(await readFile(join(destinationRoot, 'lookup-knowledge', 'SKILL.md'), 'utf8'), /name: lookup-knowledge/u);
 });
 
 test('Skill installer rolls every replacement back when post-install verification fails', async (t) => {

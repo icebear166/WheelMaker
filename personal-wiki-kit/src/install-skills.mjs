@@ -32,14 +32,15 @@ function safeTimestamp(value) {
 
 async function validateSkillDirectory(directory, skillName) {
   const skillFile = path.join(directory, 'SKILL.md');
-  const source = await readFile(skillFile, 'utf8');
+  const source = (await readFile(skillFile, 'utf8')).replace(/\r\n?/gu, '\n');
   if (!source.startsWith('---\n')
     || !source.includes(`\nname: ${skillName}\n`)
     || !source.includes('\ndescription: ')
     || /\[?TODO/iu.test(source)) {
     throw new Error(`Skill ${skillName} 的 SKILL.md 无效`);
   }
-  const agent = await readFile(path.join(directory, 'agents', 'openai.yaml'), 'utf8');
+  const agent = (await readFile(path.join(directory, 'agents', 'openai.yaml'), 'utf8'))
+    .replace(/\r\n?/gu, '\n');
   if (!agent.includes('display_name:') || !agent.includes(`$${skillName}`)) {
     throw new Error(`Skill ${skillName} 的 agents/openai.yaml 无效`);
   }
