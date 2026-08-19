@@ -3427,6 +3427,24 @@ func TestSkillSourceStoreWritesStableValidatedJSON(t *testing.T) {
 	}
 }
 
+func TestCanonicalizeSkillSourceSnapshotDoesNotPromoteCatalogToManagedSkills(t *testing.T) {
+	source := skillSourceSnapshot{
+		Source:        "https://github.com/example/skills.git",
+		SourceKey:     "github.com/example/skills",
+		ManagedSkills: []string{},
+		SkillList: []skillSourceSkillSnapshot{
+			{Name: "alpha", SkillPath: "skills/alpha/SKILL.md"},
+			{Name: "beta", SkillPath: "skills/beta/SKILL.md"},
+		},
+	}
+
+	canonicalizeSkillSourceSnapshot(&source)
+
+	if len(source.ManagedSkills) != 0 {
+		t.Fatalf("managedSkills=%v, want empty ownership for catalog-only source", source.ManagedSkills)
+	}
+}
+
 func TestSkillSourceStoreRejectsUnknownVersionAndDuplicateSource(t *testing.T) {
 	path := filepath.Join(t.TempDir(), ".skill-source-lock.json")
 	invalidValues := []string{
@@ -3571,17 +3589,26 @@ func TestSkillSourceResolverDiscoversOnlyNestedSkillsDirectoryCatalog(t *testing
 	}
 }
 
-func TestSkillSourceResolverIgnoresSkillsRootSkill(t *testing.T) {
+func TestSkillSourceResolverUsesSkillsRootSkillAndShadowsNested(t *testing.T) {
 	checkout := t.TempDir()
-	writeSkillSourceFixture(t, filepath.Join(checkout, "skills"), "---\nname: catalog-root\n---\n# Root\n", nil)
+	writeSkillSourceFixture(t, filepath.Join(checkout, "skills"), "---\nname: catalog-root\n---\n# Root\n", map[string]string{
+		"references/guide.md": "guide\n",
+	})
 	writeSkillSourceFixture(t, filepath.Join(checkout, "skills", "nested"), "# Must not be discovered\n", nil)
 
 	skills, err := discoverSkillSourceCatalog(checkout)
 	if err != nil {
 		t.Fatalf("discoverSkillSourceCatalog() error=%v", err)
 	}
-	if len(skills) != 1 || skills[0].Name != "nested" || skills[0].SkillPath != "skills/nested/SKILL.md" {
-		t.Fatalf("catalog=%#v, want nested skill with repository-level skills/SKILL.md ignored", skills)
+	if len(skills) != 1 || skills[0].Name != "catalog-root" || skills[0].SkillPath != "skills/SKILL.md" {
+		t.Fatalf("catalog=%#v, want skills/SKILL.md as the single shadowing skill", skills)
+	}
+	wantHash, err := hashSkillDirectory(filepath.Join(checkout, "skills"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if skills[0].ContentSHA256 != wantHash {
+		t.Fatalf("content hash=%q, want complete skills directory hash %q", skills[0].ContentSHA256, wantHash)
 	}
 }
 
@@ -3891,7 +3918,8 @@ func TestSkillSourceCatalogDistinguishesCopiesDifferAndNeedsRefresh(t *testing.T
 		Sources: []skillSourceSnapshot{{
 			Source: "https://github.com/example/catalog.git", SourceKey: "github.com/example/catalog",
 			ResolvedCommit: strings.Repeat("a", 40), RefreshedAt: "2026-08-12T12:00:00Z",
-			SkillList: []skillSourceSkillSnapshot{{Name: "alpha", SkillPath: "alpha/SKILL.md", ContentSHA256: remoteHash}},
+			ManagedSkills: []string{"alpha"},
+			SkillList:     []skillSourceSkillSnapshot{{Name: "alpha", SkillPath: "alpha/SKILL.md", ContentSHA256: remoteHash}},
 		}},
 	}
 	row := composeSkillSourceCatalog(ready, native, installed, nil).Sources[0].Skills[0]
@@ -3977,7 +4005,8 @@ func TestSkillSourceCatalogTreatsSymlinkedCopiesAsSameContent(t *testing.T) {
 		Sources: []skillSourceSnapshot{{
 			Source: "https://github.com/example/catalog.git", SourceKey: "github.com/example/catalog",
 			ResolvedCommit: strings.Repeat("a", 40), RefreshedAt: "2026-08-12T12:00:00Z",
-			SkillList: []skillSourceSkillSnapshot{{Name: "alpha", SkillPath: "alpha/SKILL.md", ContentSHA256: remoteHash}},
+			ManagedSkills: []string{"alpha"},
+			SkillList:     []skillSourceSkillSnapshot{{Name: "alpha", SkillPath: "alpha/SKILL.md", ContentSHA256: remoteHash}},
 		}},
 	}
 	row := composeSkillSourceCatalog(lock, native, installed, nil).Sources[0].Skills[0]
@@ -4014,7 +4043,8 @@ func TestSkillSourceCatalogTreatsJunctionChildCopiesAsSameContent(t *testing.T) 
 		Sources: []skillSourceSnapshot{{
 			Source: "https://github.com/example/catalog.git", SourceKey: "github.com/example/catalog",
 			ResolvedCommit: strings.Repeat("a", 40), RefreshedAt: "2026-08-12T12:00:00Z",
-			SkillList: []skillSourceSkillSnapshot{{Name: "alpha", SkillPath: "alpha/SKILL.md", ContentSHA256: remoteHash}},
+			ManagedSkills: []string{"alpha"},
+			SkillList:     []skillSourceSkillSnapshot{{Name: "alpha", SkillPath: "alpha/SKILL.md", ContentSHA256: remoteHash}},
 		}},
 	}
 
@@ -4036,7 +4066,8 @@ func TestSkillSourceCatalogUsesLastSuccessfulOwnerForSameName(t *testing.T) {
 		lock.Sources = append(lock.Sources, skillSourceSnapshot{
 			Source: "https://github.com/example/" + repository + ".git", SourceKey: "github.com/example/" + repository,
 			ResolvedCommit: strings.Repeat(repository[:1], 40), RefreshedAt: "2026-08-12T12:00:00Z",
-			SkillList: []skillSourceSkillSnapshot{{Name: "Shared", SkillPath: "Shared/SKILL.md", ContentSHA256: hash}},
+			ManagedSkills: []string{"Shared"},
+			SkillList:     []skillSourceSkillSnapshot{{Name: "Shared", SkillPath: "Shared/SKILL.md", ContentSHA256: hash}},
 		})
 	}
 	installed := []skillSourceInstalledSnapshot{{Name: "shared", Locations: []string{filepath.Join(local, "SKILL.md")}}}
@@ -5728,6 +5759,50 @@ func TestNativeSkillSourceCatalogMarksMissingCloneWithoutNetwork(t *testing.T) {
 	}
 }
 
+func TestNativeSkillsCommandInstallsSkillsRootRepositoryWithSupportingFiles(t *testing.T) {
+	repository := t.TempDir()
+	runSkillSourceGit(t, repository, "init", "-b", "main")
+	runSkillSourceGit(t, repository, "config", "user.email", "skills@example.com")
+	runSkillSourceGit(t, repository, "config", "user.name", "Skills Test")
+	writeSkillSourceFixture(t, filepath.Join(repository, "skills"), "---\nname: better-icons\n---\n# Better Icons\n", map[string]string{
+		"references/guide.md": "supporting guide\n",
+	})
+	runSkillSourceGit(t, repository, "add", ".")
+	runSkillSourceGit(t, repository, "commit", "-m", "add root skill")
+
+	home := t.TempDir()
+	projectRoot := t.TempDir()
+	command := newSkillsCommandWithRunner(newFakeSkillsRunner(), skillsCommandConfig{
+		HubID: "hub-a", HomeDir: home, Projects: []ProjectInfo{{Name: "project", Path: projectRoot}},
+	})
+	target := skillsCommandTarget{scope: "project", projectName: "project", dir: projectRoot}
+	source := "https://github.com/better-auth/better-icons.git"
+	sourceKey := "github.com/better-auth/better-icons"
+	seedNativeSkillSourceClone(t, command, repository, source, sourceKey)
+	if err := command.nativeAddRepo(context.Background(), target, source, sourceKey); err != nil {
+		t.Fatalf("nativeAddRepo() error=%v", err)
+	}
+	if err := command.nativeInstall(context.Background(), target, source, []string{"better-icons"}, false); err != nil {
+		t.Fatalf("nativeInstall() error=%v", err)
+	}
+
+	for _, root := range []string{".agents/skills/better-icons", ".claude/skills/better-icons"} {
+		for _, relative := range []string{"SKILL.md", "references/guide.md"} {
+			path := filepath.Join(projectRoot, filepath.FromSlash(root), filepath.FromSlash(relative))
+			if _, err := os.Stat(path); err != nil {
+				t.Fatalf("installed file %s missing: %v", path, err)
+			}
+		}
+	}
+	lock, _, err := readSkillSourceLockFile(command.sourceLockFile(target))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(lock.Sources) != 1 || !reflect.DeepEqual(lock.Sources[0].ManagedSkills, []string{"better-icons"}) {
+		t.Fatalf("lock=%#v, want only better-icons managed", lock)
+	}
+}
+
 func TestNativeSkillsCommandProjectUpdateDeletesUpstreamRemovedWithoutInstallingNew(t *testing.T) {
 	repository := t.TempDir()
 	initSkillSourceGitFixture(t, repository, "alpha")
@@ -5777,6 +5852,13 @@ func TestNativeSkillsCommandProjectUpdateDeletesUpstreamRemovedWithoutInstalling
 	}
 	if _, err := os.Stat(filepath.Join(projectRoot, ".agents", "skills", "beta")); !os.IsNotExist(err) {
 		t.Fatalf("new upstream beta was auto-installed: %v", err)
+	}
+	updatedLock, _, err := readSkillSourceLockFile(lockPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(updatedLock.Sources) != 1 || len(updatedLock.Sources[0].ManagedSkills) != 0 {
+		t.Fatalf("updated lock=%#v, want empty managedSkills after upstream replacement", updatedLock)
 	}
 }
 

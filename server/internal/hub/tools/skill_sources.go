@@ -991,13 +991,6 @@ func canonicalizeSkillSourceSnapshot(source *skillSourceSnapshot) {
 	if source.RefreshedAt == "" {
 		source.RefreshedAt = source.UpdatedAt
 	}
-	if len(source.ManagedSkills) == 0 && len(source.SkillList) > 0 {
-		for _, skill := range source.SkillList {
-			if strings.TrimSpace(skill.Name) != "" {
-				source.ManagedSkills = append(source.ManagedSkills, skill.Name)
-			}
-		}
-	}
 	if source.SkillList == nil {
 		for _, name := range source.ManagedSkills {
 			source.SkillList = append(source.SkillList, skillSourceSkillSnapshot{Name: name})
