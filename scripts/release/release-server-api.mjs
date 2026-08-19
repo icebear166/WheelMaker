@@ -171,6 +171,13 @@ export class ReleaseServerApi {
     });
   }
 
+  readKitStable() {
+    return this.request('/personal-wiki-kit/stable.json', {
+      allow404: true,
+      publish: false,
+    });
+  }
+
   storage() {
     return this.request('/api/storage', {
       method: 'GET',
@@ -200,6 +207,17 @@ export class ReleaseServerApi {
     });
   }
 
+  startKit(input) {
+    return this.request('/api/personal-wiki-kit/start', {
+      body: {
+        publisher: input.publisher,
+        sourceSha: input.sourceSha,
+        version: input.version,
+      },
+      method: 'POST',
+    });
+  }
+
   startDebugWeb({size, sha256}) {
     if (!Number.isSafeInteger(size) || size <= 0 || !/^[0-9a-f]{64}$/.test(sha256 ?? '')) {
       throw new Error('invalid debug web archive identity');
@@ -218,7 +236,22 @@ export class ReleaseServerApi {
   }
 
   upload(sessionId, asset, onProgress = () => {}) {
-    validateSessionId(sessionId);
+    return this.uploadAsset(
+      `/api/publish/${validateSessionId(sessionId)}/files/${encodeURIComponent(asset.name)}`,
+      asset,
+      onProgress,
+    );
+  }
+
+  uploadKit(sessionId, asset, onProgress = () => {}) {
+    return this.uploadAsset(
+      `/api/personal-wiki-kit/${validateSessionId(sessionId)}/files/${encodeURIComponent(asset.name)}`,
+      asset,
+      onProgress,
+    );
+  }
+
+  uploadAsset(requestPath, asset, onProgress = () => {}) {
     if (!/^[A-Za-z0-9._-]+$/.test(asset.name ?? '')) {
       throw new Error('invalid release asset name');
     }
@@ -229,7 +262,7 @@ export class ReleaseServerApi {
       throw new Error('invalid release asset SHA-256');
     }
     return this.request(
-      `/api/publish/${sessionId}/files/${encodeURIComponent(asset.name)}`,
+      requestPath,
       {
         headers: {
           'Content-Length': asset.size,
@@ -302,6 +335,12 @@ export class ReleaseServerApi {
     });
   }
 
+  commitKit(sessionId) {
+    return this.request(`/api/personal-wiki-kit/${validateSessionId(sessionId)}/commit`, {
+      method: 'POST',
+    });
+  }
+
   commitDebugWeb(sessionId) {
     return this.request(`/api/debug-web/${validateSessionId(sessionId)}/commit`, {
       method: 'POST',
@@ -310,6 +349,12 @@ export class ReleaseServerApi {
 
   cancel(sessionId) {
     return this.request(`/api/publish/${validateSessionId(sessionId)}`, {
+      method: 'DELETE',
+    });
+  }
+
+  cancelKit(sessionId) {
+    return this.request(`/api/personal-wiki-kit/${validateSessionId(sessionId)}`, {
       method: 'DELETE',
     });
   }

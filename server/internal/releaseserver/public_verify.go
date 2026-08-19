@@ -97,6 +97,65 @@ func verifyPublicRelease(publicURL string, stable stableDocument, session publis
 	return nil
 }
 
+func verifyPublicKitRelease(publicURL string, stable kitStableDocument, _ kitPublishSession, client *http.Client) error {
+	base, err := url.Parse(publicURL)
+	if err != nil || (base.Scheme != "http" && base.Scheme != "https") || base.Hostname() == "" {
+		return errors.New("public verification origin is invalid")
+	}
+	if client == nil {
+		client = &http.Client{Timeout: publicVerificationTimeout}
+	}
+	fetchControl := func(relativePath string) ([]byte, error) {
+		response, err := publicVerificationRequest(client, base, relativePath, "")
+		if err != nil {
+			return nil, err
+		}
+		defer response.Body.Close()
+		if response.StatusCode != http.StatusOK {
+			return nil, fmt.Errorf("public %s returned HTTP %d", relativePath, response.StatusCode)
+		}
+		raw, err := io.ReadAll(io.LimitReader(response.Body, maxControlFileSize+1))
+		if err != nil {
+			return nil, fmt.Errorf("read public %s: %w", relativePath, err)
+		}
+		if int64(len(raw)) > maxControlFileSize {
+			return nil, fmt.Errorf("public %s exceeds control-file limit", relativePath)
+		}
+		return raw, nil
+	}
+	stableRaw, err := fetchControl("/personal-wiki-kit/stable.json")
+	if err != nil {
+		return err
+	}
+	var published kitStableDocument
+	if err := json.Unmarshal(stableRaw, &published); err != nil || !reflect.DeepEqual(published, stable) {
+		return errors.New("public Kit stable identity does not match committed release")
+	}
+	setupRaw, err := fetchControl(stable.Setup.Path)
+	if err != nil {
+		return err
+	}
+	if int64(len(setupRaw)) != stable.Setup.Size || sha256Hex(setupRaw) != stable.Setup.SHA256 {
+		return errors.New("public Kit setup identity does not match committed release")
+	}
+	for platform, artifact := range stable.Artifacts {
+		response, err := publicVerificationRequest(client, base, artifact.Path, "bytes=0-0")
+		if err != nil {
+			return err
+		}
+		body, readErr := io.ReadAll(io.LimitReader(response.Body, 2))
+		response.Body.Close()
+		if readErr != nil {
+			return fmt.Errorf("read public Kit artifact %s: %w", platform, readErr)
+		}
+		wantRange := fmt.Sprintf("bytes 0-0/%d", artifact.Size)
+		if response.StatusCode != http.StatusPartialContent || len(body) != 1 || response.Header.Get("Content-Range") != wantRange {
+			return fmt.Errorf("public Kit artifact %s did not honor the declared one-byte Range", platform)
+		}
+	}
+	return nil
+}
+
 func publicVerificationRequest(client *http.Client, base *url.URL, relativePath string, byteRange string) (*http.Response, error) {
 	if !strings.HasPrefix(relativePath, "/") || strings.HasPrefix(relativePath, "//") {
 		return nil, errors.New("public verification path is invalid")

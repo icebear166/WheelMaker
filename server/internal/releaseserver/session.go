@@ -104,14 +104,18 @@ type statusOwner struct {
 }
 
 type serverDependencies struct {
-	now          func() time.Time
-	random       io.Reader
-	diskFree     func(string) (uint64, error)
-	writeJSON    func(string, any, os.FileMode) error
-	verifyPublic func(stableDocument, publishSession) error
+	now             func() time.Time
+	random          io.Reader
+	diskFree        func(string) (uint64, error)
+	writeJSON       func(string, any, os.FileMode) error
+	verifyPublic    func(stableDocument, publishSession) error
+	verifyPublicKit func(kitStableDocument, kitPublishSession) error
 }
 
 func (s *Server) handleAPI(w http.ResponseWriter, r *http.Request) bool {
+	if s.handlePersonalWikiKitAPI(w, r) {
+		return true
+	}
 	if s.handleDebugWebAPI(w, r) {
 		return true
 	}
@@ -700,6 +704,12 @@ func defaultServerDependencies(cfg Config) serverDependencies {
 				return fmt.Errorf("create public verification client: %w", err)
 			}
 			return verifyPublicRelease(cfg.PublicURL, stable, session, client)
+		},
+		verifyPublicKit: func(stable kitStableDocument, session kitPublishSession) error {
+			if err != nil {
+				return fmt.Errorf("create public verification client: %w", err)
+			}
+			return verifyPublicKitRelease(cfg.PublicURL, stable, session, client)
 		},
 	}
 }
