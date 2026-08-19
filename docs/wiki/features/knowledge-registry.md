@@ -1,49 +1,142 @@
-> 摘要：本页维护 Knowledge Registry 个人知识库的整体架构、WheelMaker 配置接入、服务器部署运维、文档导入审核和 Git 发布流程。
+> 摘要：本页维护 Knowledge Registry 个人 Wiki 的当前设计，包括知识治理、双视图信息架构、本机 Skill 项目路由、服务器访问、审核和 Git 发布流程。
 
-# Knowledge Registry：WheelMaker 接入、服务器运维与知识管理
+# Knowledge Registry：个人 Wiki 当前设计
 
 Knowledge Registry 是一个独立于具体工程的个人知识库。它把经过确认的长期知识保存为 Markdown，使用 Git 记录历史，通过构建生成只读网页，再由密码保护的服务发布到 `https://wiki.wheelbox.top`。
 
-核心原则是：**原始材料不是知识，只有经过整理、确认、验证和版本化的结论才进入知识库。** WheelMaker 提供知识库地址和对话入口，Personal Wiki 独立仓库负责内容、构建与发布，服务器只负责安全读取和原子切换版本。
+核心原则是：**原始材料不是知识，只有经过整理、确认、验证和版本化的结论才进入知识库。** 任意本地工程都可以提供知识来源，用户级 `publish-knowledge` Skill 负责项目路由和发布流程，Personal Wiki 独立仓库负责内容、索引、构建与发布，服务器只负责认证、安全读取和原子切换版本。
+
+本文同时记录线上现状和本地待发布实现。服务器、域名、认证、Git 发布和原子 release 是线上现行能力；“按知识类型 / 按项目”双视图、项目注册表和本机 Skill 项目路由已于 2026-08-17 在本地实现，完成验证和发布前不得描述为线上现状。
+
+## 对话沉淀的决策基线
+
+本节是搭建 Knowledge Registry 过程中多轮对话形成的当前结论，不保存逐句聊天记录。后续实现变化时更新这里的现行结论，历史讨论由 Git 和原对话保留。
+
+- 产品名称使用 **Knowledge Registry**，它是跨项目的个人知识档案库，不按 WheelMaker、Unity 项目名或 Unreal 项目名拆成独立站点。
+- 内容形态采用 **Markdown 作为知识源、Git 管理历史、构建生成 HTML 网站**；服务器上的网页是发布产物，不是编辑源。
+- Knowledge Registry 使用独立私有仓库 `icebear166/personal-wiki`，本地仓库目前位于 `D:/WheelMaker/WheelMaker/.wiki-work/personal-wiki`；它拥有独立 `.git`，不属于 WheelMaker 仓库历史，也可以在更新用户级定位文件后迁移到其他位置。
+- 审核界面就是当前 Codex 对话。Agent 先提出精确候选，用户明确批准后才能写入、提交和推送；Wiki 本身不设置 Inbox、Draft 或 Review 页面。
+- 网站使用独立密码登录，当前不与 WheelMaker 登录做单点登录。密码哈希只保存在服务器，部署私钥只保存在 GitHub Secrets 或本地安全位置。
+- 所有文章只保存一份，同时生成两种阅读索引：默认按知识类型浏览，也可切换为按项目浏览；项目视图不会复制文章或建立第二套正文。
+- 知识类型仍是文章的唯一主题归属。Unity 与 Unreal Engine 是独立顶层目录；每个引擎再通过稳定的 `category` 二级分类组织 BRG、Animation、Rendering、Gameplay、Tools 等主题。
+- 项目使用稳定 ID 和独立项目注册表。文章可关联多个项目；项目视图按“项目 → 知识类型 → 二级分类 → 文章”组织，未关联项目的文章进入自动生成的“未指定项目”。
+- `E:/文档`、WheelMaker 代码、测试、项目文档和经过验证的对话结论都是候选来源；原始材料默认留在原位置，不整批复制进 Wiki。
+- 本机 `publish-knowledge` Skill 的 `references/project-routing.json` 保存“本机来源路径 → Wiki projectId”映射。多个工程根或精确文档路径可以映射到同一个 Wiki 项目；没有匹配时使用“未指定项目”。
+- Personal Wiki 不读取 WheelMaker 代码或 `config.json`，不要求 WheelMaker 提供项目映射、网站入口或协议字段。两者当前只共用服务器 Gateway，文章、密码、Git 发布和 Wiki 会话不进入 WheelMaker Registry。
+- 一旦用户批准精确知识候选，`publish-knowledge` 可以完成写入、检查、提交和推送；`main` 分支 push 触发 GitHub Actions，通过专用 Wiki 部署密钥发布到服务器。
+
+## 实施状态与生效边界
+
+| 能力 | 当前状态 | 生效说明 |
+| --- | --- | --- |
+| Markdown、Git、构建与密码保护网站 | 已实现 | 当前 Personal Wiki 的内容和发布基础 |
+| DNS、Gateway、`wiki-server`、原子 release | 已实现 | 当前线上访问和部署链路 |
+| 按知识类型浏览 | 已实现 | 线上现行目录模式 |
+| 文章稳定 `projectId` 元数据 | 本地已实现，待发布 | 现有名称已迁移为注册 ID |
+| `content/projects.json` 项目注册表 | 本地已实现，待发布 | 项目身份唯一事实源 |
+| 按项目浏览 | 本地已实现，待发布 | 与知识类型视图共用同一文章数据 |
+| 本机 Skill 项目路由 | 本地已实现并安装验证，待随 Wiki 发布 | 不读取 WheelMaker 代码或配置 |
+| `publish-knowledge` 项目候选与校验 | 本地已实现并安装验证，待随 Wiki 发布 | 只生成候选默认值，不绕过用户批准 |
+
+本方案不修改 `~/.wheelmaker/config.json`，也不要求 WheelMaker 发布兼容版本。项目路由是用户级 Skill 的本机私有能力。
+
+下表是本文最后核对于 2026-08-13 的实例关系；它记录部署地址，不表示 2026-08-17 确认的双视图功能已经上线：
+
+| 项目 | 当前值 | 说明 |
+| --- | --- | --- |
+| 网站地址 | `https://wiki.wheelbox.top` | 浏览器使用的 Knowledge Registry 入口 |
+| DNS 目标 | `47.86.63.26` | `wiki.wheelbox.top` 当前 A 记录指向该服务器 |
+| 公网入口 | HTTPS `443` | 由 Caddy/Gateway 接收并处理 TLS |
+| Wiki 内部服务 | `127.0.0.1:9765` | 只允许服务器本机访问 |
+| WheelMaker 公网入口 | `47.86.63.26:28800` | 与 Wiki 位于同一服务器，但属于不同服务入口 |
+| GitHub 仓库 | `icebear166/personal-wiki` | 私有知识源仓库，默认分支为 `main` |
+| 认证方式 | 独立密码登录 | 未登录访问会跳转到 `/login` |
 
 ## 整体架构
 
 ```mermaid
 flowchart LR
-    Sources["文档、代码、测试结果和对话"]
-    Agent["Codex / publish-knowledge"]
-    Review["当前对话中人工确认"]
-    Markdown["审核后的 Markdown"]
-    Git["Personal Wiki Git 仓库"]
-    Build["校验、构建与发布包"]
-    Activate["服务器校验与原子激活"]
-    Server["wiki-server 127.0.0.1:9765"]
-    Gateway["WheelMaker Gateway / HTTPS"]
-    Browser["wiki.wheelbox.top"]
-    WheelMaker["WheelMaker knowledgeRegistry.publicUrl"]
+    subgraph LocalWork["任意本地工程与 Codex 对话"]
+        Sources["代码、测试、项目文档<br/>外部资料和对话结论"]
+        ProjectRouting["publish-knowledge/references/project-routing.json<br/>工程根路径 → Wiki projectId"]
+        Skill["publish-knowledge<br/>整理、匹配、校验"]
+        Review["候选知识<br/>用户明确批准"]
+    end
 
-    Sources --> Agent
-    Agent -->|候选标题、分类、结论、证据| Review
-    Review -->|明确批准| Markdown
-    Markdown --> Git
-    Git --> Build
-    Build --> Activate
-    Activate --> Server
-    Server --> Gateway
-    Gateway --> Browser
-    WheelMaker -.->|只保存公开地址| Browser
+    subgraph WikiRepo["Personal Wiki 独立 Git 仓库"]
+        Markdown["content/**/*.md<br/>唯一文章事实源"]
+        Sections["content/sections.json<br/>知识类型定义"]
+        Projects["content/projects.json<br/>项目定义"]
+        Build["检查与构建"]
+        TopicIndex["按知识类型索引"]
+        ProjectIndex["按项目索引"]
+    end
+
+    subgraph GitHub["GitHub 私有仓库"]
+        Main["icebear166/personal-wiki<br/>main"]
+        Actions["GitHub Actions<br/>检查、构建和 SSH 发布"]
+    end
+
+    subgraph Host["服务器 47.86.63.26"]
+        Gateway["Caddy / Gateway<br/>HTTPS 443"]
+        Server["wiki-server<br/>127.0.0.1:9765"]
+        Release["/srv/personal-wiki/current<br/>当前原子 release"]
+    end
+
+    Browser["浏览器<br/>wiki.wheelbox.top"] --> DNS["DNS<br/>A → 47.86.63.26"]
+    DNS --> Gateway
+    Gateway --> Server
+    Server --> Release
+
+    Sources --> Skill
+    ProjectRouting -.->|默认项目归属| Skill
+    Skill --> Review
+    Review -->|批准后写入| Markdown
+    Sections --> Build
+    Projects --> Build
+    Markdown --> Build
+    Build --> TopicIndex
+    Build --> ProjectIndex
+    Build -->|提交并 push main| Main
+    Main --> Actions
+    Actions -->|验证并激活| Release
+
 ```
+
+## 核心流程速查
+
+Knowledge Registry 同时有一条“知识发布路径”和一条“网页访问路径”。两条路径只在服务器的当前 release 汇合。
+
+### 知识发布路径
+
+1. Agent 读取用户指定的原始文档，或读取任意本地工程的代码、测试和项目文档。
+2. `publish-knowledge` 根据候选来源路径匹配 Skill 自己的 `project-routing.json`；每个来源选择最长匹配根，取得并去重对应的 Wiki `projectId`，没有匹配时使用“未指定项目”。
+3. Agent 去重、清洗、核实来源，并把内容整理成候选标题、知识类型、关联项目、结论、置信度和变更方式。用户可以在候选审核时增加或移除关联项目。
+4. 用户在当前对话明确批准精确候选；一般性的开发批准不等于知识发布批准。
+5. Agent 把获批内容写入独立 Personal Wiki 仓库的 `content/**/*.md`，并更新必要的目录数据。Skill 映射引用未知项目 ID 时不得按普通文章直接发布；Agent 可以提示修正本机映射，或把新项目定义与首批文章作为同一批候选一起审批。
+6. 内容检查确认 schema、文章 ID、知识类型、项目 ID、链接、来源、附件和敏感信息均符合合同。
+7. 只提交获批文件并 push `main`；Git 保存每次知识变化的历史。
+8. GitHub Actions 运行测试、构建静态站点，并使用专用部署密钥把 release 包上传服务器。
+9. 服务器验证压缩包、manifest 和文件哈希，健康检查通过后原子切换 `/srv/personal-wiki/current`；失败时继续使用上一版本。
+
+### 网页访问路径
+
+1. 浏览器访问 `https://wiki.wheelbox.top`。
+2. DNS 把域名解析到 `47.86.63.26`。
+3. Caddy/Gateway 在 `443` 端口完成 TLS，并按 hostname 把请求转发到 `127.0.0.1:9765`。
+4. `wiki-server` 检查独立 Wiki 登录 Session；未登录时跳转 `/login`。
+5. 登录后，`wiki-server` 从 `/srv/personal-wiki/current` 读取已构建网页、目录、搜索索引和文章数据。
 
 各组件的职责如下：
 
 | 组件 | 职责 | 不负责的内容 |
 | --- | --- | --- |
-| WheelMaker | 保存 Knowledge Registry 的公开地址，承载产生和确认知识的对话 | 不保存 Wiki 密码，不充当知识源，不代理 Personal Wiki 的 Git 操作 |
-| `publish-knowledge` skill | 盘点材料、提议候选知识、执行获批后的整理和发布流程 | 不替用户批准内容，不把对话原文直接写入 Wiki |
-| Personal Wiki 仓库 | 保存审核后的 Markdown、目录、附件、构建器、认证服务和部署脚本 | 不保存原始资料库、草稿队列和任何凭据 |
+| 任意本地工程 | 提供代码、测试、项目文档和当前工作区上下文 | 不需要实现 Wiki 接口，不保存 Wiki 密码，不代理 Personal Wiki 的 Git 操作 |
+| `publish-knowledge` Skill | 保存本机工程路由、盘点材料、解析默认项目、提议候选知识、执行获批后的整理和发布流程 | 不替用户批准内容，不自动创建项目，不读取 WheelMaker 配置，不把对话原文直接写入 Wiki |
+| Personal Wiki 仓库 | 保存审核后的 Markdown、知识类型和项目注册表、附件、构建器、认证服务和部署脚本 | 不保存原始资料库、草稿队列和任何凭据 |
 | Git | 保存当前知识和完整变更历史 | 不代替内容审核 |
 | `wiki-server` | 密码认证、会话管理和受保护的静态文件读取 | 不编辑知识，不直接面向公网监听 |
-| WheelMaker Gateway | 为 `wiki.wheelbox.top` 提供公网入口、TLS 和反向代理 | 不读取密码，不直接暴露静态发布目录 |
+| 服务器 Gateway | 为 `wiki.wheelbox.top` 提供公网入口、TLS 和反向代理 | 不读取密码，不直接暴露静态发布目录 |
 | DNS | 把 `wiki.wheelbox.top` 解析到服务器公网地址 | 不存放网页、证书或知识内容 |
 
 ## 仓库与配置所有权
@@ -63,12 +156,13 @@ Codex 通过用户级配置 `~/.codex/personal-wiki.json` 定位独立知识库�
 
 该文件只保存路径、远端名、默认分支和公开地址，不得保存密码、Token、私钥或会话数据。`remote` 字段只是预期远端名称；实际仓库仍必须正确配置对应 Git remote 和认证。
 
-Personal Wiki 仓库的核心结构是：
+Personal Wiki 仓库在双视图落地后的目标核心结构如下；其中 `projects.json` 是新增文件，其余目录沿用现行职责：
 
 ```text
 personal-wiki/
 ├─ content/                    # 唯一知识源，按主题保存 Markdown
 │  ├─ sections.json           # 顶层分类和顺序
+│  ├─ projects.json           # 稳定项目 ID、显示名称和顺序
 │  └─ <section>/*.md          # 审核后的知识文章
 ├─ attachments/               # 仅保存明确批准的附件
 ├─ app/                       # React 阅读界面
@@ -79,34 +173,57 @@ personal-wiki/
 └─ .wiki-out/                 # 本地生成物，不提交、不手工编辑
 ```
 
-`content/**/*.md` 是知识的唯一事实源。网页 JSON、搜索索引、HTML、JavaScript 和发布包全部是可重新生成的产物。
+`content/**/*.md` 是文章正文的唯一事实源；`sections.json` 和 `projects.json` 分别是知识类型与项目身份的唯一目录定义。网页 JSON、两种目录索引、搜索索引、HTML、JavaScript 和发布包全部是可重新生成的产物。
 
-### WheelMaker 配置接入
+### 本机 `publish-knowledge` Skill 项目路由
 
-WheelMaker 顶层 `config.json` 支持独立的非敏感定位配置：
+项目归属由用户级 `publish-knowledge` Skill 自己维护，不进入任何业务工程配置。Skill 的 `references/project-routing.json` 保存可自定义的本机路径映射：
 
 ```json
 {
-  "knowledgeRegistry": {
-    "publicUrl": "https://wiki.wheelbox.top"
-  }
+  "schema": 1,
+  "routes": [
+    {
+      "projectId": "wheelmaker",
+      "roots": [
+        "D:/WheelMaker/WheelMaker/.wiki-work/personal-wiki",
+        "D:/WheelMaker/WheelMaker"
+      ]
+    },
+    {
+      "projectId": "unity-engine-projects",
+      "roots": [
+        "D:/ProjectC1",
+        "E:/Z1Engine",
+        "E:/文档/BRG+AnimationInstancing接入流程.pdf",
+        "E:/文档/docs/AnimationInstancing烘焙.pdf",
+        "E:/文档/C1 Animation Instance骨骼挂点使用说明.pdf",
+        "E:/文档/Z1 BRG粒子.pdf",
+        "E:/文档/2024.02 通用BRG模块测试.pdf",
+        "E:/文档/BRG角色性能测试.pdf",
+        "E:/文档/docs/C1场景BRG.pdf",
+        "E:/文档/docs/如何从0开始创建一个World.pdf"
+      ]
+    }
+  ]
 }
 ```
 
-必须区分两个名称相近但职责不同的配置：
+`scripts/resolve-projects.mjs` 对来源文件执行最长包含根匹配；多来源结果取并集并去重，没有具体来源时才使用当前工作区。多个 `roots` 可以指向同一个 `projectId`，因此多个本地工程可以汇总到同一个 Wiki 项目。对于混合用途文档目录，应像上例一样映射已确认的精确文档路径，不能为了省事把整个目录错误归给某个项目。
 
-- `registry`：WheelMaker Conversation Registry，负责 App、Hub、Session 和 WebSocket 通信。
-- `knowledgeRegistry`：Personal Wiki 地址定位器，只包含 `publicUrl`。
+路由文件只保存本机路径和稳定项目 ID，不保存显示名称、仓库凭据或服务器密钥。`content/projects.json` 仍是项目身份的唯一正式注册表；Skill 映射引用未知 ID 时停止普通发布，不能静默回退或自动登记。没有任何匹配时文章保存 `projects: []`，网页把它显示为“未指定项目”，不会把 `unassigned` 写成正式 ID。
 
-Go 共享配置层使用严格 JSON 解码。`knowledgeRegistry` 目前只允许 `publicUrl`；在该 section 中加入 `password`、`token` 或其他未知字段会导致配置解析失败。运行中的 WheelMaker 二进制必须已经包含该字段后，才能把它写入真实 `~/.wheelmaker/config.json`，否则旧版本的严格解析器会把它当作未知字段拒绝启动。
+该映射只影响运行此 Skill 的电脑。其他电脑可以安装同一发布 Skill，但应维护自己的工程根路径；这不会要求任何被扫描工程实现接口或修改配置。Knowledge Registry 的日常新增知识、项目路由和网站访问均不需要 WheelMaker 发布。
 
-当前接入边界是“配置可解析并保留公开地址”。Workspace Web 还没有消费该字段形成菜单或内嵌页面；后续若增加入口，应由服务端以受控、只读方式投影公开地址，不能把配置文件或 Wiki 凭据发送给浏览器。
-
-Knowledge Registry 仍是独立站点。日常新增知识不需要修改 WheelMaker 代码，也不需要重新发布 WheelMaker；只有 WheelMaker 自身的入口、配置合同或 Gateway 能力变化时才涉及 WheelMaker 发布。
+`publish-knowledge` 面向用户和智能体的说明、流程、合同、注释、错误提示与普通命令提示统一使用中文。为保持已有内容和自动化兼容，技能名称、`projectId`、JSON 字段名、命令行参数、代码标识符、文件路径及稳定项目 ID 保持原有英文机器契约，不做中文化改名。
 
 ## 知识分类与文章模型
 
-目录按未来检索问题的主题组织，不按工程名组织。当前顶层分类是：
+每篇文章只有一个主题归属，但可以关联零到多个项目。主题和项目是同一份文章的两个正交检索维度：主题回答“这是什么知识”，项目回答“它与哪些长期项目有关”。
+
+### 知识类型
+
+知识类型按未来检索问题的主题组织，不按工程名组织。当前顶层分类是：
 
 1. `Unity`：BRG、渲染架构、资源管线、性能分析和平台构建。
 2. `Unreal Engine`：Shader、Niagara、VT、渲染、资产管线和性能分析。
@@ -116,9 +233,57 @@ Knowledge Registry 仍是独立站点。日常新增知识不需要修改 WheelM
 6. `产品与决策`：已确认的方向、权衡和决策依据。
 7. `个人方法`：跨工程适用的原则、检查表和思考框架。
 
-Unity 和 Unreal Engine 先在顶层分开，同一引擎内部再用文章标题和标签区分渲染、场景、资产、UI、Shader、特效、构建和性能等主题。项目名只写入文章的 `projects` 元数据，不能成为顶层目录。
+Unity 和 Unreal Engine 先在顶层分开，同一引擎内部使用文章的显式 `category` 形成稳定二级目录，例如 BRG、Animation、Rendering、Gameplay 和 Tools；标签只用于补充检索，不能替代目录。按知识类型浏览时，目录结构保持“知识类型 → 二级分类 → 文章”。
+
+### 项目注册表与项目视图
+
+`content/projects.json` 保存稳定项目 ID、显示名称、说明和顺序。文章与本机 Skill 路由只引用 ID；项目改名只修改注册表，不批量改写文章。初始迁移把现有名称合并为两个正式项目：
+
+| 稳定 ID | 显示名称 | 合并的现有值 |
+| --- | --- | --- |
+| `wheelmaker` | WheelMaker | `WheelMaker`、`Personal Wiki` |
+| `unity-engine-projects` | Unity Engine Projects | `C1`、`Z1`、`SLGWorld` |
+
+目标注册表形状如下，ID 使用稳定 kebab-case，显示名称和说明可以独立演进：
+
+```json
+[
+  {
+    "id": "wheelmaker",
+    "title": "WheelMaker",
+    "description": "WheelMaker 产品、Personal Wiki 和相关工具链。",
+    "order": 10
+  },
+  {
+    "id": "unity-engine-projects",
+    "title": "Unity Engine Projects",
+    "description": "由现有 C1、Z1 和 SLGWorld 知识合并形成的项目视图。",
+    "order": 20
+  }
+]
+```
+
+重复 ID、重复顺序、非法 ID 或文章引用未知 ID 都是内容校验错误。已登记但没有文章的项目保留在注册表中，但不显示在阅读目录里。
+
+项目关联不改变文章的知识类型。例如原 `SLGWorld` 文章仍可属于 `Unreal Engine` 知识类型，但在项目视图中归入 `Unity Engine Projects`。
+
+文章可以关联多个项目，并在每个关联项目下出现。没有项目关联的文章保持 `projects: []`，构建器把它们汇总到自动生成的“未指定项目”；该伪项目不写入 `projects.json`。项目视图只显示当前至少包含一篇文章的正式项目和“未指定项目”。
+
+按项目浏览时，目录结构为“项目 → 知识类型 → 二级分类 → 文章”。项目不是第二套知识源，也不拥有独立分类体系。
+
+### 文章元数据
 
 每篇文章必须具有稳定 ID、明确标题、一句话摘要、分类、排序、标签、当前状态、更新时间、置信度、关联项目和可追溯来源。文章正文先给出当前结论，再说明适用范围、约束、证据和操作含义。旧结论不在正文中保留副本，历史由 Git 负责。
+
+`projects` 保存稳定 ID，不保存显示名称：
+
+```yaml
+section: software-development
+category: architecture
+projects: [wheelmaker, unity-engine-projects]
+```
+
+`projects` 表示关联和适用项目，用于浏览与检索；它不代替 `sources`。Agent 先根据来源路径生成默认值，用户可以在候选审核时明确增加或移除项目。
 
 置信度使用三档：
 
@@ -127,6 +292,62 @@ Unity 和 Unreal Engine 先在顶层分开，同一引擎内部再用文章标�
 - `provisional`：明确批准的短期结论，需要尽快验证或删除。
 
 来源必须是具体仓库版本、文档标题或链接、带日期的决定、验证结果之一，不能写“根据记忆”一类无法追溯的描述。
+
+## 双视图阅读交互
+
+阅读界面提供“按知识类型”和“按项目”两个模式。首次访问保持现有的按知识类型模式；之后在浏览器本地记住用户最近一次选择。模式和目录上下文进入 URL，使刷新、收藏、前进和后退恢复相同视图。
+
+按知识类型模式沿用现有左侧知识类型与二级分类目录。按项目模式采用以下布局：
+
+- 左侧只列出有文章的项目及文章数量；
+- 选择项目后，主区域展示该项目下的知识类型、二级分类和文章；
+- 面包屑显示项目、知识类型、二级分类和文章的完整上下文；
+- 多项目文章从哪个项目进入，就保留哪个项目上下文；
+- 阅读文章时切换模式，正文保持不变，只切换侧栏、面包屑和上下文 URL；
+- 没有项目的文章在“未指定项目”下浏览。
+
+搜索始终覆盖整个 Wiki，不因当前目录模式或所选项目缩小范围。搜索结果显示解析后的项目名称；项目模式是浏览索引，不把知识重新隔离成项目孤岛。
+
+## 本地工程内容的复用与软联动边界
+
+Knowledge Registry 与本地工程的联动发生在 Agent 知识工作流中，不是数据库同步，也不是运行时接口。WheelMaker 只是其中一个普通来源。
+
+### 任意工程作为知识来源
+
+工程代码、测试和项目文档是项目事实来源。一次开发任务结束后，Agent 主动检查是否产生了由代码、测试或文档支持、离开当前任务仍有价值的结论，并提出 Personal Wiki 候选；它不会因为开发任务完成就直接写入。
+
+候选的默认项目归属按本机 Skill 路由解析：
+
+1. 收集支撑候选结论的文件或仓库路径；
+2. 与 `publish-knowledge/references/project-routing.json` 中的工程根比较；
+3. 每个来源选择最长的包含根并取得对应 `projectId`；
+4. 多个来源映射到同一 ID 时去重，映射到不同 ID 时保留多个关联项目；
+5. 没有具体来源时使用当前工作区；仍无法匹配时使用“未指定项目”；
+6. 映射引用 `projects.json` 中不存在的 ID 时停止普通发布，并提示修正本机映射或审批登记新项目。
+
+来源路径决定默认值，不决定最终关联。候选清单必须展示项目归属，用户可以在批准时调整；文章同时保存精确 `sources` 以追溯证据。
+
+工程内部约定仍由各工程自己的文档维护；跨任务可复用的方法、Unity/Unreal 技术结论和长期个人经验才进入 Personal Wiki。Personal Wiki 不取代代码和项目文档，也不自动复制全部工程内容。
+
+### 显示能力复用
+
+Personal Wiki 的 Markdown 阅读器沿用 WheelMaker 已验证的能力组合，包括 React Markdown、GFM、Mermaid、KaTeX 和 Shiki。这里复用的是技术栈和渲染约定，而不是在运行时导入 WheelMaker 前端产物，因此两者可以独立构建和发布。
+
+### 本机 Skill 与网络入口
+
+Codex 通过 `~/.codex/personal-wiki.json` 定位 Wiki 仓库和网站地址，通过 `publish-knowledge` Skill 自己的路由文件解析项目。业务工程不保存这些信息，也不向浏览器投影本机路径。
+
+Knowledge Registry 当前与 WheelMaker 共用同一个 Gateway 和服务器 IP。Gateway 根据域名和端口把请求路由给不同内部服务；这是部署基础设施复用，不构成产品代码、配置或身份系统依赖。日常文章更新不会修改 WheelMaker 业务代码，也不会重新发布 WheelMaker。
+
+### 当前明确没有的自动联动
+
+- WheelMaker Registry 数据库不保存 Wiki 文章。
+- WheelMaker 登录与 Wiki 密码不是同一身份，也没有单点登录。
+- 对话、代码提交和 `docs/wiki` 不会自动发布到 Personal Wiki。
+- 项目映射只生成候选默认值，不绕过当前对话中的精确批准。
+- WheelMaker 前端目前没有 Knowledge Registry 菜单或内嵌页面。
+- 项目映射不进入 Registry 协议，也不读取 WheelMaker 配置。
+- Wiki 的 GitHub Deploy Key、服务器密码哈希和登录 Session 不进入任何业务工程配置。
 
 ## 文档和对话进入知识库的流程
 
@@ -160,10 +381,12 @@ Agent 把原始材料整理成少量可复用文章，而不是“一份文档�
 写入前必须展示精确候选清单。每个候选至少包含：
 
 1. 稳定工作标题；
-2. 目标分类；
-3. 一句话结论；
-4. 置信度和证据；
-5. 新建文章还是更新现有文章。
+2. 目标知识类型和二级分类；
+3. 关联项目 ID 和显示名称；
+4. 一句话结论；
+5. 置信度和证据；
+6. 新建文章还是更新现有文章；
+7. 如果引用尚未登记的项目，列出新增 `projects.json` 项目的精确 ID、名称、说明和顺序。
 
 这一步只做提案，不修改 Personal Wiki 文件、不创建 Wiki commit、不推送。审核发生在当前对话中，Wiki 页面不建立 Inbox、Draft、Review Queue 或审批界面。
 
@@ -190,6 +413,8 @@ Agent 把原始材料整理成少量可复用文章，而不是“一份文档�
 - 保留任务开始前的无关工作树改动；目标文章存在重叠修改时停止；
 - 主题已存在时更新原文，不制造“v2”“新版”“归档版”等平行页面；
 - 填写精确范围、置信度、更新日期和来源；
+- 文章 `projects` 只使用 `content/projects.json` 中的稳定 ID；没有归属时使用空数组，不把“未指定项目”写成正式 ID；
+- 新项目只在用户明确批准该项目定义后写入 `projects.json`；不根据任何工程配置或目录名自动创建；
 - 不使用原始 HTML；
 - Wiki 内部文章链接使用稳定文章 ID；
 - 不写密码、Token、私钥、访问码、Session 数据或原始对话；
@@ -197,7 +422,7 @@ Agent 把原始材料整理成少量可复用文章，而不是“一份文档�
 
 ### 6. 校验、提交和发布
 
-内容写入后从 Personal Wiki 仓库根目录执行：
+内容写入后从 Personal Wiki 仓库根目录执行以下现行验证命令；双视图落地时扩展这些命令背后的校验内容，不新增一套旁路验证：
 
 ```powershell
 npm run check
@@ -207,7 +432,7 @@ npm test
 
 其中：
 
-- `npm run check` 校验文章 schema、ID、标题、分类、链接、附件、来源和敏感信息；
+- `npm run check` 校验文章 schema、ID、标题、分类、链接、附件、来源、敏感信息、项目注册表、文章项目 ID、双视图目录完整性和重复项目；
 - TypeScript 检查保证阅读界面仍能编译；
 - `npm test` 同时运行内容测试和 Go 认证服务测试。
 
@@ -221,11 +446,11 @@ npm test
 npm run build
 ```
 
-构建流程会：
+双视图落地后的构建流程会：
 
 1. 清理旧的 `.wiki-out/site`；
-2. 读取并验证 Markdown 和 `sections.json`；
-3. 生成文章 JSON、目录和搜索索引；
+2. 读取并验证 Markdown、`sections.json` 和 `projects.json`；
+3. 生成文章 JSON、按知识类型目录、按项目目录和全局搜索索引；
 4. 用 webpack 生成静态阅读界面；
 5. 把源 Git commit 写入 release metadata；
 6. 为全部发布文件生成大小和 SHA-256 manifest；
@@ -243,7 +468,7 @@ Personal Wiki 的 `main` 分支 push 会触发私有仓库中的 `publish.yml`�
 4. 从 GitHub Secrets 写入临时 SSH identity 和独立 known-hosts 文件；
 5. 执行 `npm run publish`。
 
-所需 Secrets 只存在 GitHub 仓库设置中，包括部署主机、端口、私钥和 pinned known-hosts。它们不得进入 Git、WheelMaker 配置、Personal Wiki 内容或日志。只有 Personal Wiki 仓库实际配置了 Git remote、Secrets 和服务器授权公钥后，push-to-main 自动发布链路才算完整启用。
+所需 Secrets 只存在 GitHub 仓库设置中，包括部署主机、端口、私钥和 pinned known-hosts。它们不得进入 Git、业务工程配置、Personal Wiki 内容或日志。只有 Personal Wiki 仓库实际配置了 Git remote、Secrets 和服务器授权公钥后，push-to-main 自动发布链路才算完整启用。
 
 ### 本地手动发布
 
@@ -297,7 +522,7 @@ Knowledge Registry 内容更新不需要修改 WheelMaker 业务代码，也不�
 - 以 `0600` 权限保存密码哈希；
 - 为部署公钥添加禁止端口转发、Agent 转发、X11 和 PTY 的限制。
 
-密码原文不会保存到仓库或 WheelMaker 配置。服务使用 Argon2id 哈希验证密码；密码哈希文件对 group 和 others 不可读。
+密码原文不会保存到仓库或任何业务工程配置。服务使用 Argon2id 哈希验证密码；密码哈希文件对 group 和 others 不可读。
 
 ### 服务运行边界
 
@@ -354,17 +579,27 @@ readlink -f /srv/personal-wiki/current
 
 普通静态发布不会替换正在运行的 Go 二进制。若只发布前端改名而没有部署新二进制，登录页仍可能显示旧品牌，但登录后的静态界面已经更新。
 
+## 双视图设计的落地与发布边界
+
+双视图和项目注册表属于 Personal Wiki 的静态内容、构建器和 React 阅读界面变更，完成验证后通过 Personal Wiki `main` 的既有 Actions 发布到 `wiki.wheelbox.top`；它不要求替换服务器上的 `wiki-server`。
+
+本轮不修改 WheelMaker 源码、协议或 `config.json`，也不要求执行 WheelMaker 正式产品发布。双视图只发布 Personal Wiki 的静态 release。
+
+本机全局 `publish-knowledge` Skill 与文章合同同步增加项目解析和校验规则。该 Skill 的本机更新不能证明其他电脑已经具备相同能力；多机使用时应分别安装同一版本，并维护各自的 `project-routing.json`。
+
 ## 日常知识管理操作
 
 ### 从一批文档开始
 
-在任何 WheelMaker/Codex 对话中提供资料目录，并明确先盘点、不要直接发布：
+在任何 Codex 对话中提供资料目录，并明确先盘点、不要直接发布：
 
 ```text
 盘点这个目录中的文档，按 Unity、Unreal Engine 和通用知识分类，识别重复与敏感内容，先给我候选文章，不要写入 Wiki。
 ```
 
 确认候选后再回复精确批准范围。Agent 会定位 Personal Wiki、同步默认分支、写入获批文章、运行检查、提交、同步并推送。
+
+如果资料路径匹配本机 Skill 路由，Agent 会自动提出默认项目归属；如果没有映射，则候选明确显示“未指定项目”，不会猜测项目名称。
 
 ### 从一次代码任务或问答沉淀知识
 
@@ -377,6 +612,10 @@ readlink -f /srv/personal-wiki/current
 - 不与现有文章重复。
 
 临时状态、未解决问题、猜测、一次性 workaround 和流水账不进入 Wiki。用户批准的是“知识候选”，不是整个开发任务；开发任务获批不自动等于知识发布获批。
+
+### 登记或调整项目
+
+新 Wiki 项目不从任何工程配置自动同步。第一次贡献时，Agent 可以把项目定义与首批候选文章一起提出；用户明确批准后，同一批次更新 `content/projects.json` 和文章。项目改名只改注册表显示名称，稳定 ID 保持不变；合并项目时先提出旧 ID 到新 ID 的完整文章迁移范围。
 
 ### 修改已有知识
 
@@ -392,6 +631,7 @@ readlink -f /srv/personal-wiki/current
 ### 故障处理边界
 
 - 内容校验失败：保持 Wiki 未提交，修复具体文章和规则。
+- 本机 Skill 路由引用未知项目 ID：停止该批发布，提示修正路由或审批登记新项目；不静默转为未指定，也不自动创建。
 - 检测到秘密：从暂存区和生成物中移除，不在回复或日志中复述秘密。
 - Git 语义冲突：停止并请求用户选择，不静默合并不同知识结论。
 - push 成功但部署失败：保留 commit，服务器继续使用上一份原子 release。
@@ -402,11 +642,13 @@ readlink -f /srv/personal-wiki/current
 
 ### 每次知识发布
 
-- 候选标题、分类、结论、置信度、来源和修改方式已经展示。
+- 候选标题、知识类型、关联项目、结论、置信度、来源和修改方式已经展示。
 - 用户在当前对话明确批准精确候选。
 - 没有密码、Token、私钥、Session、内部人员或原始对话。
 - 现有主题优先更新，没有制造重复文章。
-- Unity 和 Unreal Engine 分类正确，项目名只在元数据中。
+- Unity 和 Unreal Engine 知识类型正确，文章项目值都是已登记的稳定 ID。
+- 未归属文章保持空项目数组，“未指定项目”没有被写成正式注册项。
+- 按知识类型和按项目两种目录都能索引到文章，搜索仍覆盖全库。
 - `npm run check`、`npx tsc --noEmit`、`npm test` 全部通过。
 - commit 聚焦且来源可追溯。
 - push、Actions 和服务器激活结果已确认。
@@ -427,15 +669,14 @@ readlink -f /srv/personal-wiki/current
 WheelMaker 仓库：
 
 - [`../architecture/gateway.md`](../architecture/gateway.md)：Gateway、TLS、站点声明和公网入口边界。
-- [`../architecture/server-runtime.md`](../architecture/server-runtime.md)：WheelMaker 顶层配置所有权和 `knowledgeRegistry.publicUrl`。
-- [`../../../server/config.example.json`](../../../server/config.example.json)：WheelMaker 配置示例。
-- [`../../../server/internal/shared/config.go`](../../../server/internal/shared/config.go)：`KnowledgeRegistryConfig` 严格解析实现。
+- 本页所在仓库只记录当前服务器 Gateway 的基础设施关系；Knowledge Registry 不要求修改 WheelMaker 代码或配置。
 
 Personal Wiki 独立仓库：
 
 - `README.md`、`AGENTS.md`：仓库边界和基本工作流。
-- `content/sections.json`：当前主题分类。
-- `scripts/publish-wiki.mjs`、`scripts/lib/content.mjs`：检查、构建、manifest 和 SSH 发布。
+- `content/sections.json`、`content/projects.json`：知识类型和项目身份定义。
+- `app/src/App.tsx`、`app/src/routes.ts`、`app/src/types.ts`：双视图交互、上下文路由和公开数据类型。
+- `scripts/publish-wiki.mjs`、`scripts/lib/content.mjs`：内容与项目检查、双目录构建、manifest 和 SSH 发布。
 - `server/internal/wiki/`：Argon2id、Session、限流、安全 Header 和 release 校验。
 - `ops/provision.sh`、`ops/activate-release.sh`、`ops/personal-wiki.service`、`ops/wiki.caddy`：安装、原子激活、systemd 沙箱和 Gateway 路由。
 - `.github/workflows/publish.yml`：私有仓库的 push-to-main 自动发布。
@@ -444,3 +685,5 @@ Personal Wiki 独立仓库：
 
 - `~/.codex/skills/publish-knowledge/SKILL.md`
 - `~/.codex/skills/publish-knowledge/references/article-contract.md`
+- `~/.codex/skills/publish-knowledge/references/project-routing.json`
+- `~/.codex/skills/publish-knowledge/scripts/resolve-projects.mjs`

@@ -19,6 +19,12 @@
       "skillPath": "skills/apple-design/SKILL.md",
       "computedHash": "0d19303902efa64eace10e6b183eb29ef3220d424c1a7fd1eafc52adde216932"
     },
+    "auto-using-skills": {
+      "source": "swm8023/skills",
+      "sourceType": "github",
+      "skillPath": "skills/auto-using-skills/SKILL.md",
+      "computedHash": "646b6e2674abfd6fc182e5b1f56958b13d239c3d3ee41392fdd1a5c2161de9eb"
+    },
     "baseline-ui": {
       "source": "ibelick/ui-skills",
       "sourceType": "github",
@@ -30,6 +36,24 @@
       "sourceType": "github",
       "skillPath": "skills/SKILL.md",
       "computedHash": "b16a2f5830f3db40695fdd58d415a631e9fb6170a0cc5d3b56469d17e53596bc"
+    },
+    "caveman": {
+      "source": "swm8023/skills",
+      "sourceType": "github",
+      "skillPath": "skills/caveman/SKILL.md",
+      "computedHash": "517d0a6f5110c2a34a0ca26d237861c17eb563b4baa06c3fb56927a7ffed4668"
+    },
+    "debug": {
+      "source": "swm8023/skills",
+      "sourceType": "github",
+      "skillPath": "skills/debug/SKILL.md",
+      "computedHash": "2059c580226ac792c93208847a84717d69df1ef0b43a11f0af8dcbb052aa36ec"
+    },
+    "do-scoped": {
+      "source": "swm8023/skills",
+      "sourceType": "github",
+      "skillPath": "skills/do-scoped/SKILL.md",
+      "computedHash": "a5884a3412afff509771e251a9b5e3bb5bad6248cb6b6b91836552a1ffbc277d"
     },
     "emil-design-eng": {
       "source": "emilkowalski/skills",
@@ -48,6 +72,30 @@
       "sourceType": "github",
       "skillPath": "skills/frontend-design/SKILL.md",
       "computedHash": "93f53fd1c0352d3d7ec17b8f73d7351bf76f4821e55d123c9d2abc2c53ba48e4"
+    },
+    "git-check": {
+      "source": "swm8023/skills",
+      "sourceType": "github",
+      "skillPath": "skills/git-check/SKILL.md",
+      "computedHash": "1f7883aa4d2ad509ed33874d51602280087da1b2f4bc87e45d37767ad263fa16"
+    },
+    "git-workflow": {
+      "source": "swm8023/skills",
+      "sourceType": "github",
+      "skillPath": "skills/git-workflow/SKILL.md",
+      "computedHash": "815cad533374593242937428e68171a1fe409455d998285f23a0aab08b52b571"
+    },
+    "handoff": {
+      "source": "swm8023/skills",
+      "sourceType": "github",
+      "skillPath": "skills/handoff/SKILL.md",
+      "computedHash": "d35eb4dabd4b20230738db51b7894da42e1a9f1186c204f365ca429dbfe640f9"
+    },
+    "handoff-wheel": {
+      "source": "swm8023/skills",
+      "sourceType": "github",
+      "skillPath": "skills/handoff-wheel/SKILL.md",
+      "computedHash": "a1708ee87e89d9593746626575a8b352fb56341d5054105d8fed3ab7aa7fc81f"
     },
     "improve-animations": {
       "source": "emilkowalski/skills",
@@ -72,6 +120,30 @@
       "sourceType": "github",
       "skillPath": "skills/review-animations/SKILL.md",
       "computedHash": "6f8d633d7884c1390eff7af4bfaf7a450e798f117e1d49a555e00819dc877f64"
+    },
+    "scope": {
+      "source": "swm8023/skills",
+      "sourceType": "github",
+      "skillPath": "skills/scope/SKILL.md",
+      "computedHash": "b53aecdaed7b75a693db1b9aa01dbb6a24f77f9d0260c191e4f04ad05ebe11db"
+    },
+    "test-driven-development": {
+      "source": "swm8023/skills",
+      "sourceType": "github",
+      "skillPath": "skills/test-driven-development/SKILL.md",
+      "computedHash": "25d523437b06e71adf6a335574789e6d26104fd4e48d95e01455890457a2bac7"
+    },
+    "wiki": {
+      "source": "swm8023/skills",
+      "sourceType": "github",
+      "skillPath": "skills/wiki/SKILL.md",
+      "computedHash": "7560155a3a957cb084a28343da1d3914e6fc94f00f14ffdf2c01e036531c5bf3"
+    },
+    "zoom-out": {
+      "source": "swm8023/skills",
+      "sourceType": "github",
+      "skillPath": "skills/zoom-out/SKILL.md",
+      "computedHash": "7724e4718417afa275f509f3f8773110404174e32ec042afb0d1e599ec3cabb7"
     }
   }
 }
