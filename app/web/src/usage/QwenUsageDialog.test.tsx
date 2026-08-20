@@ -1,7 +1,15 @@
 import React from 'react';
 import TestRenderer, {act} from 'react-test-renderer';
+import fs from 'fs';
+import path from 'path';
 
 import {QwenUsageDialog} from './QwenUsageDialog';
+
+test('starts native login directly from the Login button event', () => {
+  const source = fs.readFileSync(path.join(__dirname, 'QwenUsageDialog.tsx'), 'utf8');
+  expect(source).toContain('onClick={startLogin}');
+  expect(source).not.toContain('onClick={() => { void runLogin(); }}');
+});
 
 const account = {
   localId: 'bailian-token-plan',

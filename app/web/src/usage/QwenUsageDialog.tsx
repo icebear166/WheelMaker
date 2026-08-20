@@ -64,13 +64,13 @@ export function QwenUsageDialog({
   const statsUnavailable = !data && providerAuthenticated === true;
   const loginRequired = data && providerAuthenticated === false && providerStatus !== 'ok';
   const [loginError, setLoginError] = React.useState('');
-  const runLogin = async () => {
-    try {
-      setLoginError('');
-      await onLogin(await requestNativeQwenLogin());
-    } catch (cause) {
-      setLoginError(cause instanceof Error ? cause.message : String(cause));
-    }
+  const startLogin = () => {
+    setLoginError('');
+    void requestNativeQwenLogin()
+      .then(credential => onLogin(credential))
+      .catch(cause => {
+        setLoginError(cause instanceof Error ? cause.message : String(cause));
+      });
   };
 
   return (
@@ -140,10 +140,10 @@ export function QwenUsageDialog({
               <strong>Login to view Bailian Token Plan</strong>
               <p>Sign in with your Alibaba Cloud Console account in the native login window.</p>
               {nativeAvailable ? (
-                <button type="button" className="deepseek-usage-primary-action" disabled={busy} onClick={() => { void runLogin(); }}>
+                <button type="button" className="deepseek-usage-primary-action" disabled={busy} onClick={startLogin}>
                   {busy ? 'Logging in…' : 'Login in window'}
                 </button>
-          ) : (
+              ) : (
                 <p className="deepseek-usage-login-error" role="status">Native login is unavailable in this browser.</p>
               )}
             </div>
@@ -153,7 +153,7 @@ export function QwenUsageDialog({
               <strong>Login expired</strong>
               <p>Reconnect the Alibaba Cloud Console account to refresh Qwen usage.</p>
               {nativeAvailable ? (
-                <button type="button" className="deepseek-usage-primary-action" disabled={busy} onClick={() => { void runLogin(); }}>
+                <button type="button" className="deepseek-usage-primary-action" disabled={busy} onClick={startLogin}>
                   {busy ? 'Logging in…' : 'Login in window'}
                 </button>
               ) : <p className="deepseek-usage-login-error" role="status">Native login is unavailable in this browser.</p>}

@@ -15,15 +15,19 @@ function accountLabel(account: UsageProviderView['accounts'][number]): string {
 }
 
 function qwenPlaceholderAccount(provider: UsageProviderView): UsageViewAccount {
-  const hubId = provider.hubId ?? provider.hubs?.[0]?.hubId ?? '';
+  const hubIds = Array.from(new Set([
+    provider.hubId,
+    ...(provider.hubs ?? []).map(hub => hub.hubId),
+  ].filter((hubId): hubId is string => Boolean(hubId)))).sort();
+  const primaryHubId = hubIds[0];
   return {
     localId: 'bailian-token-plan',
     identity: {kind: 'source', label: 'Bailian Token Plan'},
     status: provider.status,
-    message: provider.message ?? provider.hubs?.find(hub => hub.hubId === hubId)?.message,
+    message: provider.message ?? provider.hubs?.find(hub => hub.hubId === primaryHubId)?.message,
     limits: [],
-    hubIds: hubId ? [hubId] : [],
-    sources: hubId ? [{hubId, accountLocalId: 'bailian-token-plan'}] : [],
+    hubIds,
+    sources: hubIds.map(hubId => ({hubId, accountLocalId: 'bailian-token-plan'})),
   };
 }
 

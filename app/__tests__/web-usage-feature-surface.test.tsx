@@ -37,6 +37,22 @@ const fixtureSnapshot: UsageViewSnapshot = {
   }],
 };
 
+const qwenAggregateSnapshot: UsageViewSnapshot = {
+  refreshing: false,
+  providers: [{
+    id: 'qwen',
+    name: 'Qwen',
+    status: 'unavailable',
+    authenticated: false,
+    accountCount: 1,
+    accounts: [],
+    hubs: [
+      {hubId: 'hub-a', status: 'unavailable', message: 'login required'},
+      {hubId: 'hub-b', status: 'unavailable', message: 'login required'},
+    ],
+  }],
+};
+
 const efficiencySnapshot: ModelEfficiencySnapshot = {
   status: 'ready',
   refreshing: false,
@@ -53,6 +69,18 @@ function renderedText(node: TestRenderer.ReactTestInstance): string {
 }
 
 describe('MonitorSurface module', () => {
+  it('renders all source Hubs for one aggregated Qwen placeholder', () => {
+    let view: TestRenderer.ReactTestRenderer;
+    act(() => {
+      view = TestRenderer.create(<UsageDetailContent snapshot={qwenAggregateSnapshot} />);
+    });
+
+    expect(view!.root.findAllByProps({'data-usage-account': 'qwen:bailian-token-plan'})).toHaveLength(1);
+    expect(view!.root.findAllByProps({'data-usage-hub': true})).toHaveLength(2);
+    expect(renderedText(view!.root)).toContain('hub-a');
+    expect(renderedText(view!.root)).toContain('hub-b');
+  });
+
   it('has a dedicated shared desktop surface', () => {
     expect(fs.existsSync(path.join(
       __dirname,

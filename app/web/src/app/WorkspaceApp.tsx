@@ -13399,9 +13399,7 @@ export function App() {
   const currentQwenUsageProvider = useMemo(() => {
     const view = qwenUsageDialogView;
     if (!view) return null;
-    const hubId = view.target.provider.hubId ?? view.target.account.hubIds[0];
-    return usageSnapshot.providers.find(candidate =>
-      candidate.id === 'qwen' && (!hubId || candidate.hubId === hubId));
+    return usageSnapshot.providers.find(candidate => candidate.id === 'qwen');
   }, [qwenUsageDialogView, usageSnapshot.providers]);
 
   const currentQwenUsageAccount = useMemo(() => {

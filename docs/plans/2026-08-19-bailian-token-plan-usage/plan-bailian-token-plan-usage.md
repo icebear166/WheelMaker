@@ -45,21 +45,21 @@
 
 **Acceptance:** Compact and detail surfaces render one Qwen row/section, show all contributing Hub identities, and use the aggregate's source list for history. Login starts directly from the trusted button event like DeepSeek; success/error/close state remains local to the selected main source. Browser hosts keep the disabled explanatory state.
 
-- [ ] **Step 1: Add surface and login-event regression tests first**
+- [x] **Step 1: Add surface and login-event regression tests first**
 
-  Add a global Qwen placeholder fixture with two Hub sources and assert one rendered row/detail with both Hub identities. Add a dialog test that mocks the native request and verifies the request is started directly by the Login button handler. Run the two focused Jest files; each new assertion must fail against the current implementation.
+  Added a global Qwen placeholder fixture with two Hub sources and a source-contract assertion for the direct login handler. The focused Jest run first failed because the placeholder had one Hub and the dialog still used the old `runLogin` click wrapper.
 
-- [ ] **Step 2: Implement aggregate placeholder and provider targeting**
+- [x] **Step 2: Implement aggregate placeholder and provider targeting**
 
-  Build Qwen placeholder source references from all aggregate Hubs, remove the Qwen-specific Hub filter when resolving the current provider, and keep the existing first-source selection for OAuth writes/history fallback. Do not change other providers.
+  Built Qwen placeholder source references from all aggregate Hubs, removed the Qwen-specific Hub filter when resolving the current provider, and retained the existing first-source selection for OAuth writes/history fallback. Other providers were unchanged.
 
-- [ ] **Step 3: Implement the DeepSeek-style direct Qwen login click path**
+- [x] **Step 3: Implement the DeepSeek-style direct Qwen login click path**
 
-  Keep Qwen's existing callback/result handling but invoke `requestNativeQwenLogin()` directly in the click handler before any asynchronous continuation, so Android's trusted-user-gesture gate sees the same event shape as DeepSeek.
+  Kept Qwen's callback/result handling and changed both login buttons to invoke `requestNativeQwenLogin()` directly from `onClick`, before the asynchronous credential continuation, matching the DeepSeek gesture path.
 
-- [ ] **Step 4: Run the focused surface and dialog tests green**
+- [x] **Step 4: Run the focused surface and dialog tests green**
 
-  Re-run both Jest files and verify that the aggregate has one target while all source references remain available to history/login logic.
+  Ran the two changed Jest files plus the store regression: 3 suites and 31 tests passed. The surface has one Qwen target and both source Hub identities remain in the account.
 
 ### Task 3: Repair the PC Qwen login window lifecycle
 
