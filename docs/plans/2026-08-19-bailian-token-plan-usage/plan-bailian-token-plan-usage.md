@@ -1,141 +1,121 @@
-# Bailian Token Plan Usage Implementation Plan
+# Bailian Token Plan Usage Aggregation and Native Login Repair Plan
 
-> **For agentic workers:** REQUIRED SKILL: Use implement to execute this plan task-by-task. Respect the handed-off git_state: inherit prepared, otherwise prepare; use git-workflow for checkpoint/finalize. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SKILL: Use do-scoped to execute this plan task-by-task. Respect the handed-off git_state: inherit prepared, otherwise prepare; use git-workflow for checkpoint/finalize. Update each checkbox only after the step is verified.
 
-**Goal:** Add Hub-isolated Qwen Bailian Token Plan personal usage snapshots to Limits Monitor and reuse the existing local usage-history trend for Qwen.
+**Goal:** Change the existing Qwen Bailian Token Plan integration from per-Hub Web rows to one aggregated Qwen row, retain Hub-scoped credentials and history sources, and align PC/Android login surfaces with the proven DeepSeek lifecycle without changing the official Qwen callback or field parsing.
 
 **Scope Source:** `docs/scope/2026-08-19-bailian-token-plan-usage.md`
 
-**Architecture:** Each Hub owns the Qwen `sk-sp-` configuration check, Bailian Console credential package, current usage cache, and successful local history samples. The Hub publishes only sanitized state through the existing tokenStats path. The Web UI reuses the existing `usage.history.get` trend path and invokes native login only on supported Desktop/Android hosts.
+**Architecture:** Hub services remain unchanged and continue to own OAuth, credential storage, current snapshots, and local history. Web `UsageStore` aggregates only providers with `id === 'qwen'` and `localId === 'bailian-token-plan'`; the aggregate keeps every source Hub and never sums Credits. The first stable source is the main source for login/logout/credential writes. Desktop keeps the official local callback and protected credential extraction while adopting DeepSeek's owned-popup, timeout, completion, and teardown discipline. Android keeps the Qwen callback and allowlist while adopting DeepSeek's full-screen in-app page, wide viewport, progress, retry, and navigation-error handling.
 
-**Tech Stack:** Go Hub services and protocol envelopes, React/TypeScript usage store and monitor surfaces, Windows WebView2, Android WebView bridge, Go/Jest/Kotlin tests.
+**Tech Stack:** Go desktop bridge, React/TypeScript usage store and surfaces, Windows WebView2, Android WebView/Kotlin, Jest, Go tests, and Android source-level protocol tests.
 
-**Verification:** Focused Go tests for hubconfig, usage, reporter, protocol, and redaction; focused Jest tests for parser/store/surface; Web TypeScript check; Android/Desktop source and unit tests; live Desktop and Android Bailian account probe.
+**Verification:** Run focused Jest and Go tests, source-level Android lifecycle tests, TypeScript checking when dependencies permit, static secret/diff checks, and inspect native-login behavior boundaries. Do not run a Web production build. Real Bailian Desktop/Android login and current-snapshot probes remain unrun unless test credentials and the external account are available.
 
 ---
 
-### Task 1: Verify the Bailian external contracts before production code
+### Task 1: Aggregate Qwen provider sources in the Web usage store
 
 **Files:**
-- Create: `docs/notes/2026-08-19-bailian-token-plan-probe.md` only after a real probe produces a redacted response record.
-- Test: `server/internal/hub/usage/qwen_bailian_test.go` with fixture-based parser cases after the response schema is verified.
-
-**Acceptance:** A redacted Desktop and Android login probe identifies the allowed Console origins, login completion signal, credential fields, expiry/refresh/rotation behavior, and a stable current snapshot response. The probe must preserve no token, Cookie, API key, Authorization header, or full response body.
-
-- [ ] **Step 1: Run the Desktop native login probe**
-
-  Verify the actual Bailian Console login window, callback/origin allowlist, embedded WebView navigation boundary, and protected credential result.
-
-- [ ] **Step 2: Run the Android native login probe**
-
-  Verify the same contract through the Android WebView dialog and confirm that the result can be associated with the initiating Hub.
-
-- [ ] **Step 3: Query the personal Token Plan snapshot**
-
-  Confirm absolute Credits, `limited/unlimited/unavailable`, subscription/package fields, reset/window identifiers, response limits, and error/status mapping. Qwen trend points come from successful local snapshots through the existing history path; no official trend endpoint is required.
-
-- [ ] **Step 4: Verify secret diagnostics behavior**
-
-  Send a complete redacted test credential package through the intended method and prove that inbound/outbound diagnostics contain no secret field values.
-
-- [x] **Step 5: Record the live-validation boundary**
-
-  No live Desktop/Android credentials were available. The implementation uses the public CLI-compatible Console gateway contract and keeps the live OAuth/current-snapshot validation boundary explicit; it does not substitute RAM, CLI-local credentials, ordinary API keys, or Credits estimates.
-
-### Task 2: Add Hub-scoped Bailian OAuth secret storage
-
-- [x] Implemented and covered by Hub config/protocol/redaction tests.
-
-**Files:**
-- Modify: `server/internal/hubconfig/store.go`
-- Modify: `server/internal/hub/reporter.go`
-- Modify: `server/internal/protocol/registry_methods.go`
-- Modify: `server/internal/protocol/registry_wire.go` or the verified protocol payload file containing Hub config updates
-- Test: existing `server/internal/hubconfig/mcp_test.go` and `server/internal/hub/hub_test.go`
-
-**Acceptance:** Structured `qwen.oauth.update` accepts only the verified lifecycle actions, persists the verified credential fields atomically, exposes only sanitized login state, supports clear without changing `apiKeys.qwen`, and never routes a full credential package through generic `hub.config.update.value`.
-
-### Task 3: Implement the Qwen Token Plan snapshot provider
-
-- [x] Implemented with `sk-sp-` gating, tombstone removal, stale-success retention, official Console gateway parsing, and successful local Qwen history samples.
-
-**Files:**
-- Modify: `server/internal/hub/usage/model.go`
-- Create: `server/internal/hub/usage/qwen_bailian.go`
-- Modify: `server/internal/hub/reporter.go`
-- Test: `server/internal/hub/usage/qwen_bailian_test.go`
-- Test: `server/internal/hub/usage/service_test.go`
-
-**Acceptance:** A configured `sk-sp-` key creates one Hub-local Qwen provider; ordinary `sk-` or clear removes it authoritatively; official snapshot data preserves limited/unlimited/unavailable windows and absolute Credits strings; temporary failures retain the last successful snapshot with stale/error status; failed samples never enter local history.
-
-### Task 4: Reuse the existing local seven-day usage history
-
-- [x] Implemented by recording successful Qwen snapshots through the existing usage-history store and reading them through `usage.history.get`; no `qwen.usage.get` or Credits estimate is added.
-
-**Files:**
-- Modify: `server/internal/hub/usage/history.go`
-- Modify: `server/internal/hub/usage/qwen_bailian.go`
-- Modify: `server/internal/hub/reporter.go`
-- Test: `server/internal/hub/usage/qwen_bailian_test.go`
-
-**Acceptance:** Qwen successful snapshots append only normalized local remaining-percentage samples; `usage.history.get` targets exactly one Hub and preserves the existing loading/empty/error behavior without claiming official Credits history.
-
-### Task 5: Add native Desktop and Android login bridges
-
-- [x] Implemented controlled stateful local-callback login bridges; Desktop cross-build passed and Android source/test compile remains unrun because no Gradle runner is available in the workspace.
-
-**Files:**
-- Modify: `server/cmd/wheelmaker-desktop/desktop_bridge.go`
-- Modify: `server/cmd/wheelmaker-desktop/webview_windows.go`
-- Create or modify: `server/cmd/wheelmaker-desktop/qwen_login.go`
-- Create or modify: `server/cmd/wheelmaker-desktop/qwen_login_windows.go`
-- Modify: `mobile/android/app/src/main/java/com/wheelmaker/android/WheelMakerBridge.kt`
-- Create or modify: `mobile/android/app/src/main/java/com/wheelmaker/android/QwenLoginDialog.kt`
-- Modify: `mobile/android/app/src/main/java/com/wheelmaker/android/MainActivity.kt`
-- Modify: `mobile/android/app/src/main/java/com/wheelmaker/android/TrustedWebMessagePolicy.kt`
-- Test: corresponding Desktop Go and Android Kotlin protocol/security tests
-
-**Acceptance:** Supported native hosts open a controlled Bailian login window and return only the verified protected result; browser hosts expose a disabled explanatory state; close, timeout, navigation violations, and concurrent Hub targeting are handled safely.
-
-### Task 6: Render Hub-isolated Qwen placeholder, snapshot, and detail trend
-
-- [x] Implemented Hub-isolated placeholder/snapshot/detail rendering, login/logout/retry, browser limitation state, and local usage-history trend rendering.
-
-**Files:**
-- Modify: `app/web/src/usage/usageTypes.ts`
 - Modify: `app/web/src/usage/usageStore.ts`
-- Modify: `app/web/src/usage/UsageFeatureSurface.tsx`
-- Create or modify: `app/web/src/usage/qwenUsage.ts`
-- Create or modify: `app/web/src/usage/qwenLogin.ts`
-- Modify: `app/web/src/registry/registryTypes.ts`
-- Modify: `app/web/src/registry/registryMethods.ts`
-- Modify: `app/web/src/registry/RegistryRepository.ts`
-- Modify: `app/web/src/registry/RegistryWorkspaceService.ts`
-- Modify: `app/web/src/app/WorkspaceApp.tsx`
-- Test: `app/__tests__/web-usage-store.test.ts`
-- Test: `app/__tests__/web-usage-feature-surface.test.tsx`
+- Test: `app/web/src/usage/usageStore.test.ts`
 
-**Acceptance:** Each Hub with `sk-sp-` has one placeholder or data row; rows are not cross-Hub merged; compact display selects only limited windows and shows seven-day summary; detail shows both windows, subscription/package, local cached trend, login/logout/retry, and browser limitation text.
+**Acceptance:** Two Hub snapshots for the same `bailian-token-plan` produce one provider with no `hubId`; its account preserves both `hubIds` and both source references, uses the newest valid source snapshot, and does not add numeric Credits or remaining values together. Non-Qwen providers retain their existing aggregation behavior.
 
-### Task 7: Run focused verification and Git handoff
+- [ ] **Step 1: Add the aggregate regression test first**
+
+  Change the existing Qwen isolation test to provide two dated Hub snapshots and assert one global Qwen provider, both Hub/source references, and the selected newest data. Run `npm test -- --runInBand web/src/usage/usageStore.test.ts` from `app`; the test must fail against the current per-Hub key.
+
+- [ ] **Step 2: Implement the smallest store-key and identity change**
+
+  Use one stable Qwen provider key and one stable source-account identity for `bailian-token-plan`; leave the existing `hubIds`, `sources`, status, and newest-account merge machinery in place. Do not alter Hub protocol payloads or sum Qwen metrics.
+
+- [ ] **Step 3: Run the focused store test green**
+
+  Re-run the exact Jest command and inspect the serialized aggregate to confirm the one-row/no-sum contract.
+
+### Task 2: Render one aggregate Qwen row and target its main source
 
 **Files:**
-- Modify: the plan checkboxes and verified implementation files only.
+- Modify: `app/web/src/usage/UsageFeatureSurface.tsx`
+- Modify: `app/web/src/app/WorkspaceApp.tsx`
+- Modify: `app/web/src/usage/QwenUsageDialog.tsx`
+- Test: `app/__tests__/web-usage-feature-surface.test.tsx`
+- Test: `app/web/src/usage/QwenUsageDialog.test.tsx`
 
-**Acceptance:** Focused tests, Web TypeScript check when applicable, native tests, redaction audit, and the two real-host probes pass; `git diff --check` is clean and unrelated `.skill-source-lock.json.lock` remains untouched.
+**Acceptance:** Compact and detail surfaces render one Qwen row/section, show all contributing Hub identities, and use the aggregate's source list for history. Login starts directly from the trusted button event like DeepSeek; success/error/close state remains local to the selected main source. Browser hosts keep the disabled explanatory state.
 
-- [x] **Step 1: Run focused Go tests with the repository Windows hidden Go test runner**
+- [ ] **Step 1: Add surface and login-event regression tests first**
 
-- [x] **Step 2: Run focused Jest and Web TypeScript checks**
+  Add a global Qwen placeholder fixture with two Hub sources and assert one rendered row/detail with both Hub identities. Add a dialog test that mocks the native request and verifies the request is started directly by the Login button handler. Run the two focused Jest files; each new assertion must fail against the current implementation.
 
-  Focused Jest passed. `tsc:web` remains blocked by pre-existing missing `rehype-*`, `@xterm/*`, and `echarts/*` dependencies plus existing TerminalView implicit-any errors.
+- [ ] **Step 2: Implement aggregate placeholder and provider targeting**
 
-- [x] **Step 3: Run Desktop and Android native tests/build checks**
+  Build Qwen placeholder source references from all aggregate Hubs, remove the Qwen-specific Hub filter when resolving the current provider, and keep the existing first-source selection for OAuth writes/history fallback. Do not change other providers.
 
-  Desktop Windows cross-compile passed. Android Gradle tests/build were not runnable because no Gradle/`gradlew` executable is present.
+- [ ] **Step 3: Implement the DeepSeek-style direct Qwen login click path**
 
-- [x] **Step 4: Review diagnostics and serialized state for secret leakage**
+  Keep Qwen's existing callback/result handling but invoke `requestNativeQwenLogin()` directly in the click handler before any asynchronous continuation, so Android's trusted-user-gesture gate sees the same event shape as DeepSeek.
 
-- [x] **Step 5: Run `git diff --check`, inspect status/diff, and finalize through `git-workflow`**
+- [ ] **Step 4: Run the focused surface and dialog tests green**
 
-  `git diff --check` passed. The unrelated `.skill-source-lock.json.lock` remains unmodified and unstaged.
+  Re-run both Jest files and verify that the aggregate has one target while all source references remain available to history/login logic.
+
+### Task 3: Repair the PC Qwen login window lifecycle
+
+**Files:**
+- Modify: `server/cmd/wheelmaker-desktop/qwen_login_windows.go`
+- Test: `server/cmd/wheelmaker-desktop/qwen_login_test.go`
+
+**Acceptance:** The PC login window remains an owned independent popup, is created and destroyed on the locked UI thread, closes on callback/window close/timeout without terminating the main client, and does not rely on DeepSeek localStorage or token field names. The official Qwen callback continues to validate state and extract only the existing protected fields.
+
+- [ ] **Step 1: Add a lifecycle source-contract test first**
+
+  Assert the Qwen Windows implementation contains the locked UI thread, owned-popup tracker, explicit timeout, callback/close termination, and safe DeepSeek teardown helper calls. Run the focused desktop Go test; it must fail before the lifecycle repair.
+
+- [ ] **Step 2: Align the Windows lifecycle with DeepSeek**
+
+  Add an explicit Qwen timeout/termination path and safe completion/close cleanup around the existing callback wait. Preserve the Qwen URL allowlist, local callback, state validation, and credential extraction; do not copy DeepSeek polling or storage assumptions.
+
+- [ ] **Step 3: Run focused desktop tests and the Windows compile check**
+
+  Run the package's hidden Go test runner and the repository's existing Windows cross-compile check when the required Go toolchain is available. Record compile/runtime boundaries separately.
+
+### Task 4: Make Android Qwen login a resilient DeepSeek-style in-app page
+
+**Files:**
+- Modify: `mobile/android/app/src/main/java/com/wheelmaker/android/QwenLoginDialog.kt`
+- Test: `mobile/android/app/src/test/java/com/wheelmaker/android/QwenLoginProtocolTest.kt`
+
+**Acceptance:** Android opens a full-screen in-app login page with a close action, wide viewport, progress feedback, explicit main-frame error state, retry, and visible blocked-navigation errors. It preserves the Qwen callback URL/state and allowlist and returns only the existing protected callback result. A blocked or failed page never closes the whole app.
+
+- [ ] **Step 1: Add Android source-contract tests first**
+
+  Assert the Qwen dialog has the DeepSeek-style full-screen/page controls, wide viewport, progress, retry, and WebView error callbacks. Run the focused Android test if a Gradle runner is available; otherwise run the source test through the repository's available Kotlin/Gradle path and record the unavailable tool.
+
+- [ ] **Step 2: Implement the resilient Qwen WebView page**
+
+  Port only the DeepSeek page/lifecycle mechanics into Qwen: keep Qwen's callback server, start URL, host allowlist, callback extraction, timeout, and result callback. Add explicit retry/error UI and wide viewport settings; do not change authorization policy or credentials.
+
+- [ ] **Step 3: Run the focused Android/static checks**
+
+  Verify the source-contract tests, callback/allowlist tests, and Kotlin formatting/static checks available in the checkout. Keep the no-Gradle boundary explicit if the runner is absent.
+
+### Task 5: Focused verification and Git handoff
+
+**Files:**
+- Modify: this plan's checkboxes and verification notes only as evidence is produced.
+
+**Acceptance:** Focused tests and static checks pass for the changed behavior; no Web production build is run; no secret values are introduced; `git diff --check` is clean; unrelated `.skill-source-lock.json.lock` remains untouched. Live Bailian account validation is reported as unrun when credentials are unavailable.
+
+- [ ] **Step 1: Run the complete focused verification set**
+
+  Run the changed Jest files, desktop Go package tests, available Android tests, and TypeScript check when dependencies permit. Do not broaden to unrelated suites.
+
+- [ ] **Step 2: Audit the diff and serialized/source boundaries**
+
+  Check for Qwen token/cookie/API-key leakage, accidental Hub protocol changes, unwanted Credits aggregation, unexpected Web build output, and unrelated worktree changes.
+
+- [ ] **Step 3: Update this plan and checkpoint only scoped files**
+
+  Record exact pass/block evidence, run `git diff --check`, stage only task files, and use `git-workflow checkpoint`/`finalize` according to the prepared Git context. Do not push or merge unless the configured workflow and all required acceptance checks permit it.
