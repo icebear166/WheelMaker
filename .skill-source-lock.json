@@ -6,14 +6,17 @@
       "sourceKey": "github.com/anthropics/skills",
       "branch": "main",
       "commit": "0a64e398ec6bb34a494f0c347e8ccae53a862f8e",
-      "updatedAt": "2026-08-19T13:31:20Z",
-      "managedSkills": []
+      "updatedAt": "2026-08-19T23:37:31Z",
+      "managedSkills": [
+        "frontend-design"
+      ]
     },
     {
       "source": "https://github.com/better-auth/better-icons.git",
       "sourceKey": "github.com/better-auth/better-icons",
+      "branch": "main",
       "commit": "033316ecb8f4982235af4111a2257e80231f5ab1",
-      "updatedAt": "2026-08-13T12:00:29Z",
+      "updatedAt": "2026-08-19T22:55:19Z",
       "managedSkills": [
         "better-icons"
       ]
@@ -23,16 +26,30 @@
       "sourceKey": "github.com/emilkowalski/skills",
       "branch": "main",
       "commit": "e879241fab3cdb22e8d95587cdbf40b57a88d7da",
-      "updatedAt": "2026-08-19T13:35:30Z",
-      "managedSkills": []
+      "updatedAt": "2026-08-19T23:37:58Z",
+      "managedSkills": [
+        "animate",
+        "animate-expo",
+        "animation-vocabulary",
+        "apple-design",
+        "ask-sonner",
+        "emil-design-eng",
+        "find-animation-opportunities",
+        "improve-animations",
+        "pick-ui-library",
+        "prototype",
+        "review-animations"
+      ]
     },
     {
       "source": "https://github.com/ibelick/ui-skills.git",
       "sourceKey": "github.com/ibelick/ui-skills",
       "branch": "main",
       "commit": "0a8411b1f8732d52923e78773d54b67a65ef9587",
-      "updatedAt": "2026-08-19T13:33:14Z",
-      "managedSkills": []
+      "updatedAt": "2026-08-19T23:40:12Z",
+      "managedSkills": [
+        "baseline-ui"
+      ]
     }
   ]
 }

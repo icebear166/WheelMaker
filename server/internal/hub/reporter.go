@@ -2146,20 +2146,11 @@ func (r *Reporter) ensureSkillsStateCoordinator() *skillsStateCoordinator {
 			},
 			ScanHubSources: func(ctx context.Context, inventory map[string]skillInventoryItem) (tools.SkillsSourceScopeSnapshot, error) {
 				return tools.ScanSkillsSourceScope(ctx, tools.SkillsSourceScopeInput{
-					GlobalLockPath: managedSkillsLockPath(""),
-					Installed:      skillInventoryAsInstalledSnapshots(inventory),
-					StaleErrors:    r.skillSourceErrors("hub", ""),
+					Installed:   skillInventoryAsInstalledSnapshots(inventory),
+					StaleErrors: r.skillSourceErrors("hub", ""),
 				})
 			},
 			ScanProjectSources: func(ctx context.Context, target projectSkillsTarget, inventory map[string]skillInventoryItem) (tools.SkillsSourceScopeSnapshot, error) {
-				reconciliationPath := ""
-				if stateDir := strings.TrimSpace(r.cfg.StateDir); stateDir != "" {
-					reconciliationPath = filepath.Join(
-						stateDir,
-						"skills-source-reconciliation",
-						strings.TrimPrefix(hubHashLines(target.ProjectID, target.Path), "sha256:")+".json",
-					)
-				}
 				projectName := ""
 				r.mu.RLock()
 				if project, exists := r.projectsByID[target.ProjectID]; exists {
@@ -2167,10 +2158,9 @@ func (r *Reporter) ensureSkillsStateCoordinator() *skillsStateCoordinator {
 				}
 				r.mu.RUnlock()
 				return tools.ScanSkillsSourceScope(ctx, tools.SkillsSourceScopeInput{
-					ProjectRoot:        target.Path,
-					ReconciliationPath: reconciliationPath,
-					Installed:          skillInventoryAsInstalledSnapshots(inventory),
-					StaleErrors:        r.skillSourceErrors("project", projectName),
+					ProjectRoot: target.Path,
+					Installed:   skillInventoryAsInstalledSnapshots(inventory),
+					StaleErrors: r.skillSourceErrors("project", projectName),
 				})
 			},
 			Targets: r.skillsTargets,

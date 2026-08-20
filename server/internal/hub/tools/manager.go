@@ -11,9 +11,11 @@ import (
 type ProjectInfo = rp.ProjectInfo
 
 type ManagerConfig struct {
-	HubID                  string
-	Projects               []ProjectInfo
-	StateDir               string
+	HubID    string
+	Projects []ProjectInfo
+	StateDir string
+	// GlobalLockPath is kept for configuration compatibility; Skills Manager
+	// 2.0 uses only canonical .skill-source-lock.json files.
 	GlobalLockPath         string
 	HomeDir                string
 	OnNPMOperationDone     func()
@@ -97,7 +99,6 @@ func NewManager(config ManagerConfig) *Manager {
 		skillsCommand: NewSkillsCommand(skillsCommandConfig{
 			HubID:           config.HubID,
 			Projects:        config.Projects,
-			GlobalLockPath:  config.GlobalLockPath,
 			HomeDir:         config.HomeDir,
 			OnOperationDone: config.OnSkillsOperationDone,
 		}),
@@ -162,7 +163,6 @@ func (m *Manager) Handle(ctx context.Context, method string, payload json.RawMes
 			m.skillsCommand = NewSkillsCommand(skillsCommandConfig{
 				HubID:           m.cfg.HubID,
 				Projects:        m.cfg.Projects,
-				GlobalLockPath:  m.cfg.GlobalLockPath,
 				HomeDir:         m.cfg.HomeDir,
 				OnOperationDone: m.cfg.OnSkillsOperationDone,
 			})

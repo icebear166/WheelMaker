@@ -2042,9 +2042,6 @@ func TestSkillsCommandUninstallRemovesManagedAndUnmanagedSkillDirectories(t *tes
 	if countSkillsCalls(runner, "", "skills", "remove", "-g", "--skill", "tdd", "--agent", "codex", "claude-code", "opencode", "github-copilot", "-y") != 0 {
 		t.Fatalf("uninstall should remove managed directories directly: %#v", runner.calls)
 	}
-	if entries := readNativeSkillSourceEntries(globalLock); len(entries) != 0 {
-		t.Fatalf("native skill lock retained removed skill: %#v", entries)
-	}
 }
 
 func TestSkillsCommandUpdateUsesHubAndProjectScopes(t *testing.T) {
@@ -3232,17 +3229,21 @@ func TestReleaseCommandStoragePropagatesScriptFailure(t *testing.T) {
 	}
 }
 
-func TestSkillSourceLockPathUsesScopeAndGlobalLockDirectory(t *testing.T) {
+func TestSkillSourceLockPathsUseCanonicalAndLegacySourceLockLocations(t *testing.T) {
 	projectRoot := t.TempDir()
-	if got, want := skillSourceLockPath(projectRoot, "", ""), filepath.Join(projectRoot, ".skill-source-lock.json"); got != want {
+	if got, want := skillSourceLockPath(projectRoot, ""), filepath.Join(projectRoot, ".skill-source-lock.json"); got != want {
 		t.Fatalf("project lock path=%q, want %q", got, want)
 	}
+	if got := legacySkillSourceLockPath(projectRoot, ""); got != "" {
+		t.Fatalf("project legacy lock path=%q, want empty", got)
+	}
 
-	globalDir := t.TempDir()
-	upstreamLock := filepath.Join(globalDir, ".skill-lock.json")
 	canonicalHome := t.TempDir()
-	if got, want := skillSourceLockPath("", upstreamLock, canonicalHome), filepath.Join(canonicalHome, ".wheelmaker", "skills", ".skill-source-lock.json"); got != want {
+	if got, want := skillSourceLockPath("", canonicalHome), filepath.Join(canonicalHome, ".wheelmaker", "skills", ".skill-source-lock.json"); got != want {
 		t.Fatalf("global lock path=%q, want %q", got, want)
+	}
+	if got, want := legacySkillSourceLockPath("", canonicalHome), filepath.Join(canonicalHome, ".agents", ".skill-source-lock.json"); got != want {
+		t.Fatalf("global legacy lock path=%q, want %q", got, want)
 	}
 }
 
@@ -3250,12 +3251,12 @@ func TestSkillSourceLockPathUsesXDGThenAgentsHome(t *testing.T) {
 	xdg := t.TempDir()
 	home := t.TempDir()
 	t.Setenv("XDG_STATE_HOME", xdg)
-	if got, want := skillSourceLockPath("", "", home), filepath.Join(home, ".wheelmaker", "skills", ".skill-source-lock.json"); got != want {
+	if got, want := skillSourceLockPath("", home), filepath.Join(home, ".wheelmaker", "skills", ".skill-source-lock.json"); got != want {
 		t.Fatalf("xdg lock path=%q, want %q", got, want)
 	}
 
 	t.Setenv("XDG_STATE_HOME", "")
-	if got, want := skillSourceLockPath("", "", home), filepath.Join(home, ".wheelmaker", "skills", ".skill-source-lock.json"); got != want {
+	if got, want := skillSourceLockPath("", home), filepath.Join(home, ".wheelmaker", "skills", ".skill-source-lock.json"); got != want {
 		t.Fatalf("home lock path=%q, want %q", got, want)
 	}
 }
@@ -3737,7 +3738,7 @@ func writeSkillSourceFixture(t *testing.T, root, skillMarkdown string, files map
 	}
 }
 
-func TestSkillSourceRebuildsUnsupportedOrMissingLockAsEmptyV3(t *testing.T) {
+func TestSkillSourceRebuildsUnsupportedOrMissingLockAsEmptyV3WithoutNativeLock(t *testing.T) {
 	root := t.TempDir()
 	nativePath := filepath.Join(root, "skills-lock.json")
 	native := []byte(`{
@@ -3767,7 +3768,7 @@ func TestSkillSourceRebuildsUnsupportedOrMissingLockAsEmptyV3(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			result, err := readOrMigrateSkillSourceLock(nativePath, sourcePath)
+			result, err := readOrMigrateSkillSourceLock(sourcePath)
 			if err != nil {
 				t.Fatalf("readOrMigrateSkillSourceLock() error=%v", err)
 			}
@@ -3802,7 +3803,7 @@ func TestSkillSourceRebuildsUnsupportedOrMissingLockAsEmptyV3(t *testing.T) {
 	}
 }
 
-func TestSkillSourceRebuildFailurePreservesMalformedLockBytes(t *testing.T) {
+func TestSkillSourceRebuildFailurePreservesMalformedSourceLockBytes(t *testing.T) {
 	root := t.TempDir()
 	nativePath := filepath.Join(root, "skills-lock.json")
 	sourcePath := filepath.Join(root, ".skill-source-lock.json")
@@ -3813,8 +3814,8 @@ func TestSkillSourceRebuildFailurePreservesMalformedLockBytes(t *testing.T) {
 	if err := os.WriteFile(nativePath, []byte(`{"version":1,"skills":{}}`), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := readOrMigrateSkillSourceLock(nativePath, sourcePath); err == nil {
-		t.Fatal("rebuild succeeded with malformed native lock")
+	if _, err := readOrMigrateSkillSourceLock(sourcePath); err == nil {
+		t.Fatal("rebuild succeeded with malformed source lock")
 	}
 	after, err := os.ReadFile(sourcePath)
 	if err != nil {
@@ -4217,18 +4218,6 @@ func TestSkillsCommandRejectsExplicitRefBeforePreview(t *testing.T) {
 	}
 }
 
-func TestSkillsLockInstallGroupsIgnoreRef(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "skills-lock.json")
-	raw := `{"version":1,"skills":{"alpha":{"source":"https://github.com/example/catalog.git","ref":"main"},"beta":{"source":"https://github.com/example/catalog.git","ref":"release"}}}`
-	if err := os.WriteFile(path, []byte(raw), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	groups := readSkillsLockInstallGroups(path)
-	if len(groups) != 1 || groups[0].Source != "https://github.com/example/catalog.git" || !reflect.DeepEqual(groups[0].Skills, []string{"alpha", "beta"}) {
-		t.Fatalf("install groups=%#v, want one repository-only group", groups)
-	}
-}
-
 func TestSkillsCommandSourcePreviewAndApplySavesCatalogWithoutInstalling(t *testing.T) {
 	t.Skip("preview/apply actions were removed in 2.0")
 	root := t.TempDir()
@@ -4570,16 +4559,6 @@ func TestSkillsCommandPreviewUpdateAllContinuesAfterSourceRefreshFailure(t *test
 	}
 }
 
-func TestSkillUpdateNonActionResultReportsConflict(t *testing.T) {
-	t.Skip("skill-level update/conflict blocking was removed in 2.0")
-	result, include := skillUpdateNonActionResult(SkillsSourceCatalogSkillSnapshot{
-		Name: "shared", Status: "conflict", Conflict: true, Error: "Same name exists in multiple sources.",
-	})
-	if !include || result.Status != "conflict" || result.ErrorSummary == "" {
-		t.Fatalf("conflict result=%#v include=%t", result, include)
-	}
-}
-
 func TestSkillsCommandPreviewDeleteRemovesInstalledSkillsBeforeSource(t *testing.T) {
 	t.Skip("preview/apply actions were removed in 2.0")
 	root := t.TempDir()
@@ -4634,9 +4613,6 @@ func TestSkillsCommandPreviewDeleteRemovesInstalledSkillsBeforeSource(t *testing
 	}
 	if runner.hasCall("", "skills", "remove", "-g", "--skill", "alpha", "--agent", "codex", "claude-code", "opencode", "github-copilot", "-y") {
 		t.Fatalf("source skill uninstall should remove managed directories directly: %#v", runner.calls)
-	}
-	if entries := readNativeSkillSourceEntries(globalLock); len(entries) != 0 {
-		t.Fatalf("native skill lock retained removed source skill: %#v", entries)
 	}
 	lock, _, err := readSkillSourceLockFile(sourceLockPath)
 	if err != nil || len(lock.Sources) != 0 {

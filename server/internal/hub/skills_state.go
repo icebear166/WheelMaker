@@ -182,20 +182,6 @@ func readManagedSkillNames(root string) map[string]bool {
 	return tools.ManagedSkillNamesForScope(root, "")
 }
 
-func managedSkillsLockPath(root string) string {
-	if root = strings.TrimSpace(root); root != "" {
-		return filepath.Join(root, "skills-lock.json")
-	}
-	if stateHome := strings.TrimSpace(os.Getenv("XDG_STATE_HOME")); stateHome != "" {
-		return filepath.Join(stateHome, "skills", ".skill-lock.json")
-	}
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return ""
-	}
-	return filepath.Join(home, ".agents", ".skill-lock.json")
-}
-
 type skillsStateCoordinatorOptions struct {
 	ScanHub              func(context.Context) (map[string]skillInventoryItem, error)
 	ScanProject          func(context.Context, projectSkillsTarget) (map[string]skillInventoryItem, error)

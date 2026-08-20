@@ -53,7 +53,7 @@ func (c *SkillsCommand) readNativeScopeLock(ctx context.Context, target skillsCo
 		return skillSourceLock{}, "", err
 	}
 	migration, err := readOrMigrateSkillSourceLockWithMaterializer(
-		c.skillsLockFile(target),
+		legacySkillSourceLockPath(target.dir, c.homeDir),
 		c.sourceLockFile(target),
 		installed,
 		func(lock *skillSourceLock) (*skillSourceMigrationMaterialization, error) {

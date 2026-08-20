@@ -274,7 +274,7 @@ func TestNativeWellKnownUninstallAndRemoveSourceWorkOffline(t *testing.T) {
 func TestNativeWellKnownPassiveScanReportsMissingSnapshotWithoutNetwork(t *testing.T) {
 	home := t.TempDir()
 	canonical := "https://example.invalid/.well-known/skills/index.json"
-	lockPath := skillSourceLockPath("", "", home)
+	lockPath := skillSourceLockPath("", home)
 	if _, err := writeSkillSourceLockFile(lockPath, skillSourceMissingRevision, skillSourceLock{
 		Version: 3,
 		Sources: []skillSourceSnapshot{{

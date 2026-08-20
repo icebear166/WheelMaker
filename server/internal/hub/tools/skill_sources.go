@@ -91,6 +91,9 @@ type skillSourceMigrationMaterialization struct {
 	release  func()
 }
 
+// nativeSkillSourceEntry is retained as an internal compatibility shape for
+// older in-package catalog tests. Production code never populates it from a
+// skills-lock file; native lock metadata is not part of 2.0 state.
 type nativeSkillSourceEntry struct {
 	Name       string
 	Source     string
@@ -98,13 +101,7 @@ type nativeSkillSourceEntry struct {
 	SourceType string
 }
 
-type nativeSkillSourceGroup struct {
-	SourceKey string
-	Sources   map[string]struct{}
-	Skills    []string
-}
-
-func skillSourceLockPath(projectRoot, globalLockPath, homeDir string) string {
+func skillSourceLockPath(projectRoot, homeDir string) string {
 	if projectRoot = strings.TrimSpace(projectRoot); projectRoot != "" {
 		return filepath.Join(projectRoot, ".skill-source-lock.json")
 	}
@@ -118,16 +115,25 @@ func skillSourceLockPath(projectRoot, globalLockPath, homeDir string) string {
 	return filepath.Join(homeDir, ".wheelmaker", "skills", ".skill-source-lock.json")
 }
 
+func legacySkillSourceLockPath(projectRoot, homeDir string) string {
+	if strings.TrimSpace(projectRoot) != "" {
+		return ""
+	}
+	homeDir = strings.TrimSpace(homeDir)
+	if homeDir == "" {
+		resolved, err := os.UserHomeDir()
+		if err != nil {
+			return ""
+		}
+		homeDir = resolved
+	}
+	return filepath.Join(homeDir, ".agents", ".skill-source-lock.json")
+}
+
 // ManagedSkillNamesForScope returns ownership declared by the canonical source
 // lock. Legacy native skills locks are intentionally not consulted.
 func ManagedSkillNamesForScope(projectRoot, homeDir string) map[string]bool {
 	projectRoot = strings.TrimSpace(projectRoot)
-	nativeLockPath := ""
-	if projectRoot != "" {
-		nativeLockPath = filepath.Join(projectRoot, "skills-lock.json")
-	} else {
-		nativeLockPath = defaultGlobalSkillsLockPath(homeDir)
-	}
 	installed := map[string]struct{}{}
 	if projectRoot != "" {
 		for _, directory := range []string{filepath.Join(projectRoot, ".agents", "skills"), filepath.Join(projectRoot, ".claude", "skills")} {
@@ -142,8 +148,8 @@ func ManagedSkillNamesForScope(projectRoot, homeDir string) map[string]bool {
 			collectSkillDirectoryNames(directory, installed)
 		}
 	}
-	path := skillSourceLockPath(projectRoot, nativeLockPath, homeDir)
-	command := newSkillsCommandWithRunner(nil, skillsCommandConfig{HomeDir: homeDir, GlobalLockPath: nativeLockPath})
+	path := skillSourceLockPath(projectRoot, homeDir)
+	command := newSkillsCommandWithRunner(nil, skillsCommandConfig{HomeDir: homeDir})
 	target := skillsCommandTarget{scope: "hub"}
 	if projectRoot != "" {
 		target = skillsCommandTarget{scope: "project", dir: projectRoot}
@@ -152,7 +158,7 @@ func ManagedSkillNamesForScope(projectRoot, homeDir string) map[string]bool {
 	err := withSkillSourceLockFile(path, func() error {
 		var err error
 		migration, err = readOrMigrateSkillSourceLockWithMaterializer(
-			nativeLockPath,
+			legacySkillSourceLockPath(projectRoot, homeDir),
 			path,
 			installed,
 			func(lock *skillSourceLock) (*skillSourceMigrationMaterialization, error) {
@@ -206,16 +212,16 @@ func collectSkillDirectoryNames(directory string, names map[string]struct{}) {
 	}
 }
 
-func readOrMigrateSkillSourceLock(nativeLockPath, sourceLockPath string) (skillSourceMigrationResult, error) {
-	return readOrMigrateSkillSourceLockWithInstalled(nativeLockPath, sourceLockPath, nil)
+func readOrMigrateSkillSourceLock(sourceLockPath string) (skillSourceMigrationResult, error) {
+	return readOrMigrateSkillSourceLockWithInstalled(sourceLockPath, nil)
 }
 
-func readOrMigrateSkillSourceLockWithInstalled(nativeLockPath, sourceLockPath string, installed map[string]struct{}) (skillSourceMigrationResult, error) {
-	return readOrMigrateSkillSourceLockWithMaterializer(nativeLockPath, sourceLockPath, installed, nil)
+func readOrMigrateSkillSourceLockWithInstalled(sourceLockPath string, installed map[string]struct{}) (skillSourceMigrationResult, error) {
+	return readOrMigrateSkillSourceLockWithMaterializer("", sourceLockPath, installed, nil)
 }
 
 func readOrMigrateSkillSourceLockWithMaterializer(
-	nativeLockPath, sourceLockPath string,
+	legacySourceLockPath, sourceLockPath string,
 	installed map[string]struct{},
 	materialize func(*skillSourceLock) (*skillSourceMigrationMaterialization, error),
 ) (skillSourceMigrationResult, error) {
@@ -231,10 +237,10 @@ func readOrMigrateSkillSourceLockWithMaterializer(
 		return skillSourceMigrationResult{}, fmt.Errorf("stat skill source lock: %w", err)
 	}
 	if !canonicalExists {
-		legacyPath := legacySkillSourceLockPath(nativeLockPath, canonicalPath)
-		if legacyPath != "" {
-			if _, legacyErr := os.Stat(legacyPath); legacyErr == nil {
-				readPath = legacyPath
+		legacySourceLockPath = strings.TrimSpace(legacySourceLockPath)
+		if legacySourceLockPath != "" {
+			if _, legacyErr := os.Stat(legacySourceLockPath); legacyErr == nil {
+				readPath = legacySourceLockPath
 			} else if !errors.Is(legacyErr, os.ErrNotExist) {
 				return skillSourceMigrationResult{}, fmt.Errorf("stat legacy skill source lock: %w", legacyErr)
 			}
@@ -289,19 +295,6 @@ func readOrMigrateSkillSourceLockWithMaterializer(
 	return result, nil
 }
 
-func legacySkillSourceLockPath(nativeLockPath, canonicalPath string) string {
-	nativeLockPath = strings.TrimSpace(nativeLockPath)
-	canonicalPath = strings.TrimSpace(canonicalPath)
-	if nativeLockPath == "" || canonicalPath == "" {
-		return ""
-	}
-	legacy := filepath.Join(filepath.Dir(nativeLockPath), ".skill-source-lock.json")
-	if samePath(legacy, canonicalPath) {
-		return ""
-	}
-	return legacy
-}
-
 func samePath(left, right string) bool {
 	leftAbs, leftErr := filepath.Abs(left)
 	rightAbs, rightErr := filepath.Abs(right)
@@ -309,96 +302,6 @@ func samePath(left, right string) bool {
 		return filepath.Clean(left) == filepath.Clean(right)
 	}
 	return strings.EqualFold(filepath.Clean(leftAbs), filepath.Clean(rightAbs))
-}
-
-func readNativeSkillSourceEntries(path string) []nativeSkillSourceEntry {
-	entries, _ := loadNativeSkillSourceEntries(path)
-	return entries
-}
-
-func loadNativeSkillSourceEntries(path string) ([]nativeSkillSourceEntry, error) {
-	if strings.TrimSpace(path) == "" {
-		return nil, nil
-	}
-	raw, err := os.ReadFile(path)
-	if errors.Is(err, os.ErrNotExist) {
-		return nil, nil
-	}
-	if err != nil {
-		return nil, fmt.Errorf("read native skill lock: %w", err)
-	}
-	var body struct {
-		Skills map[string]struct {
-			Source     string `json:"source"`
-			SourceURL  string `json:"sourceUrl"`
-			SourceType string `json:"sourceType"`
-		} `json:"skills"`
-	}
-	if err := json.Unmarshal(raw, &body); err != nil {
-		return nil, fmt.Errorf("decode native skill lock: %w", err)
-	}
-	names := make([]string, 0, len(body.Skills))
-	for name := range body.Skills {
-		names = append(names, name)
-	}
-	sort.Strings(names)
-	entries := make([]nativeSkillSourceEntry, 0, len(names))
-	for _, name := range names {
-		value := body.Skills[name]
-		entries = append(entries, nativeSkillSourceEntry{
-			Name:       strings.TrimSpace(name),
-			Source:     strings.TrimSpace(value.Source),
-			SourceURL:  strings.TrimSpace(value.SourceURL),
-			SourceType: strings.ToLower(strings.TrimSpace(value.SourceType)),
-		})
-	}
-	return entries, nil
-}
-
-func classifyNativeSkillSourceEntries(entries []nativeSkillSourceEntry) ([]nativeSkillSourceGroup, []string) {
-	grouped := map[string]*nativeSkillSourceGroup{}
-	var unmanaged []string
-	for _, entry := range entries {
-		if entry.Name == "" {
-			continue
-		}
-		if entry.SourceType == "local" || entry.SourceType == "node_modules" {
-			unmanaged = append(unmanaged, entry.Name)
-			continue
-		}
-		address := entry.SourceURL
-		if address == "" {
-			address = entry.Source
-		}
-		normalizedSource, sourceKey, err := normalizeSkillGitSource(address)
-		if err != nil {
-			unmanaged = append(unmanaged, entry.Name)
-			continue
-		}
-		group := grouped[sourceKey]
-		if group == nil {
-			group = &nativeSkillSourceGroup{
-				SourceKey: sourceKey,
-				Sources:   map[string]struct{}{},
-			}
-			grouped[sourceKey] = group
-		}
-		group.Sources[normalizedSource] = struct{}{}
-		group.Skills = append(group.Skills, entry.Name)
-	}
-	keys := make([]string, 0, len(grouped))
-	for key := range grouped {
-		keys = append(keys, key)
-	}
-	sort.Strings(keys)
-	groups := make([]nativeSkillSourceGroup, 0, len(keys))
-	for _, key := range keys {
-		group := *grouped[key]
-		sort.Strings(group.Skills)
-		groups = append(groups, group)
-	}
-	sort.Strings(unmanaged)
-	return groups, unmanaged
 }
 
 func normalizeSkillGitSource(raw string) (string, string, error) {
