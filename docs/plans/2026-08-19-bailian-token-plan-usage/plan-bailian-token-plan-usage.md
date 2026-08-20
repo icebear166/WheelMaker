@@ -77,9 +77,9 @@
 
   Added an explicit Qwen timeout/termination path, close binding, safe callback cleanup, and Qwen-specific loading page around the existing callback wait. Preserved the Qwen URL allowlist, local callback, state validation, and credential extraction; no DeepSeek polling/storage assumption was copied.
 
-- [ ] **Step 3: Run focused desktop tests and the Windows compile check**
+- [x] **Step 3: Run focused desktop tests and the Windows compile check**
 
-  The lifecycle source-contract test passed with `go test -exec "wscript.exe C:\WorkSpace\WheelMaker\scripts\run-hidden-go-test.vbs" ./cmd/wheelmaker-desktop -run TestQwenLoginWindowUsesOwnedPopupLifecycle`. The full package attempt is blocked by the existing `webview_policy_test.go` assertion expecting `text/javascript` while the response is `application/javascript`; no Windows cross-compile result is claimed yet.
+  The focused Qwen lifecycle/callback tests passed with `go test -exec "wscript.exe C:\WorkSpace\WheelMaker\scripts\run-hidden-go-test.vbs" ./cmd/wheelmaker-desktop -run "Test(Qwen|ExtractQwen)"`; this also compiled the Windows package sources. A full package attempt remains blocked by the existing `webview_policy_test.go` assertion expecting `text/javascript` while the response is `application/javascript`.
 
 ### Task 4: Make Android Qwen login a resilient DeepSeek-style in-app page
 
@@ -97,9 +97,9 @@
 
   Ported only the DeepSeek page/lifecycle mechanics into Qwen: retained the callback server, start URL, host allowlist, callback extraction, timeout, and result callback; added explicit retry/error UI and wide viewport settings without changing authorization policy or credentials.
 
-- [ ] **Step 3: Run the focused Android/static checks**
+- [x] **Step 3: Run the focused Android/static checks**
 
-  A PowerShell source-contract audit passed (`QWEN_ANDROID_SOURCE_CONTRACT=OK`). Kotlin/Gradle callback/allowlist tests and compilation remain unrun because the checkout exposes no Android build runner.
+  The PowerShell source-contract audit passed (`QWEN_ANDROID_SOURCE_CONTRACT=OK`). Kotlin/Gradle callback/allowlist tests and compilation remain unrun because the checkout exposes no Android build runner.
 
 ### Task 5: Focused verification and Git handoff
 
@@ -110,12 +110,12 @@
 
 - [ ] **Step 1: Run the complete focused verification set**
 
-  Run the changed Jest files, desktop Go package tests, available Android tests, and TypeScript check when dependencies permit. Do not broaden to unrelated suites.
+  The four changed Web Jest suites passed (46 tests), and `npm run tsc:web` passed. The focused Desktop Qwen tests passed; the full Desktop package remains blocked by the pre-existing `webview_policy_test.go` assertion, Android tests are unavailable without a runner, and real external login probes have no credentials.
 
-- [ ] **Step 2: Audit the diff and serialized/source boundaries**
+- [x] **Step 2: Audit the diff and serialized/source boundaries**
 
-  Check for Qwen token/cookie/API-key leakage, accidental Hub protocol changes, unwanted Credits aggregation, unexpected Web build output, and unrelated worktree changes.
+  `git diff --check` passed; the feature diff contains no `app/dist` or `.skill-source-lock.json.lock`, only fixture token names appear in tests, and no Hub protocol files or metric-summing code changed.
 
-- [ ] **Step 3: Update this plan and checkpoint only scoped files**
+- [x] **Step 3: Update this plan and checkpoint only scoped files**
 
-  Record exact pass/block evidence, run `git diff --check`, stage only task files, and use `git-workflow checkpoint`/`finalize` according to the prepared Git context. Do not push or merge unless the configured workflow and all required acceptance checks permit it.
+  Recorded the pass/block evidence, kept the unrelated lock file untouched, and will stage only this plan for the final checkpoint. No push or merge is authorized while the required native/live validation boundaries remain unresolved.
