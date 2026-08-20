@@ -1,12 +1,16 @@
 import {UsageStore} from './usageStore';
 import type {UsageHubSnapshot} from './usageTypes';
 
-function qwenHub(hubId: string, remaining: string): UsageHubSnapshot {
+function qwenHub(
+  hubId: string,
+  remaining: string,
+  updatedAt = '2026-08-19T12:00:00Z',
+): UsageHubSnapshot {
   return {
     hubId,
     generation: 1,
     status: 'ready',
-    updatedAt: '2026-08-19T12:00:00Z',
+    updatedAt,
     providers: [{
       id: 'qwen',
       name: 'Qwen',
@@ -28,16 +32,35 @@ function qwenHub(hubId: string, remaining: string): UsageHubSnapshot {
 }
 
 describe('UsageStore Qwen aggregation', () => {
-  it('keeps Qwen rows and credentials scoped to each Hub', () => {
+  it('aggregates one Qwen row while retaining every Hub source', () => {
     const store = new UsageStore();
-    store.replaceHub('hub-a', qwenHub('hub-a', '600'));
-    store.replaceHub('hub-b', qwenHub('hub-b', '500'));
+    store.replaceHub('hub-a', qwenHub('hub-a', '600', '2026-08-19T12:00:00Z'));
+    store.replaceHub('hub-b', qwenHub('hub-b', '500', '2026-08-19T12:01:00Z'));
 
     const qwen = store.snapshot().providers.filter(provider => provider.id === 'qwen');
-    expect(qwen).toHaveLength(2);
-    expect(qwen.map(provider => provider.hubId).sort()).toEqual(['hub-a', 'hub-b']);
-    expect(qwen.map(provider => provider.accounts[0].qwen?.fiveHour.remaining).sort()).toEqual(['500', '600']);
-    expect(qwen[0].accounts[0].hubIds).toHaveLength(1);
+    expect(qwen).toHaveLength(1);
+    expect(qwen[0].hubId).toBeUndefined();
+    expect(qwen[0].accounts).toHaveLength(1);
+    expect(qwen[0].accounts[0].qwen?.fiveHour.remaining).toBe('500');
+    expect(qwen[0].accounts[0].hubIds).toEqual(['hub-a', 'hub-b']);
+    expect(qwen[0].accounts[0].sources?.map(source => `${source.hubId}:${source.accountLocalId}`)).toEqual([
+      'hub-a:bailian-token-plan',
+      'hub-b:bailian-token-plan',
+    ]);
     expect(qwen[0].authenticated).toBe(true);
+  });
+
+  it('keeps the newest valid Qwen data when a newer Hub has no snapshot', () => {
+    const store = new UsageStore();
+    store.replaceHub('hub-a', qwenHub('hub-a', '600', '2026-08-19T12:00:00Z'));
+    const unavailable = qwenHub('hub-b', '0', '2026-08-19T12:01:00Z');
+    unavailable.providers[0].status = 'error';
+    unavailable.providers[0].accounts[0].status = 'error';
+    unavailable.providers[0].accounts[0].qwen = undefined;
+    store.replaceHub('hub-b', unavailable);
+
+    const account = store.snapshot().providers.find(provider => provider.id === 'qwen')!.accounts[0];
+    expect(account.qwen?.fiveHour.remaining).toBe('600');
+    expect(account.hubIds).toEqual(['hub-a', 'hub-b']);
   });
 });

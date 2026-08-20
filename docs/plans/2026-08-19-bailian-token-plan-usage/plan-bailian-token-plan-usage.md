@@ -22,17 +22,17 @@
 
 **Acceptance:** Two Hub snapshots for the same `bailian-token-plan` produce one provider with no `hubId`; its account preserves both `hubIds` and both source references, uses the newest valid source snapshot, and does not add numeric Credits or remaining values together. Non-Qwen providers retain their existing aggregation behavior.
 
-- [ ] **Step 1: Add the aggregate regression test first**
+- [x] **Step 1: Add the aggregate regression test first**
 
-  Change the existing Qwen isolation test to provide two dated Hub snapshots and assert one global Qwen provider, both Hub/source references, and the selected newest data. Run `npm test -- --runInBand web/src/usage/usageStore.test.ts` from `app`; the test must fail against the current per-Hub key.
+  Changed the existing Qwen isolation test to provide two dated Hub snapshots and assert one global Qwen provider, both Hub/source references, and the selected newest data. The focused Jest command first failed with the old two-provider result.
 
-- [ ] **Step 2: Implement the smallest store-key and identity change**
+- [x] **Step 2: Implement the smallest store-key and identity change**
 
-  Use one stable Qwen provider key and one stable source-account identity for `bailian-token-plan`; leave the existing `hubIds`, `sources`, status, and newest-account merge machinery in place. Do not alter Hub protocol payloads or sum Qwen metrics.
+  Used one stable Qwen provider key and one stable source-account identity for `bailian-token-plan`; retained the existing `hubIds`, `sources`, status, and newest-account merge machinery. Added the Qwen valid-snapshot guard without changing Hub protocol payloads or summing metrics.
 
-- [ ] **Step 3: Run the focused store test green**
+- [x] **Step 3: Run the focused store test green**
 
-  Re-run the exact Jest command and inspect the serialized aggregate to confirm the one-row/no-sum contract.
+  Re-ran `npm test -- --runInBand web/src/usage/usageStore.test.ts` from `app`: 2 tests passed.
 
 ### Task 2: Render one aggregate Qwen row and target its main source
 

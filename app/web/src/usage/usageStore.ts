@@ -82,11 +82,11 @@ export class UsageStore {
       refreshing ||= hub.status === 'scanning';
       if (hub.updatedAt && hub.updatedAt > updatedAt) updatedAt = hub.updatedAt;
       for (const provider of hub.providers) {
-        const providerKey = provider.id === 'qwen' ? `${provider.id}:${hubId}` : provider.id;
+        const providerKey = provider.id;
         const aggregate: UsageProviderAggregate = providers.get(providerKey) ?? {
           id: provider.id,
           name: provider.name,
-          hubId: provider.id === 'qwen' ? hubId : undefined,
+          hubId: undefined,
           statuses: [],
           accounts: new Map<string, {account: UsageViewAccount; updatedAt?: string}>(),
           hubs: new Map(),
@@ -104,8 +104,8 @@ export class UsageStore {
           const normalizedIdentityValue = normalizedIdentityKind === 'email'
             ? identityValue?.toLowerCase()
             : identityValue;
-          const identityKey = provider.id === 'qwen'
-            ? `${hubId}:${provider.id}:${localId}`
+          const identityKey = provider.id === 'qwen' && localId === 'bailian-token-plan'
+            ? `${provider.id}:source:${localId}`
             : identityKind && identityValue
             ? `${provider.id}:${normalizedIdentityKind}:${normalizedIdentityValue}`
             : normalizedIdentityKind === 'source' && localId
@@ -120,7 +120,11 @@ export class UsageStore {
             accountLocalId: account.localId,
             updatedAt: hub.updatedAt,
           });
-          if (!existing || isNewerSnapshotTime(hub.updatedAt, existing.updatedAt)) {
+          const shouldReplace = !existing || (
+            isNewerSnapshotTime(hub.updatedAt, existing.updatedAt)
+            && (provider.id !== 'qwen' || hasQwenSnapshot(account) || !hasQwenSnapshot(existing.account))
+          );
+          if (shouldReplace) {
             aggregate.accounts.set(identityKey, {
               account: {...account, hubIds, sources},
               updatedAt: hub.updatedAt,
@@ -367,6 +371,10 @@ function isNewerSnapshotTime(incoming?: string, existing?: string): boolean {
   if (incomingAt === null) return false;
   const existingAt = parseSnapshotTime(existing);
   return existingAt === null || incomingAt > existingAt;
+}
+
+function hasQwenSnapshot(account: UsageViewAccount): boolean {
+  return account.qwen !== undefined;
 }
 
 function mergeAccountSources(
