@@ -5,13 +5,19 @@ import android.app.Activity
 import android.app.Dialog
 import android.graphics.Color
 import android.view.Gravity
+import android.view.View
 import android.view.ViewGroup
 import android.view.Window
+import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
+import android.webkit.WebResourceResponse
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.Button
+import android.widget.FrameLayout
+import android.widget.ImageButton
 import android.widget.LinearLayout
+import android.widget.ProgressBar
 import android.widget.TextView
 import org.json.JSONObject
 import org.json.JSONTokener
@@ -238,6 +244,11 @@ class QwenLoginDialog(
     private val finished = AtomicBoolean(false)
     private var dialog: Dialog? = null
     private var callbackServer: QwenLoginCallbackServer? = null
+    private var webView: WebView? = null
+    private var progressView: View? = null
+    private var errorLabel: TextView? = null
+    private var errorView: View? = null
+    private var timeoutRunnable: Runnable? = null
 
     @SuppressLint("SetJavaScriptEnabled")
     fun show() {
@@ -256,47 +267,149 @@ class QwenLoginDialog(
         val dialog = Dialog(activity)
         this.dialog = dialog
         dialog.requestWindowFeature(Window.FEATURE_NO_TITLE)
-        val title = TextView(activity).apply {
+        val titleView = TextView(activity).apply {
             text = "Qwen / Bailian Login"
             setTextColor(Color.WHITE)
             textSize = 16f
             gravity = Gravity.CENTER_VERTICAL
-            layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f)
+            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1f)
         }
-        val close = Button(activity).apply {
-            text = "Close"
+        val closeButton = ImageButton(activity).apply {
+            setImageResource(android.R.drawable.ic_menu_close_clear_cancel)
+            setColorFilter(Color.WHITE)
+            setBackgroundColor(Color.TRANSPARENT)
+            contentDescription = "Close"
             setOnClickListener { finish(null) }
         }
-        val bar = LinearLayout(activity).apply {
+        val appBar = LinearLayout(activity).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
             setBackgroundColor(Color.rgb(0x1b, 0x1b, 0x1b))
-            setPadding(24, 0, 8, 0)
-            addView(title)
-            addView(close, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, 48))
+            setPadding(dp(16), 0, dp(8), 0)
+            layoutParams = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                dp(56),
+            )
+            addView(titleView)
+            addView(closeButton, LinearLayout.LayoutParams(dp(40), dp(40)))
         }
+
+        val progress = ProgressBar(activity, null, android.R.attr.progressBarStyleHorizontal).apply {
+            isIndeterminate = true
+            layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(3))
+        }
+        progressView = progress
+
         val web = WebView(activity)
+        webView = web
         web.settings.javaScriptEnabled = true
         web.settings.domStorageEnabled = true
-        web.webViewClient = object : WebViewClient() {
-            override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
-                val rawUrl = request?.url?.toString()
-                if (isQwenLoginUrl(rawUrl) || isQwenCallbackUrl(rawUrl, callback.port)) return false
-                return true
+        web.settings.useWideViewPort = true
+        web.settings.loadWithOverviewMode = true
+
+        val errorText = TextView(activity).apply {
+            textSize = 14f
+            setTextColor(Color.rgb(0xb0, 0x30, 0x30))
+            gravity = Gravity.CENTER
+            setPadding(dp(24), dp(24), dp(24), dp(24))
+        }
+        errorLabel = errorText
+        val retryButton = Button(activity).apply {
+            text = "Retry"
+            setOnClickListener {
+                errorView?.visibility = View.GONE
+                web.visibility = View.VISIBLE
+                progressView?.visibility = View.VISIBLE
+                web.loadUrl(qwenLoginUrl(callback.port, state))
             }
         }
+        val errorContainer = LinearLayout(activity).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER
+            setBackgroundColor(Color.WHITE)
+            visibility = View.GONE
+            addView(errorText)
+            addView(retryButton)
+        }
+        errorView = errorContainer
+
+        val content = FrameLayout(activity).apply {
+            addView(web, FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT,
+            ))
+            addView(errorContainer, FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT,
+            ))
+        }
+
+        web.webViewClient = object : WebViewClient() {
+            @Suppress("DEPRECATION", "OVERRIDE_DEPRECATION")
+            override fun shouldOverrideUrlLoading(view: WebView?, url: String?): Boolean =
+                handleNavigation(url, callback.port)
+
+            override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean =
+                handleNavigation(request?.url?.toString(), callback.port)
+
+            override fun onReceivedError(
+                view: WebView?,
+                request: WebResourceRequest?,
+                error: WebResourceError?,
+            ) {
+                if (request?.isForMainFrame != true) return
+                showError("Page load error: ${error?.description}")
+            }
+
+            override fun onReceivedHttpError(
+                view: WebView?,
+                request: WebResourceRequest?,
+                errorResponse: WebResourceResponse?,
+            ) {
+                if (request?.isForMainFrame != true) return
+                showError("HTTP ${errorResponse?.statusCode}: ${errorResponse?.reasonPhrase}")
+            }
+
+            override fun onPageFinished(view: WebView?, url: String?) {
+                progressView?.visibility = View.GONE
+            }
+        }
+
         val root = LinearLayout(activity).apply {
             orientation = LinearLayout.VERTICAL
-            addView(bar, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 56))
-            addView(web, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
+            addView(appBar)
+            addView(progress)
+            addView(content, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
         }
         dialog.setContentView(root)
         dialog.setOnCancelListener { finish(null) }
         dialog.show()
-        dialog.window?.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
-        web.postDelayed({ finish(null) }, QWEN_LOGIN_TIMEOUT_MS)
+        dialog.window?.setLayout(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            ViewGroup.LayoutParams.MATCH_PARENT
+        )
+        val timeout = Runnable { finish(null) }
+        timeoutRunnable = timeout
+        web.postDelayed(timeout, QWEN_LOGIN_TIMEOUT_MS)
         web.loadUrl(qwenLoginUrl(callback.port, state))
     }
+
+    private fun handleNavigation(rawUrl: String?, port: Int): Boolean {
+        if (isQwenLoginUrl(rawUrl) || isQwenCallbackUrl(rawUrl, port)) return false
+        showError("Blocked navigation to $rawUrl")
+        return true
+    }
+
+    private fun showError(message: String) {
+        if (finished.get()) return
+        progressView?.visibility = View.GONE
+        webView?.visibility = View.GONE
+        errorLabel?.text = message
+        errorView?.visibility = View.VISIBLE
+    }
+
+    private fun dp(value: Int): Int =
+        (activity.resources.displayMetrics.density * value).toInt()
 
     private fun isQwenCallbackUrl(rawUrl: String?, port: Int): Boolean {
         val parsed = try { URI(rawUrl ?: "") } catch (_: Exception) { return false }
@@ -309,6 +422,7 @@ class QwenLoginDialog(
 
     private fun finish(credential: String?) {
         if (!finished.compareAndSet(false, true)) return
+        timeoutRunnable?.let { webView?.removeCallbacks(it) }
         callbackServer?.close()
         dialog?.dismiss()
         onResult(credential)

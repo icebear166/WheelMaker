@@ -89,17 +89,17 @@
 
 **Acceptance:** Android opens a full-screen in-app login page with a close action, wide viewport, progress feedback, explicit main-frame error state, retry, and visible blocked-navigation errors. It preserves the Qwen callback URL/state and allowlist and returns only the existing protected callback result. A blocked or failed page never closes the whole app.
 
-- [ ] **Step 1: Add Android source-contract tests first**
+- [x] **Step 1: Add Android source-contract tests first**
 
-  Assert the Qwen dialog has the DeepSeek-style full-screen/page controls, wide viewport, progress, retry, and WebView error callbacks. Run the focused Android test if a Gradle runner is available; otherwise run the source test through the repository's available Kotlin/Gradle path and record the unavailable tool.
+  Added assertions for the DeepSeek-style full-screen/page controls, wide viewport, progress, retry, and WebView error callbacks. The checkout has no Gradle/`gradlew`/`kotlinc` runner, so the Kotlin test itself remains unrun.
 
-- [ ] **Step 2: Implement the resilient Qwen WebView page**
+- [x] **Step 2: Implement the resilient Qwen WebView page**
 
-  Port only the DeepSeek page/lifecycle mechanics into Qwen: keep Qwen's callback server, start URL, host allowlist, callback extraction, timeout, and result callback. Add explicit retry/error UI and wide viewport settings; do not change authorization policy or credentials.
+  Ported only the DeepSeek page/lifecycle mechanics into Qwen: retained the callback server, start URL, host allowlist, callback extraction, timeout, and result callback; added explicit retry/error UI and wide viewport settings without changing authorization policy or credentials.
 
 - [ ] **Step 3: Run the focused Android/static checks**
 
-  Verify the source-contract tests, callback/allowlist tests, and Kotlin formatting/static checks available in the checkout. Keep the no-Gradle boundary explicit if the runner is absent.
+  A PowerShell source-contract audit passed (`QWEN_ANDROID_SOURCE_CONTRACT=OK`). Kotlin/Gradle callback/allowlist tests and compilation remain unrun because the checkout exposes no Android build runner.
 
 ### Task 5: Focused verification and Git handoff
 
