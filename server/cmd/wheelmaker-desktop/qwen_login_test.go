@@ -3,9 +3,30 @@ package main
 import (
 	"net/http/httptest"
 	"net/url"
+	"os"
 	"strings"
 	"testing"
 )
+
+func TestQwenLoginWindowUsesOwnedPopupLifecycle(t *testing.T) {
+	source, err := os.ReadFile("qwen_login_windows.go")
+	if err != nil {
+		t.Fatalf("read Windows Qwen login source: %v", err)
+	}
+	text := string(source)
+	for _, fragment := range []string{
+		"runtime.LockOSThread()",
+		"makeDeepSeekLoginOwnedPopup(hwnd, parentHwnd)",
+		"trackDeepSeekLoginPopup(window, hwnd, parentHwnd)",
+		"window.Bind(\"__wheelMakerQwenClose\"",
+		"time.AfterFunc(qwenLoginTimeout",
+		"destroyDeepSeekLoginWindow(window, hwnd)",
+	} {
+		if !strings.Contains(text, fragment) {
+			t.Errorf("qwen_login_windows.go is missing lifecycle fragment %q", fragment)
+		}
+	}
+}
 
 func TestExtractQwenOAuthAcceptsOnlyOAuthBundle(t *testing.T) {
 	want := `{"accessToken":"qwen-access-token","refreshToken":"qwen-refresh-token"}`

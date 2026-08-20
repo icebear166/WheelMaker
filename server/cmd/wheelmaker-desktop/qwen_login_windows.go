@@ -5,6 +5,7 @@ package main
 import (
 	"errors"
 	"runtime"
+	"time"
 
 	webview2 "github.com/jchv/go-webview2"
 )
@@ -89,9 +90,21 @@ func launchQwenLoginWindow(parentHwnd uintptr) (string, error) {
 				window.Dispatch(func() { timedOut = true; window.Terminate() })
 			}
 		}()
-		window.SetHtml(deepSeekLoginSplashHTML)
+		window.Bind("__wheelMakerQwenClose", func() {
+			callback.Close()
+			window.Terminate()
+		})
+		timeout := time.AfterFunc(qwenLoginTimeout, func() {
+			window.Dispatch(func() {
+				timedOut = true
+				callback.Close()
+				window.Terminate()
+			})
+		})
+		window.SetHtml(qwenLoginSplashHTML)
 		window.Navigate(callback.LoginURL())
 		window.Run()
+		timeout.Stop()
 		callback.Close()
 		<-callbackDone
 		stopTracking()
@@ -109,3 +122,11 @@ func launchQwenLoginWindow(parentHwnd uintptr) (string, error) {
 	outcome := <-outcomeCh
 	return outcome.credential, outcome.err
 }
+
+const qwenLoginSplashHTML = `<!doctype html>
+<html><head><meta charset="utf-8"><style>
+html, body { margin: 0; height: 100%; background: #ffffff; }
+body { display: grid; place-items: center; color: #737373; font: 14px system-ui, sans-serif; }
+strong { display: block; margin-bottom: 6px; color: #252525; font-size: 16px; text-align: center; }
+</style></head>
+<body><div><strong>Qwen / Bailian Login</strong>Loading Alibaba Cloud Console…</div></body></html>`

@@ -69,17 +69,17 @@
 
 **Acceptance:** The PC login window remains an owned independent popup, is created and destroyed on the locked UI thread, closes on callback/window close/timeout without terminating the main client, and does not rely on DeepSeek localStorage or token field names. The official Qwen callback continues to validate state and extract only the existing protected fields.
 
-- [ ] **Step 1: Add a lifecycle source-contract test first**
+- [x] **Step 1: Add a lifecycle source-contract test first**
 
-  Assert the Qwen Windows implementation contains the locked UI thread, owned-popup tracker, explicit timeout, callback/close termination, and safe DeepSeek teardown helper calls. Run the focused desktop Go test; it must fail before the lifecycle repair.
+  Added a source-contract test for the locked UI thread, owned-popup tracker, explicit timeout, callback/close termination, and safe DeepSeek teardown helper calls. The focused desktop Go test first failed on the missing close binding and explicit timeout.
 
-- [ ] **Step 2: Align the Windows lifecycle with DeepSeek**
+- [x] **Step 2: Align the Windows lifecycle with DeepSeek**
 
-  Add an explicit Qwen timeout/termination path and safe completion/close cleanup around the existing callback wait. Preserve the Qwen URL allowlist, local callback, state validation, and credential extraction; do not copy DeepSeek polling or storage assumptions.
+  Added an explicit Qwen timeout/termination path, close binding, safe callback cleanup, and Qwen-specific loading page around the existing callback wait. Preserved the Qwen URL allowlist, local callback, state validation, and credential extraction; no DeepSeek polling/storage assumption was copied.
 
 - [ ] **Step 3: Run focused desktop tests and the Windows compile check**
 
-  Run the package's hidden Go test runner and the repository's existing Windows cross-compile check when the required Go toolchain is available. Record compile/runtime boundaries separately.
+  The lifecycle source-contract test passed with `go test -exec "wscript.exe C:\WorkSpace\WheelMaker\scripts\run-hidden-go-test.vbs" ./cmd/wheelmaker-desktop -run TestQwenLoginWindowUsesOwnedPopupLifecycle`. The full package attempt is blocked by the existing `webview_policy_test.go` assertion expecting `text/javascript` while the response is `application/javascript`; no Windows cross-compile result is claimed yet.
 
 ### Task 4: Make Android Qwen login a resilient DeepSeek-style in-app page
 
