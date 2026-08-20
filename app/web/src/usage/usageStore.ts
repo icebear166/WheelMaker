@@ -373,7 +373,7 @@ function isNewerSnapshotTime(incoming?: string, existing?: string): boolean {
   return existingAt === null || incomingAt > existingAt;
 }
 
-function hasQwenSnapshot(account: UsageViewAccount): boolean {
+function hasQwenSnapshot(account: Pick<UsageAccount, 'qwen'>): boolean {
   return account.qwen !== undefined;
 }
 

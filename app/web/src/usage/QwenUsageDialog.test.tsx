@@ -1,15 +1,16 @@
 import React from 'react';
 import TestRenderer, {act} from 'react-test-renderer';
-import fs from 'fs';
-import path from 'path';
 
+jest.mock('./qwenLogin', () => ({
+  nativeQwenLoginAvailable: () => true,
+  requestNativeQwenLogin: jest.fn(async () => ({
+    accessToken: 'qwen-access-token',
+    refreshToken: 'qwen-refresh-token',
+  })),
+}));
+
+import {requestNativeQwenLogin} from './qwenLogin';
 import {QwenUsageDialog} from './QwenUsageDialog';
-
-test('starts native login directly from the Login button event', () => {
-  const source = fs.readFileSync(path.join(__dirname, 'QwenUsageDialog.tsx'), 'utf8');
-  expect(source).toContain('onClick={startLogin}');
-  expect(source).not.toContain('onClick={() => { void runLogin(); }}');
-});
 
 const account = {
   localId: 'bailian-token-plan',
@@ -23,6 +24,36 @@ const account = {
     week: {state: 'limited' as const, remainingPercent: 60},
   },
 };
+
+test('starts native login from the Login button event', async () => {
+  const onLogin = jest.fn(async () => {});
+  let renderer!: TestRenderer.ReactTestRenderer;
+  act(() => {
+    renderer = TestRenderer.create(
+      <QwenUsageDialog
+        account={{...account, qwen: undefined, status: 'unavailable'}}
+        providerAuthenticated={false}
+        providerStatus="unavailable"
+        historyState={{status: 'empty', providerName: 'Qwen', accountLabel: 'Bailian Token Plan'}}
+        triggerElement={null}
+        onClose={jest.fn()}
+        onLogin={onLogin}
+        onRefresh={jest.fn(async () => {})}
+        onLogout={jest.fn(async () => {})}
+        onHistoryRetry={jest.fn()}
+      />,
+    );
+  });
+
+  await act(async () => {
+    renderer.root.findByProps({className: 'deepseek-usage-primary-action'}).props.onClick();
+  });
+  expect(requestNativeQwenLogin).toHaveBeenCalledTimes(1);
+  expect(onLogin).toHaveBeenCalledWith({
+    accessToken: 'qwen-access-token',
+    refreshToken: 'qwen-refresh-token',
+  });
+});
 
 test('Qwen details use the local usage-history trend instead of an official trend status', () => {
   let renderer!: TestRenderer.ReactTestRenderer;
