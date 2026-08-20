@@ -2423,7 +2423,6 @@
 .chat-hub-project-skill-option,
 .chat-hub-flicker-modes button,
 .chat-hub-skill-icon-button,
-.chat-hub-skill-toolbar-button,
 .chat-hub-skill-update-all,
 .chat-hub-skill-source-actions button,
 .chat-hub-skill-row-actions button,
@@ -2443,7 +2442,6 @@ button.chat-hub-skill-name {
   .chat-hub-project-skill-option,
   .chat-hub-flicker-modes button,
   .chat-hub-skill-icon-button,
-  .chat-hub-skill-toolbar-button,
   .chat-hub-skill-update-all,
   .chat-hub-skill-source-actions button,
   .chat-hub-skill-row-actions button,
@@ -2787,7 +2785,8 @@ button.chat-hub-gateway-capsule:disabled {
 
 .chat-hub-mcp-form input:not([type='checkbox']),
 .chat-hub-mcp-form select,
-.chat-hub-mcp-form textarea {
+.chat-hub-mcp-form textarea,
+.chat-hub-skill-add-repository-input-row input {
   width: 100%;
   box-sizing: border-box;
   min-height: 25px;
@@ -3028,18 +3027,8 @@ button.chat-hub-skill-name:disabled {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 6px;
-  padding: 1px 2px;
-}
-
-.chat-hub-skill-toolbar-label {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: var(--text-secondary);
-  font-size: 10px;
-  font-weight: 650;
+  gap: 8px;
+  padding: 0 2px;
 }
 
 .chat-hub-skill-toolbar-actions {
@@ -3050,25 +3039,13 @@ button.chat-hub-skill-name:disabled {
   gap: 2px;
 }
 
-.chat-hub-skill-uninstalled-toggle {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  color: var(--text-tertiary);
-  font-size: 9px;
-  white-space: nowrap;
-  cursor: pointer;
-}
-
-.chat-hub-skill-uninstalled-toggle input {
-  width: 13px;
-  height: 13px;
-  margin: 0;
-  accent-color: var(--accent-primary);
+/* The Show all toggle keeps the shared hover fill as its pressed state. */
+.chat-hub-skill-toolbar .chat-hub-detail-action[aria-pressed='true'] {
+  color: var(--text-primary);
+  background: color-mix(in srgb, var(--hover) 80%, transparent);
 }
 
 .chat-hub-skill-icon-button,
-.chat-hub-skill-toolbar-button,
 .chat-hub-skill-update-all,
 .chat-hub-skill-source-actions button,
 .chat-hub-skill-row-actions button {
@@ -3091,12 +3068,10 @@ button.chat-hub-skill-name:disabled {
 }
 
 .chat-hub-skill-icon-button:hover:not(:disabled),
-.chat-hub-skill-toolbar-button:hover:not(:disabled),
 .chat-hub-skill-update-all:hover:not(:disabled),
 .chat-hub-skill-source-actions button:hover:not(:disabled),
 .chat-hub-skill-row-actions button:hover:not(:disabled),
 .chat-hub-skill-icon-button:focus-visible,
-.chat-hub-skill-toolbar-button:focus-visible,
 .chat-hub-skill-update-all:focus-visible,
 .chat-hub-skill-source-actions button:focus-visible,
 .chat-hub-skill-row-actions button:focus-visible {
@@ -3105,7 +3080,6 @@ button.chat-hub-skill-name:disabled {
 }
 
 .chat-hub-skill-icon-button:disabled,
-.chat-hub-skill-toolbar-button:disabled,
 .chat-hub-skill-update-all:disabled,
 .chat-hub-skill-source-actions button:disabled,
 .chat-hub-skill-row-actions button:disabled {
@@ -3113,7 +3087,6 @@ button.chat-hub-skill-name:disabled {
   cursor: default;
 }
 
-.chat-hub-skill-toolbar-button.is-danger,
 .chat-hub-skill-source-actions button.is-danger,
 .chat-hub-skill-row-actions button.is-danger {
   color: var(--danger, #df6674);
@@ -3184,6 +3157,12 @@ button.chat-hub-skill-name:disabled {
   overflow: hidden;
 }
 
+.chat-hub-skill-add-repository.is-expanded {
+  border-style: solid;
+  border-color: color-mix(in srgb, var(--border-subtle) 68%, transparent);
+  background: color-mix(in srgb, var(--surface-panel) 75%, transparent);
+}
+
 .chat-hub-skill-add-repository-trigger {
   width: 100%;
   min-height: 42px;
@@ -3194,6 +3173,9 @@ button.chat-hub-skill-name:disabled {
   border: 0;
   background: transparent;
   color: var(--text-secondary);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 600;
   cursor: pointer;
 }
 
@@ -3220,30 +3202,10 @@ button.chat-hub-skill-name:disabled {
   flex: 1;
 }
 
-.chat-hub-skill-add-repository-input-row button {
-  border: 1px solid var(--border-subtle);
-  border-radius: 6px;
-  padding: 5px 9px;
-  background: var(--surface-panel);
-  color: var(--text-primary);
-  cursor: pointer;
-  white-space: nowrap;
-}
-
-.chat-hub-skill-add-repository-input-row button.is-quiet {
-  color: var(--text-secondary);
-}
-
-.chat-hub-skill-add-repository-input-row button.is-primary {
-  background: var(--accent, #5f8cff);
-  border-color: var(--accent, #5f8cff);
-  color: #fff;
-}
-
 .chat-hub-skill-add-repository-hint {
   margin: 0;
-  color: var(--text-secondary);
-  font-size: 12px;
+  color: var(--text-tertiary);
+  font-size: 10px;
 }
 
 .chat-hub-skill-source {

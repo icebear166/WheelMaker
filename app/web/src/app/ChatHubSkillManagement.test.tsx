@@ -92,7 +92,7 @@ test('renders source-first hierarchy and hides uninstalled skills by default per
   expect(renderer.root.findAllByProps({className: 'chat-hub-skill-source-ref-input'})).toHaveLength(0);
   expect(renderer.root.findAllByProps({className: 'chat-hub-skill-source-meta'})).toHaveLength(0);
   expect(renderer.root.findAllByProps({'data-skill-name': 'new-skill'})).toHaveLength(0);
-  expect(renderer.root.findByProps({'aria-label': 'Show all Hub skills'}).props.checked).toBe(false);
+  expect(renderer.root.findByProps({'aria-label': 'Show all Hub skills'}).props['aria-pressed']).toBe(false);
   expect(renderer.root.findByProps({'data-skill-name': 'local-only'})).toBeTruthy();
 });
 
@@ -138,7 +138,7 @@ test('offers uninstall for unmanaged skills', async () => {
 test('shows remote additions after enabling the scope preference and offers install only there', async () => {
   const {renderer, actions} = await renderScope({target: projectTarget});
 
-  act(() => renderer.root.findByProps({'aria-label': 'Show all Project skills'}).props.onChange({target: {checked: true}}));
+  act(() => renderer.root.findByProps({'aria-label': 'Show all Project skills'}).props.onClick());
   const added = renderer.root.findByProps({'data-skill-name': 'new-skill'});
   expect(added.props.className).toContain('is-uninstalled');
   act(() => added.findByProps({'aria-label': 'Download new-skill'}).props.onClick());
@@ -223,7 +223,7 @@ test('keeps stale catalog visible while allowing explicit recovery operations', 
   };
   const {renderer} = await renderScope({snapshot: stale});
 
-  act(() => renderer.root.findByProps({'aria-label': 'Show all Hub skills'}).props.onChange({target: {checked: true}}));
+  act(() => renderer.root.findByProps({'aria-label': 'Show all Hub skills'}).props.onClick());
   expect(renderer.root.findByProps({'aria-label': 'Download new-skill'}).props.disabled).toBe(false);
   expect(renderer.root.findByProps({'aria-label': 'Update acme/skills'}).props.disabled).toBe(false);
   expect(renderer.root.findAllByProps({'aria-label': 'Refresh acme/skills'})).toHaveLength(0);

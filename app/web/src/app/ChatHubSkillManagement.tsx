@@ -144,6 +144,7 @@ function SkillCatalogRow({
             <button
               type="button"
               aria-label={`Download ${skill.name}`}
+              data-tooltip="Download"
               disabled={busy}
               onClick={() => actions.onInstallSkill(actionTarget)}
             >
@@ -157,6 +158,7 @@ function SkillCatalogRow({
               type="button"
               className="is-danger"
               aria-label={`Uninstall ${skill.name}`}
+              data-tooltip="Uninstall"
               disabled={busy}
               onClick={() => actions.onUninstall({...target, skillName: skill.name})}
             >
@@ -232,6 +234,7 @@ function SkillSourceLedger({
           <button
             type="button"
             aria-label={`Update ${displayName}`}
+            data-tooltip="Update"
             disabled={busy}
             onClick={() => actions.onUpdateSource(baseTarget)}
           >
@@ -240,6 +243,7 @@ function SkillSourceLedger({
           <button
             type="button"
             aria-label={`Install all ${displayName} skills`}
+            data-tooltip="Install all"
             disabled={busy}
             onClick={() => actions.onInstallAll(baseTarget)}
           >
@@ -249,6 +253,7 @@ function SkillSourceLedger({
             type="button"
             className="is-danger"
             aria-label={`Delete ${displayName} source`}
+            data-tooltip="Delete source"
             disabled={busy}
             onClick={() => actions.onDeleteSource(baseTarget)}
           >
@@ -338,10 +343,8 @@ function InlineAddRepository({
                 if (event.key === 'Escape') collapse();
               }}
             />
-            <button type="button" className="is-primary" disabled={busy} onClick={add}>Add</button>
-            <button type="button" className="is-quiet" disabled={busy} onClick={collapse}>
-              Cancel
-            </button>
+            <button type="button" className="chat-hub-detail-action accent" disabled={busy} onClick={add}>Add</button>
+            <button type="button" className="chat-hub-detail-action" disabled={busy} onClick={collapse}>Cancel</button>
           </div>
           {error ? <div className="chat-hub-skill-source-error">{error}</div> : null}
           <p className="chat-hub-skill-add-repository-hint">
@@ -389,26 +392,28 @@ export function ChatHubSkillScopeDetail({
   return (
     <section className="chat-hub-skill-scope" data-skill-scope={target.scope}>
       <div className="chat-hub-skill-toolbar">
-        <strong className="chat-hub-skill-toolbar-label">{label}</strong>
+        <span className="chat-hub-detail-title">{label}</span>
         <div className="chat-hub-skill-toolbar-actions">
           <button
             type="button"
-            className="chat-hub-skill-toolbar-button"
+            className="chat-hub-detail-action"
             aria-label={`Update ${scopeLabel} skills`}
             disabled={busy}
             onClick={() => actions.onUpdateScope(target)}
           >
             <Icon name="circleArrowUp" />
+            <span>Update all</span>
           </button>
-          <label className="chat-hub-skill-uninstalled-toggle">
-            <input
-              type="checkbox"
-              aria-label={`Show all ${scopeLabel} skills`}
-              checked={showUninstalled}
-              onChange={event => toggleUninstalled(event.target.checked)}
-            />
+          <button
+            type="button"
+            className="chat-hub-detail-action"
+            aria-label={`Show all ${scopeLabel} skills`}
+            aria-pressed={showUninstalled}
+            onClick={() => toggleUninstalled(!showUninstalled)}
+          >
+            <Icon name="eye" />
             <span>Show all</span>
-          </label>
+          </button>
         </div>
       </div>
 
