@@ -37,13 +37,14 @@ test('release server deploy derives host and lets SSH choose the login user', as
   assert.equal(state.installs[0].sourceSha, SOURCE_SHA);
   assert.equal(state.installs[0].remoteDirectory, `/tmp/wheelmaker-release-server-${SOURCE_SHA}`);
   assert.equal(state.uploads.length, 1);
-  assert.equal(state.uploads[0].files.length, 6);
+  assert.equal(state.uploads[0].files.length, 7);
   assert.deepEqual(
     state.uploads[0].files.map(path => path.split(/[\\/]/).at(-1)).sort(),
     [
       'deployment.md',
       'deployment.zh-CN.md',
       'index.html',
+      'personal-wiki.zh-CN.md',
       'release-home.js',
       'wheelmaker-release-server',
       'wheelmaker-release-server.service',
@@ -64,6 +65,21 @@ test('release server deploy uploads the public AI deployment guides', async () =
   const paths = state.uploads[0].files.map(path => path.replaceAll('\\', '/'));
   assert.ok(paths.some(path => path.endsWith('/scripts/release-server/public/deployment.md')));
   assert.ok(paths.some(path => path.endsWith('/scripts/release-server/public/deployment.zh-CN.md')));
+  assert.ok(paths.some(path => path.endsWith('/scripts/release-server/public/personal-wiki.zh-CN.md')));
+});
+
+test('public Personal Wiki guide is Chinese and contains the complete user workflow', async () => {
+  const guide = await readFile(new URL('./public/personal-wiki.zh-CN.md', import.meta.url), 'utf8');
+
+  assert.match(guide, /Personal Wiki 中文部署指南/u);
+  assert.match(guide, /setup-wiki\.bat/u);
+  assert.match(guide, /GitHub Private/u);
+  assert.match(guide, /project-routing\.json/u);
+  assert.match(guide, /knowledgeRegistry\.publicUrl/u);
+  assert.match(guide, /WIKI_DEPLOY_KEY/u);
+  assert.match(guide, /publish-wiki\.bat/u);
+  assert.match(guide, /不需要拉取或编译 WheelMaker 源码/u);
+  assert.doesNotMatch(guide, /wiki\.wheelbox\.top|Administrator|D:\\WheelMaker/i);
 });
 
 test('public AI deployment guides are Gateway-first v2 runbooks without Release instructions', async () => {
@@ -368,6 +384,8 @@ test('release homepage explains the private Personal Wiki workflow below client 
   assert.match(wikiSection, /setup-wiki\.bat/);
   assert.match(wikiSection, /href="\/setup-wiki\.bat"[^>]*download/u);
   assert.match(wikiSection, /Download setup-wiki\.bat/u);
+  assert.match(wikiSection, /href="\/personal-wiki\.zh-CN\.md"/u);
+  assert.match(wikiSection, /阅读中文完整部署指南/u);
   assert.match(wikiSection, /project-routing\.json/);
   assert.match(wikiSection, /multiple local projects[^<]*same Wiki project ID/i);
   assert.match(wikiSection, /knowledgeRegistry\.publicUrl/);

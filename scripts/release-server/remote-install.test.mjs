@@ -31,6 +31,14 @@ test('ordinary installer publishes and rolls back both public AI deployment guid
   assert.match(script, /deployment_zh_backup_exists=/);
 });
 
+test('ordinary installer publishes and rolls back the Personal Wiki guide', () => {
+  const script = buildRemoteInstallScript();
+  assert.match(script, /\[ -f "\$upload_dir\/personal-wiki\.zh-CN\.md" \]/);
+  assert.match(script, /\$release_home\/\.personal-wiki-zh-CN-\$source_sha\.candidate/);
+  assert.match(script, /\$public_root\/personal-wiki\.zh-CN\.md/);
+  assert.match(script, /personal_wiki_zh_backup_exists=/);
+});
+
 test('health retries suppress transient curl errors', () => {
   const script = buildRemoteInstallScript();
   assert.match(script, /curl --fail --silent "\$health_url" >\/dev\/null 2>&1/);

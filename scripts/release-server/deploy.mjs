@@ -70,6 +70,7 @@ export async function deployReleaseServer(dependencies = createDefaultDependenci
       join(templateRoot, 'release-home.js'),
       join(templateRoot, 'public', 'deployment.md'),
       join(templateRoot, 'public', 'deployment.zh-CN.md'),
+      join(templateRoot, 'public', 'personal-wiki.zh-CN.md'),
     ];
     dependencies.write(`Uploading release server files to ${remote.host}`);
     await dependencies.upload({files, remote, remoteDirectory});
